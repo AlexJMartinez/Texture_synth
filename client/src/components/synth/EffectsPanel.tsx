@@ -126,6 +126,49 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
             <Knob value={effects.chorusMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("chorusMix", v)} size="xs" />
           </div>
         </EffectSection>
+
+        <EffectSection
+          title="Transient"
+          enabled={effects.transientEnabled}
+          onToggle={(v) => updateEffects("transientEnabled", v)}
+          testId="switch-transient"
+        >
+          <div className="flex justify-center gap-1">
+            <Knob value={effects.transientAttack} min={-100} max={100} step={1} label="Atk" unit="%" onChange={(v) => updateEffects("transientAttack", v)} size="xs" />
+            <Knob value={effects.transientSustain} min={-100} max={100} step={1} label="Sus" unit="%" onChange={(v) => updateEffects("transientSustain", v)} size="xs" />
+          </div>
+        </EffectSection>
+
+        <EffectSection
+          title="Limiter"
+          enabled={effects.limiterEnabled}
+          onToggle={(v) => updateEffects("limiterEnabled", v)}
+          testId="switch-limiter"
+        >
+          <div className="flex justify-center gap-1">
+            <Knob value={effects.limiterThreshold} min={-30} max={0} step={1} label="Thr" unit="dB" onChange={(v) => updateEffects("limiterThreshold", v)} size="xs" />
+            <Knob value={effects.limiterRelease} min={10} max={500} step={1} label="Rel" unit="ms" onChange={(v) => updateEffects("limiterRelease", v)} size="xs" />
+          </div>
+        </EffectSection>
+
+        <EffectSection
+          title="M-Band"
+          enabled={effects.multibandEnabled}
+          onToggle={(v) => updateEffects("multibandEnabled", v)}
+          testId="switch-multiband"
+        >
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-center gap-1">
+              <Knob value={effects.multibandLowFreq} min={80} max={400} step={1} label="Lo" unit="Hz" onChange={(v) => updateEffects("multibandLowFreq", v)} size="xs" logarithmic />
+              <Knob value={effects.multibandHighFreq} min={2000} max={10000} step={100} label="Hi" unit="Hz" onChange={(v) => updateEffects("multibandHighFreq", v)} size="xs" logarithmic />
+            </div>
+            <div className="flex justify-center gap-1">
+              <Knob value={effects.multibandLowDrive} min={0} max={100} step={1} label="LoD" unit="%" onChange={(v) => updateEffects("multibandLowDrive", v)} size="xs" />
+              <Knob value={effects.multibandMidDrive} min={0} max={100} step={1} label="MdD" unit="%" onChange={(v) => updateEffects("multibandMidDrive", v)} size="xs" />
+              <Knob value={effects.multibandHighDrive} min={0} max={100} step={1} label="HiD" unit="%" onChange={(v) => updateEffects("multibandHighDrive", v)} size="xs" />
+            </div>
+          </div>
+        </EffectSection>
       </div>
     </CollapsiblePanel>
   );

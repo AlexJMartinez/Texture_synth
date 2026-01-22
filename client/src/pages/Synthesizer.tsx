@@ -221,7 +221,99 @@ export default function Synthesizer() {
       chorusWet.connect(effectsMixer);
     }
 
-    effectsMixer.connect(panNode);
+    let outputNode: AudioNode = effectsMixer;
+
+    if (params.effects.transientEnabled) {
+      const transientGain = ctx.createGain();
+      const attackAmount = params.effects.transientAttack / 100;
+      const sustainAmount = params.effects.transientSustain / 100;
+      
+      const attackTime = 0.01;
+      const transientDuration = 0.05;
+      
+      if (attackAmount > 0) {
+        transientGain.gain.setValueAtTime(1 + attackAmount * 0.5, now);
+        transientGain.gain.linearRampToValueAtTime(1, now + transientDuration);
+      } else if (attackAmount < 0) {
+        transientGain.gain.setValueAtTime(1 + attackAmount * 0.5, now);
+        transientGain.gain.linearRampToValueAtTime(1, now + transientDuration);
+      } else {
+        transientGain.gain.setValueAtTime(1, now);
+      }
+      
+      if (sustainAmount !== 0) {
+        transientGain.gain.linearRampToValueAtTime(1 + sustainAmount * 0.3, now + transientDuration + 0.01);
+      }
+      
+      outputNode.connect(transientGain);
+      outputNode = transientGain;
+    }
+
+    if (params.effects.multibandEnabled) {
+      const lowFilter = ctx.createBiquadFilter();
+      lowFilter.type = "lowpass";
+      lowFilter.frequency.value = params.effects.multibandLowFreq;
+      
+      const midFilterLow = ctx.createBiquadFilter();
+      midFilterLow.type = "highpass";
+      midFilterLow.frequency.value = params.effects.multibandLowFreq;
+      const midFilterHigh = ctx.createBiquadFilter();
+      midFilterHigh.type = "lowpass";
+      midFilterHigh.frequency.value = params.effects.multibandHighFreq;
+      
+      const highFilter = ctx.createBiquadFilter();
+      highFilter.type = "highpass";
+      highFilter.frequency.value = params.effects.multibandHighFreq;
+      
+      const createWaveshaper = (drive: number) => {
+        const shaper = ctx.createWaveShaper();
+        const amount = (drive / 100) * 5;
+        const samples = 256;
+        const curve = new Float32Array(samples);
+        for (let i = 0; i < samples; i++) {
+          const x = (i * 2) / samples - 1;
+          curve[i] = (Math.PI + amount) * x / (Math.PI + amount * Math.abs(x));
+        }
+        shaper.curve = curve;
+        return shaper;
+      };
+      
+      const lowShaper = createWaveshaper(params.effects.multibandLowDrive);
+      const midShaper = createWaveshaper(params.effects.multibandMidDrive);
+      const highShaper = createWaveshaper(params.effects.multibandHighDrive);
+      
+      const bandMixer = ctx.createGain();
+      bandMixer.gain.value = 1;
+      
+      outputNode.connect(lowFilter);
+      lowFilter.connect(lowShaper);
+      lowShaper.connect(bandMixer);
+      
+      outputNode.connect(midFilterLow);
+      midFilterLow.connect(midFilterHigh);
+      midFilterHigh.connect(midShaper);
+      midShaper.connect(bandMixer);
+      
+      outputNode.connect(highFilter);
+      highFilter.connect(highShaper);
+      highShaper.connect(bandMixer);
+      
+      outputNode = bandMixer;
+    }
+
+    if (params.effects.limiterEnabled) {
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = params.effects.limiterThreshold;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.001;
+      limiter.release.value = params.effects.limiterRelease / 1000;
+      
+      outputNode.connect(limiter);
+      outputNode = limiter;
+    }
+
+    outputNode.connect(panNode);
     panNode.connect(ctx.destination);
 
     const oscillators: OscillatorNode[] = [];
