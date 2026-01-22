@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Play, Zap } from "lucide-react";
 
 interface TriggerButtonProps {
@@ -9,12 +9,29 @@ interface TriggerButtonProps {
 
 export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButtonProps) {
   const [isPressed, setIsPressed] = useState(false);
+  const touchTriggeredRef = useRef(false);
 
   const handleTrigger = useCallback(() => {
     setIsPressed(true);
     onTrigger();
     setTimeout(() => setIsPressed(false), 150);
   }, [onTrigger]);
+
+  // Handle touch for mobile - fires before click
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    e.preventDefault(); // Prevent subsequent click event
+    touchTriggeredRef.current = true;
+    handleTrigger();
+    // Reset after a short delay
+    setTimeout(() => { touchTriggeredRef.current = false; }, 300);
+  }, [handleTrigger]);
+
+  // Only fire on click if not triggered by touch
+  const handleClick = useCallback(() => {
+    if (!touchTriggeredRef.current) {
+      handleTrigger();
+    }
+  }, [handleTrigger]);
 
   const sizeClasses = {
     sm: "w-14 h-14",
@@ -30,7 +47,8 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
 
   return (
     <button
-      onClick={handleTrigger}
+      onClick={handleClick}
+      onTouchEnd={handleTouchEnd}
       className={`
         relative ${sizeClasses[size]} rounded-full cursor-pointer select-none
         transition-all duration-150 ease-out

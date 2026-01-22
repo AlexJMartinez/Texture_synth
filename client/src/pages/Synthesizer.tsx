@@ -677,11 +677,13 @@ export default function Synthesizer() {
     return Math.min(baseDuration, 10000);
   }, []);
 
-  const handleTrigger = useCallback(async () => {
+  const handleTrigger = useCallback(() => {
     const ctx = getAudioContext();
     
+    // Resume audio context synchronously - critical for iOS
+    // The resume() call must happen in the same call stack as user gesture
     if (ctx.state === "suspended") {
-      await ctx.resume();
+      ctx.resume();
     }
 
     setIsPlaying(true);
@@ -700,13 +702,13 @@ export default function Synthesizer() {
     const offlineCtx = new OfflineAudioContext(1, (totalDuration / 1000) * sampleRate, sampleRate);
     generateSound(offlineCtx, params, totalDuration);
     
-    const buffer = await offlineCtx.startRendering();
-    
-    if (params.effects.bitcrusher < 16) {
-      applyBitcrusher(buffer, params.effects.bitcrusher);
-    }
-    
-    setAudioBuffer(buffer);
+    // Use .then() to avoid async/await which can break iOS audio unlock
+    offlineCtx.startRendering().then((buffer) => {
+      if (params.effects.bitcrusher < 16) {
+        applyBitcrusher(buffer, params.effects.bitcrusher);
+      }
+      setAudioBuffer(buffer);
+    });
   }, [params, getAudioContext, generateSound, applyBitcrusher, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
