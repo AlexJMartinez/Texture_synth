@@ -1,0 +1,186 @@
+Replit-based Web Audio one-shot generator that can do FM + modal synthesis, optionally morph imported samples, and export WAV.
+
+The efficient architecture (so you don’t paint yourself into a corner)
+
+1) Split the app into 4 layers
+
+A) UI (React)
+	•	Parameter panels (FM, Modal, Sample, FX, Envelope)
+	•	Preset system (save/load JSON)
+	•	“Randomize” + “Mutate” buttons (one-shots love this)
+
+B) Audio Engine (AudioWorklet + main thread graph)
+	•	Main thread: routing, loading samples, scheduling one-shots
+	•	AudioWorklet: the heavy DSP, sample-accurate envelopes, oscillators, modal bank, FM algorithms
+	•	Goal: one-shot render is deterministic and click-free.
+
+C) Offline Renderer
+	•	Use OfflineAudioContext to render exactly N samples.
+	•	Export to WAV via an encoder (easy and fast).
+
+D) Parameter Model
+	•	A single typed schema that drives:
+	•	UI controls
+	•	Automation / modulation routing
+	•	Preset serialization
+	•	Randomization ranges
+
+This is the difference between “fun prototype” and “product you can iterate for months”.
+
+⸻
+
+Replit setup that stays painless
+
+Use a Vite + React + TypeScript template (fast rebuilds), and keep audio code in a clean workspace layout:
+
+Suggested repo structure
+	•	src/ui/ – React controls + panels
+	•	src/audio/engine/ – graph builder, scheduler
+	•	src/audio/worklet/ – processors + DSP
+	•	src/audio/render/ – OfflineAudioContext renderer
+	•	src/audio/wav/ – WAV encoding
+	•	src/params/ – schema, defaults, ranges, preset I/O
+
+Replit works great for this because Vite dev server + hot reload is quick, and you can deploy as a static site when ready.
+
+⸻
+
+MVP first: one killer lane, then expand
+
+If you try to ship FM + modal + sample morph + FX all at once, it’ll sprawl. Here’s the fastest path that still lands “real” value quickly.
+
+Phase 1 (MVP in ~3–5 focused sessions): “One-shot synth + export”
+
+Features
+	•	One-shot trigger button
+	•	Envelope: A/H/D (attack/hold/decay) + curve
+	•	Oscillator: sine/tri/saw + pitch + drift
+	•	Basic saturation or filter (one FX)
+	•	Offline render + WAV export
+	•	Preset save/load (JSON)
+
+Why this first
+	•	It forces you to implement the hardest product plumbing: rendering and exporting. Everything else becomes “just new DSP modules”.
+
+Phase 2: FM synthesis that feels like a playground
+
+Add an FM module with a few algorithms (don’t start with 20):
+	•	2-op FM (carrier + mod)
+	•	3-op (one mod into mod, or dual mods into carrier)
+	•	Key params:
+	•	ratios (carrier/mod)
+	•	index envelope (separate from amp envelope)
+	•	feedback on mod oscillator
+	•	phase reset modes (one-shots benefit from consistent transients)
+
+Phase 3: Modal synthesis (the “physical-ish” snap)
+
+Do modal as a bank of resonators (modes), excited by an impulse/noise burst.
+	•	Controls:
+	•	number of modes
+	•	distribution (harmonic, stretched, random)
+	•	decay slope
+	•	inharmonicity
+	•	excitation: click/noise/short sample
+This is where you’ll get bells, hits, plucks, debris, glassy one-shots.
+
+Phase 4: Import a sample and “turn it into something else”
+
+Fastest good-enough transformations:
+	•	Sample → exciter for modal (use sample transient as excitation)
+	•	Sample → granular one-shot (tiny grains, fast decay, pitch sweep)
+	•	Sample → spectral-ish without full FFT complexity:
+	•	multi-band filter bank approximation
+	•	waveshaping + resonant filters
+If you want true spectral morphing later, you can add FFT in a worklet, but it’s heavier.
+
+Phase 5: Modulation + randomize as a first-class feature
+
+One-shots come alive with macro randomization:
+	•	A “Chaos” knob that:
+	•	randomizes within each param’s min/max range
+	•	uses distributions (log for frequency, exponential for decay, etc.)
+	•	“Mutate” button: nudges around current sound rather than fully rerolling
+	•	1–3 LFOs + 1–2 random/shot noise modulators (per-trigger RNG)
+
+⸻
+
+Audio engine choices (best practices for clicks + consistency)
+
+Use AudioWorklet for sound generation
+
+Main thread nodes are fine for prototypes, but:
+	•	FM and modal banks get CPU-heavy.
+	•	Accurate envelope + transient shaping is easier inside a worklet.
+	•	You’ll want deterministic one-shots for offline rendering.
+
+Pattern
+	•	Main thread sends a trigger message with parameters + seed.
+	•	Worklet produces audio for N samples and then goes silent.
+	•	For live preview, render in realtime; for export, render offline.
+
+Deterministic rendering (this matters for export)
+	•	Include a seed per trigger for noise/randomness.
+	•	Don’t rely on Math.random() in multiple places—use one seeded RNG for all randomness so the exported file matches what the user heard.
+
+⸻
+
+Export audio: the simplest reliable approach
+
+OfflineAudioContext → Float32Array → WAV encoder
+	•	Render at 44.1k or 48k (user-selectable)
+	•	Mono/stereo toggle
+	•	Normalize / peak-limit option (one-shot export loves this)
+	•	Download a .wav
+
+This is straightforward and stable in browsers.
+
+⸻
+
+Parameter system: do this early and you’ll move 3× faster
+
+Define parameters as data:
+
+Example (conceptually):
+	•	id: "fm.index"
+	•	type: "float"
+	•	min/max/default
+	•	scaling: "log" or "exp"
+	•	UI: knob/slider
+	•	randomize: range + distribution weight
+
+Then:
+	•	UI auto-builds controls
+	•	Presets become a single JSON blob
+	•	Randomization becomes trivial
+	•	You can add modules without reworking everything
+
+⸻
+
+What I’d build in Replit first (day-one checklist)
+	1.	Vite + React + TS project
+	2.	Audio engine skeleton:
+	•	init AudioContext
+	•	load AudioWorklet module
+	•	one-shot trigger message
+	3.	Offline render function (even before FM/modal!)
+	4.	WAV export
+	5.	Parameter schema + a single panel (envelope + pitch)
+	6.	Preset save/load
+
+Once those are working, FM and modal are “just DSP”.
+
+⸻
+
+A smart “v1 feature set” (keeps scope tight but impressive)
+	•	One-shot trigger + velocity
+	•	Amp env + pitch env
+	•	FM 2-op + feedback
+	•	Modal bank (8–64 modes) excited by click/noise
+	•	Noise layer + transient click layer
+	•	Filter + drive
+	•	Randomize + mutate
+	•	Presets
+	•	Offline export WAV (+ normalize)
+
+That already feels like a real instrument.
