@@ -3,7 +3,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 
 interface RandomizeControlsProps {
@@ -87,6 +87,18 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         type: randomFilterType(),
         combDelay: Math.round(randomInRange(1, 10) * 10) / 10,
         gain: Math.round(randomInRange(-12, 12)),
+      },
+      modal: {
+        enabled: Math.random() > 0.7,
+        basePitch: Math.round(randomInRange(100, 800, true)),
+        impactNoise: Math.round(randomInRange(20, 80 * chaos)),
+        impactDecay: Math.round(randomInRange(5, 50)),
+        modes: {
+          mode1: { ratio: 1, decay: Math.round(randomInRange(200, 2000)), level: 100 },
+          mode2: { ratio: Math.round(randomInRange(1.5, 4) * 100) / 100, decay: Math.round(randomInRange(150, 1500)), level: Math.round(randomInRange(40, 80)) },
+          mode3: { ratio: Math.round(randomInRange(3, 7) * 100) / 100, decay: Math.round(randomInRange(100, 1000)), level: Math.round(randomInRange(20, 60)) },
+          mode4: { ratio: Math.round(randomInRange(5, 12) * 100) / 100, decay: Math.round(randomInRange(80, 800)), level: Math.round(randomInRange(10, 40)) },
+        },
       },
       effects: {
         saturation: Math.round(randomInRange(0, 80 * chaos)),
@@ -175,6 +187,18 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         type: currentParams.filter.type,
         combDelay: Math.round(mutateValue(currentParams.filter.combDelay, 0.1, 50) * 10) / 10,
         gain: Math.round(mutateValue(currentParams.filter.gain, -24, 24)),
+      },
+      modal: {
+        enabled: currentParams.modal.enabled,
+        basePitch: Math.round(mutateValue(currentParams.modal.basePitch, 20, 2000, true)),
+        impactNoise: Math.round(mutateValue(currentParams.modal.impactNoise, 0, 100)),
+        impactDecay: Math.round(mutateValue(currentParams.modal.impactDecay, 1, 100)),
+        modes: {
+          mode1: { ratio: 1, decay: Math.round(mutateValue(currentParams.modal.modes.mode1.decay, 10, 5000)), level: currentParams.modal.modes.mode1.level },
+          mode2: { ratio: Math.round(mutateValue(currentParams.modal.modes.mode2.ratio, 0.5, 16) * 100) / 100, decay: Math.round(mutateValue(currentParams.modal.modes.mode2.decay, 10, 5000)), level: Math.round(mutateValue(currentParams.modal.modes.mode2.level, 0, 100)) },
+          mode3: { ratio: Math.round(mutateValue(currentParams.modal.modes.mode3.ratio, 0.5, 16) * 100) / 100, decay: Math.round(mutateValue(currentParams.modal.modes.mode3.decay, 10, 5000)), level: Math.round(mutateValue(currentParams.modal.modes.mode3.level, 0, 100)) },
+          mode4: { ratio: Math.round(mutateValue(currentParams.modal.modes.mode4.ratio, 0.5, 16) * 100) / 100, decay: Math.round(mutateValue(currentParams.modal.modes.mode4.decay, 10, 5000)), level: Math.round(mutateValue(currentParams.modal.modes.mode4.level, 0, 100)) },
+        },
       },
       effects: {
         saturation: Math.round(mutateValue(currentParams.effects.saturation, 0, 100)),

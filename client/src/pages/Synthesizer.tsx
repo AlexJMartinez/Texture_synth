@@ -9,6 +9,7 @@ import { PresetPanel } from "@/components/synth/PresetPanel";
 import { ExportPanel } from "@/components/synth/ExportPanel";
 import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
+import { ModalPanel } from "@/components/synth/ModalPanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -336,6 +337,57 @@ export default function Synthesizer() {
       oscillators.push(oscNode);
     }
 
+    if (params.modal.enabled) {
+      const modal = params.modal;
+      const modeConfigs = [
+        { mode: modal.modes.mode1, key: "mode1" },
+        { mode: modal.modes.mode2, key: "mode2" },
+        { mode: modal.modes.mode3, key: "mode3" },
+        { mode: modal.modes.mode4, key: "mode4" },
+      ];
+
+      if (modal.impactNoise > 0) {
+        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < noiseData.length; i++) {
+          noiseData[i] = (Math.random() * 2 - 1);
+        }
+        
+        const noiseSource = ctx.createBufferSource();
+        noiseSource.buffer = noiseBuffer;
+        
+        const noiseGain = ctx.createGain();
+        const noiseLevel = modal.impactNoise / 100;
+        noiseGain.gain.setValueAtTime(noiseLevel * 0.5, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + modal.impactDecay / 1000);
+        
+        noiseSource.connect(noiseGain);
+        noiseGain.connect(masterGain);
+        noiseSource.start(now);
+        noiseSource.stop(now + 0.1);
+      }
+
+      for (const { mode } of modeConfigs) {
+        if (mode.level === 0) continue;
+        
+        const modeOsc = ctx.createOscillator();
+        modeOsc.type = "sine";
+        modeOsc.frequency.value = modal.basePitch * mode.ratio;
+        
+        const modeGain = ctx.createGain();
+        const modeLevel = mode.level / 100;
+        modeGain.gain.setValueAtTime(modeLevel * 0.25, now);
+        modeGain.gain.exponentialRampToValueAtTime(0.0001, now + mode.decay / 1000);
+        
+        modeOsc.connect(modeGain);
+        modeGain.connect(masterGain);
+        
+        modeOsc.start(now);
+        modeOsc.stop(now + mode.decay / 1000 + 0.1);
+        oscillators.push(modeOsc);
+      }
+    }
+
     const ampEnv = params.envelopes.env1;
     const attackEnd = now + ampEnv.attack / 1000;
     const holdEnd = attackEnd + ampEnv.hold / 1000;
@@ -538,10 +590,14 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
+              />
+              <ModalPanel
+                modal={params.modal}
+                onChange={(modal) => setParams({ ...params, modal })}
               />
               <EffectsPanel
                 effects={params.effects}

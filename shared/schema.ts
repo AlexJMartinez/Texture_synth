@@ -41,6 +41,25 @@ const EnvelopeSchema = z.object({
   amount: z.number().min(-100).max(100),
 });
 
+const ModalModeSchema = z.object({
+  ratio: z.number().min(0.5).max(16),
+  decay: z.number().min(10).max(5000),
+  level: z.number().min(0).max(100),
+});
+
+const ModalSynthSchema = z.object({
+  enabled: z.boolean(),
+  basePitch: z.number().min(20).max(2000),
+  impactNoise: z.number().min(0).max(100),
+  impactDecay: z.number().min(1).max(100),
+  modes: z.object({
+    mode1: ModalModeSchema,
+    mode2: ModalModeSchema,
+    mode3: ModalModeSchema,
+    mode4: ModalModeSchema,
+  }),
+});
+
 export const SynthParametersSchema = z.object({
   oscillators: z.object({
     osc1: OscillatorSchema,
@@ -62,6 +81,8 @@ export const SynthParametersSchema = z.object({
     combDelay: z.number().min(0.1).max(50),
     gain: z.number().min(-24).max(24),
   }),
+  
+  modal: ModalSynthSchema,
   
   effects: z.object({
     saturation: z.number().min(0).max(100),
@@ -89,6 +110,8 @@ export const SynthParametersSchema = z.object({
 export type SynthParameters = z.infer<typeof SynthParametersSchema>;
 export type Oscillator = z.infer<typeof OscillatorSchema>;
 export type Envelope = z.infer<typeof EnvelopeSchema>;
+export type ModalMode = z.infer<typeof ModalModeSchema>;
+export type ModalSynth = z.infer<typeof ModalSynthSchema>;
 
 export const PresetSchema = z.object({
   id: z.string(),
@@ -153,6 +176,18 @@ export const defaultSynthParameters: SynthParameters = {
     type: "lowpass",
     combDelay: 5,
     gain: 0,
+  },
+  modal: {
+    enabled: false,
+    basePitch: 440,
+    impactNoise: 50,
+    impactDecay: 20,
+    modes: {
+      mode1: { ratio: 1, decay: 500, level: 100 },
+      mode2: { ratio: 2.76, decay: 400, level: 60 },
+      mode3: { ratio: 5.4, decay: 300, level: 40 },
+      mode4: { ratio: 8.93, decay: 200, level: 25 },
+    },
   },
   effects: {
     saturation: 0,
@@ -373,6 +408,64 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
       },
       effects: { ...defaultSynthParameters.effects, saturation: 20 },
+    },
+  },
+  {
+    name: "Modal Bell",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 100, decay: 2000, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      modal: {
+        enabled: true,
+        basePitch: 440,
+        impactNoise: 30,
+        impactDecay: 15,
+        modes: {
+          mode1: { ratio: 1, decay: 2000, level: 100 },
+          mode2: { ratio: 2.76, decay: 1800, level: 70 },
+          mode3: { ratio: 5.4, decay: 1500, level: 50 },
+          mode4: { ratio: 8.93, decay: 1200, level: 35 },
+        },
+      },
+      effects: { ...defaultSynthParameters.effects, reverbEnabled: true, reverbMix: 25, reverbDecay: 2.5 },
+    },
+  },
+  {
+    name: "Metal Hit",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 20, decay: 800, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      modal: {
+        enabled: true,
+        basePitch: 180,
+        impactNoise: 80,
+        impactDecay: 8,
+        modes: {
+          mode1: { ratio: 1, decay: 600, level: 100 },
+          mode2: { ratio: 1.59, decay: 500, level: 85 },
+          mode3: { ratio: 2.14, decay: 450, level: 70 },
+          mode4: { ratio: 2.83, decay: 400, level: 55 },
+        },
+      },
+      effects: { ...defaultSynthParameters.effects, saturation: 15 },
     },
   },
 ];
