@@ -55,6 +55,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index }: Oscillat
             <SelectItem value="triangle">Triangle</SelectItem>
             <SelectItem value="sawtooth">Sawtooth</SelectItem>
             <SelectItem value="square">Square</SelectItem>
+            <SelectItem value="noise">Noise</SelectItem>
           </SelectContent>
         </Select>
 

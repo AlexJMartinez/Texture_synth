@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const WaveformType = z.enum(["sine", "triangle", "sawtooth", "square"]);
+export const WaveformType = z.enum(["sine", "triangle", "sawtooth", "square", "noise"]);
 export type WaveformType = z.infer<typeof WaveformType>;
 
 export const EnvelopeCurve = z.enum(["linear", "exponential", "logarithmic"]);
@@ -757,6 +757,199 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         delayTime: 60,
         delayFeedback: 30,
         delayMix: 25,
+      },
+    },
+  },
+  // Hyperpop presets - percussive, abrasive, interesting
+  {
+    name: "808 Distort",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 45, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "sine", pitch: 90, detune: 0, drift: 0, level: 60, ...defaultModOsc },
+        osc3: { enabled: true, waveform: "noise", pitch: 200, detune: 0, drift: 0, level: 25, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 40, decay: 600, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 80, curve: "exponential", target: "pitch", amount: 100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 200, resonance: 8, type: "lowpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 80,
+        limiterEnabled: true,
+        limiterThreshold: -3,
+        limiterRelease: 50,
+      },
+    },
+  },
+  {
+    name: "Zap Lead",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 880, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 4, fmDepth: 300, fmWaveform: "square", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 440, detune: 15, drift: 15, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 10, decay: 150, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "pitch", amount: -80 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 4000, resonance: 12, type: "bandpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 50,
+        bitcrusher: 10,
+        transientEnabled: true,
+        transientAttack: 70,
+        transientSustain: -40,
+      },
+    },
+  },
+  {
+    name: "Harsh Stab",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "square", pitch: 330, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 7, fmDepth: 800, fmWaveform: "square", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 660, detune: -20, drift: 25, level: 70, fmEnabled: true, fmRatio: 5, fmDepth: 500, fmWaveform: "sawtooth", ...defaultAmOsc },
+        osc3: { enabled: true, waveform: "noise", pitch: 500, detune: 0, drift: 0, level: 40, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 15, decay: 80, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 8, decay: 60, curve: "exponential", target: "filter", amount: 100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 1500, resonance: 15, type: "bandpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 80,
+        bitcrusher: 6,
+        multibandEnabled: true,
+        multibandLowFreq: 200,
+        multibandHighFreq: 3000,
+        multibandLowDrive: 50,
+        multibandMidDrive: 70,
+        multibandHighDrive: 60,
+        limiterEnabled: true,
+        limiterThreshold: -3,
+      },
+    },
+  },
+  {
+    name: "Glitch Perc",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "square", pitch: 200, detune: 0, drift: 50, level: 100, fmEnabled: true, fmRatio: 9, fmDepth: 1000, fmWaveform: "square", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "noise", pitch: 400, detune: 0, drift: 0, level: 60, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 5, decay: 40, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 3, decay: 30, curve: "exponential", target: "pitch", amount: -100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 3000, resonance: 18, type: "highpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        bitcrusher: 3,
+        saturation: 60,
+        transientEnabled: true,
+        transientAttack: 100,
+        transientSustain: -60,
+        limiterEnabled: true,
+        limiterThreshold: -6,
+      },
+    },
+  },
+  {
+    name: "Screamer",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 40, level: 100, fmEnabled: true, fmRatio: 3, fmDepth: 600, fmWaveform: "sawtooth", amEnabled: true, amRatio: 8, amDepth: 70, amWaveform: "square" },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 443, detune: 10, drift: 35, level: 80, fmEnabled: true, fmRatio: 4, fmDepth: 500, fmWaveform: "sine", ...defaultAmOsc },
+        osc3: { enabled: true, waveform: "square", pitch: 220, detune: -15, drift: 30, level: 60, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 20, decay: 200, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 10, decay: 100, curve: "exponential", target: "filter", amount: 100 },
+        env3: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "pitch", amount: 50 },
+      },
+      filter: { enabled: true, frequency: 2000, resonance: 20, type: "bandpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 90,
+        bitcrusher: 8,
+        multibandEnabled: true,
+        multibandLowFreq: 150,
+        multibandHighFreq: 4000,
+        multibandLowDrive: 70,
+        multibandMidDrive: 90,
+        multibandHighDrive: 80,
+        limiterEnabled: true,
+        limiterThreshold: -3,
+        limiterRelease: 30,
+      },
+    },
+  },
+  {
+    name: "Pluck Drop",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "triangle", pitch: 660, detune: 0, drift: 10, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 660, detune: 5, drift: 8, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 30, decay: 250, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 20, decay: 180, curve: "exponential", target: "filter", amount: 80 },
+        env3: { enabled: true, attack: 0, hold: 10, decay: 100, curve: "exponential", target: "pitch", amount: -60 },
+      },
+      filter: { enabled: true, frequency: 5000, resonance: 6, type: "lowpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 30,
+        delayEnabled: true,
+        delayTime: 120,
+        delayFeedback: 40,
+        delayMix: 20,
+        reverbEnabled: true,
+        reverbMix: 15,
+        reverbDecay: 0.8,
+      },
+    },
+  },
+  {
+    name: "Noise Hit",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "noise", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 110, detune: 0, drift: 50, level: 40, fmEnabled: true, fmRatio: 6, fmDepth: 400, fmWaveform: "square", ...defaultAmOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 8, decay: 80, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "filter", amount: 100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 800, resonance: 12, type: "bandpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 70,
+        bitcrusher: 5,
+        transientEnabled: true,
+        transientAttack: 80,
+        transientSustain: -50,
+        limiterEnabled: true,
+        limiterThreshold: -6,
       },
     },
   },
