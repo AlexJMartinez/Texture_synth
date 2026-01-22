@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Knob } from "./Knob";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Envelope, EnvelopeCurve, EnvelopeTarget } from "@shared/schema";
 import { Clock } from "lucide-react";
 
@@ -26,26 +26,26 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
   const decayWidth = (envelope.decay / Math.max(totalDuration, 1)) * 100;
 
   return (
-    <Card className={`synth-panel transition-opacity ${!envelope.enabled ? 'opacity-50' : ''}`} data-testid={`panel-envelope-${index}`}>
-      <CardHeader className="pb-1 pt-2 px-2">
-        <CardTitle className="flex items-center justify-between text-xs font-medium">
-          <div className="flex items-center gap-1">
-            <Clock className="w-3 h-3 text-primary" />
-            {title}
-          </div>
-          <Switch
-            checked={envelope.enabled}
-            onCheckedChange={(v) => updateEnvelope("enabled", v)}
-            className="scale-75"
-            data-testid={`switch-env-${index}`}
-          />
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 px-2 pb-2">
-        <div className="h-10 w-full rounded-md relative overflow-hidden" style={{
+    <CollapsiblePanel
+      title={title}
+      icon={<Clock className="w-3 h-3 text-primary" />}
+      defaultOpen={envelope.enabled}
+      data-testid={`panel-envelope-${index}`}
+      className={`transition-opacity ${!envelope.enabled ? 'opacity-50' : ''}`}
+      headerExtra={
+        <Switch
+          checked={envelope.enabled}
+          onCheckedChange={(v) => updateEnvelope("enabled", v)}
+          className="scale-75"
+          data-testid={`switch-env-${index}`}
+        />
+      }
+    >
+      <div className="space-y-1.5">
+        <div className="h-8 w-full rounded relative overflow-hidden" style={{
           background: 'linear-gradient(to bottom, hsl(var(--muted)), hsl(var(--background)))',
         }}>
-          <svg className="w-full h-full" viewBox="0 0 100 30" preserveAspectRatio="none">
+          <svg className="w-full h-full" viewBox="0 0 100 24" preserveAspectRatio="none">
             <defs>
               <linearGradient id={`envGradient-${index}`} x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="hsl(var(--primary))" />
@@ -53,28 +53,28 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
               </linearGradient>
             </defs>
             <path
-              d={`M 0,28 
-                  L ${attackWidth},4 
-                  L ${attackWidth + holdWidth},4 
+              d={`M 0,22 
+                  L ${attackWidth},3 
+                  L ${attackWidth + holdWidth},3 
                   ${envelope.curve === 'exponential' 
-                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.5},15 ${100},28`
+                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.5},12 ${100},22`
                     : envelope.curve === 'logarithmic'
-                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.2},25 ${100},28`
-                    : `L ${100},28`
+                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.2},18 ${100},22`
+                    : `L ${100},22`
                   }
-                  L 100,28 Z`}
+                  L 100,22 Z`}
               fill={`url(#envGradient-${index})`}
               fillOpacity="0.15"
             />
             <path
-              d={`M 0,28 
-                  L ${attackWidth},4 
-                  L ${attackWidth + holdWidth},4 
+              d={`M 0,22 
+                  L ${attackWidth},3 
+                  L ${attackWidth + holdWidth},3 
                   ${envelope.curve === 'exponential' 
-                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.5},15 ${100},28`
+                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.5},12 ${100},22`
                     : envelope.curve === 'logarithmic'
-                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.2},25 ${100},28`
-                    : `L ${100},28`
+                    ? `Q ${attackWidth + holdWidth + decayWidth * 0.2},18 ${100},22`
+                    : `L ${100},22`
                   }`}
               fill="none"
               stroke={`url(#envGradient-${index})`}
@@ -90,7 +90,7 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
             min={0}
             max={2000}
             step={1}
-            label="Atk"
+            label="A"
             unit="ms"
             onChange={(v) => updateEnvelope("attack", v)}
             accentColor="primary"
@@ -101,7 +101,7 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
             min={0}
             max={2000}
             step={1}
-            label="Hold"
+            label="H"
             unit="ms"
             onChange={(v) => updateEnvelope("hold", v)}
             size="xs"
@@ -111,7 +111,7 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
             min={0}
             max={5000}
             step={1}
-            label="Dec"
+            label="D"
             unit="ms"
             onChange={(v) => updateEnvelope("decay", v)}
             accentColor="accent"
@@ -135,12 +135,12 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
             onValueChange={(v) => updateEnvelope("curve", v as EnvelopeCurve)}
             disabled={!envelope.enabled}
           >
-            <SelectTrigger className="h-6 text-[10px] px-1" data-testid={`select-curve-${index}`}>
+            <SelectTrigger className="h-5 text-[10px] px-1" data-testid={`select-curve-${index}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="linear">Linear</SelectItem>
-              <SelectItem value="exponential">Expo</SelectItem>
+              <SelectItem value="linear">Lin</SelectItem>
+              <SelectItem value="exponential">Exp</SelectItem>
               <SelectItem value="logarithmic">Log</SelectItem>
             </SelectContent>
           </Select>
@@ -149,20 +149,20 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
             onValueChange={(v) => updateEnvelope("target", v as EnvelopeTarget)}
             disabled={!envelope.enabled}
           >
-            <SelectTrigger className="h-6 text-[10px] px-1" data-testid={`select-target-${index}`}>
+            <SelectTrigger className="h-5 text-[10px] px-1" data-testid={`select-target-${index}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="amplitude">Amp</SelectItem>
-              <SelectItem value="filter">Filter</SelectItem>
-              <SelectItem value="pitch">Pitch</SelectItem>
-              <SelectItem value="osc1">OSC1</SelectItem>
-              <SelectItem value="osc2">OSC2</SelectItem>
-              <SelectItem value="osc3">OSC3</SelectItem>
+              <SelectItem value="filter">Flt</SelectItem>
+              <SelectItem value="pitch">Pch</SelectItem>
+              <SelectItem value="osc1">O1</SelectItem>
+              <SelectItem value="osc2">O2</SelectItem>
+              <SelectItem value="osc3">O3</SelectItem>
             </SelectContent>
           </Select>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsiblePanel>
   );
 }

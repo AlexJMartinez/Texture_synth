@@ -1,5 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Knob } from "./Knob";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { SynthParameters } from "@shared/schema";
 import { Volume2 } from "lucide-react";
 
@@ -17,14 +17,13 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
   };
 
   return (
-    <Card className="synth-panel" data-testid="panel-output">
-      <CardHeader className="pb-1 pt-2 px-2">
-        <CardTitle className="flex items-center gap-1 text-xs font-medium">
-          <Volume2 className="w-3 h-3 text-accent" />
-          Output
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 px-2 pb-2">
+    <CollapsiblePanel
+      title="Out"
+      icon={<Volume2 className="w-3 h-3 text-accent" />}
+      defaultOpen={true}
+      data-testid="panel-output"
+    >
+      <div className="space-y-1.5">
         <div className="flex justify-center gap-2">
           <Knob
             value={output.volume}
@@ -50,7 +49,7 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
 
         <div className="flex justify-between px-2 gap-2">
           <div className="flex flex-col items-center gap-0.5">
-            <div className="w-1.5 h-6 rounded-full bg-muted overflow-hidden relative">
+            <div className="w-1.5 h-5 rounded-full bg-muted overflow-hidden relative">
               <div 
                 className="absolute bottom-0 w-full rounded-full transition-all"
                 style={{ 
@@ -65,14 +64,12 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
             <div className="relative h-1 rounded-full bg-muted overflow-hidden w-full">
               <div 
                 className="absolute top-0 h-full w-0.5 rounded-full bg-accent transition-all"
-                style={{ 
-                  left: `calc(${(output.pan + 100) / 2}% - 1px)`,
-                }}
+                style={{ left: `calc(${(output.pan + 100) / 2}% - 1px)` }}
               />
             </div>
           </div>
           <div className="flex flex-col items-center gap-0.5">
-            <div className="w-1.5 h-6 rounded-full bg-muted overflow-hidden relative">
+            <div className="w-1.5 h-5 rounded-full bg-muted overflow-hidden relative">
               <div 
                 className="absolute bottom-0 w-full rounded-full transition-all"
                 style={{ 
@@ -84,7 +81,7 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
             <span className="text-[8px] text-muted-foreground">R</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </CollapsiblePanel>
   );
 }

@@ -1,12 +1,47 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Knob } from "./Knob";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { SynthParameters } from "@shared/schema";
-import { Sparkles, Timer, Waves as ReverbIcon, Volume2 } from "lucide-react";
+import { Sparkles, ChevronDown, ChevronRight } from "lucide-react";
 
 interface EffectsPanelProps {
   effects: SynthParameters["effects"];
   onChange: (effects: SynthParameters["effects"]) => void;
+}
+
+interface EffectSectionProps {
+  title: string;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+  children: React.ReactNode;
+  testId: string;
+}
+
+function EffectSection({ title, enabled, onToggle, children, testId }: EffectSectionProps) {
+  const [isOpen, setIsOpen] = useState(enabled);
+  
+  return (
+    <div className={`rounded border border-border/50 transition-opacity ${!enabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
+      <div className="flex items-center justify-between px-1.5 py-0.5">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+        >
+          {isOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+          {title}
+        </button>
+        <Switch
+          checked={enabled}
+          onCheckedChange={onToggle}
+          className="scale-50"
+          data-testid={testId}
+        />
+      </div>
+      {isOpen && <div className="px-1.5 pb-1.5">{children}</div>}
+    </div>
+  );
 }
 
 export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
@@ -18,16 +53,15 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
   };
 
   return (
-    <Card className="synth-panel" data-testid="panel-effects">
-      <CardHeader className="pb-1 pt-2 px-2">
-        <CardTitle className="flex items-center gap-1 text-xs font-medium">
-          <Sparkles className="w-3 h-3 text-primary" />
-          Effects
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 px-2 pb-2">
-        <div className="p-1.5 rounded bg-muted/30 border border-border/50">
-          <div className="text-[10px] text-muted-foreground mb-1">Distortion</div>
+    <CollapsiblePanel
+      title="FX"
+      icon={<Sparkles className="w-3 h-3 text-primary" />}
+      defaultOpen={true}
+      data-testid="panel-effects"
+    >
+      <div className="space-y-1">
+        <div className="p-1 rounded bg-muted/30 border border-border/50">
+          <div className="text-[10px] text-muted-foreground mb-1">Dist</div>
           <div className="flex justify-center gap-1">
             <Knob
               value={effects.saturation}
@@ -45,8 +79,8 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
               min={1}
               max={16}
               step={1}
-              label="Bits"
-              unit="bit"
+              label="Bit"
+              unit="b"
               onChange={(v) => updateEffects("bitcrusher", v)}
               accentColor="accent"
               size="xs"
@@ -54,147 +88,45 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
           </div>
         </div>
 
-        <div className={`p-1.5 rounded border border-border/50 transition-opacity ${!effects.delayEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1">
-              <Timer className="w-2.5 h-2.5 text-accent" />
-              <span className="text-[10px] text-muted-foreground">Delay</span>
-            </div>
-            <Switch
-              checked={effects.delayEnabled}
-              onCheckedChange={(v) => updateEffects("delayEnabled", v)}
-              className="scale-50"
-              data-testid="switch-delay"
-            />
-          </div>
+        <EffectSection
+          title="Delay"
+          enabled={effects.delayEnabled}
+          onToggle={(v) => updateEffects("delayEnabled", v)}
+          testId="switch-delay"
+        >
           <div className="flex justify-center gap-1">
-            <Knob
-              value={effects.delayTime}
-              min={0}
-              max={2000}
-              step={1}
-              label="Time"
-              unit="ms"
-              onChange={(v) => updateEffects("delayTime", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.delayFeedback}
-              min={0}
-              max={95}
-              step={1}
-              label="FB"
-              unit="%"
-              onChange={(v) => updateEffects("delayFeedback", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.delayMix}
-              min={0}
-              max={100}
-              step={1}
-              label="Mix"
-              unit="%"
-              onChange={(v) => updateEffects("delayMix", v)}
-              size="xs"
-            />
+            <Knob value={effects.delayTime} min={0} max={2000} step={1} label="T" unit="ms" onChange={(v) => updateEffects("delayTime", v)} size="xs" />
+            <Knob value={effects.delayFeedback} min={0} max={95} step={1} label="FB" unit="%" onChange={(v) => updateEffects("delayFeedback", v)} size="xs" />
+            <Knob value={effects.delayMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("delayMix", v)} size="xs" />
           </div>
-        </div>
+        </EffectSection>
 
-        <div className={`p-1.5 rounded border border-border/50 transition-opacity ${!effects.reverbEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1">
-              <ReverbIcon className="w-2.5 h-2.5 text-primary" />
-              <span className="text-[10px] text-muted-foreground">Reverb</span>
-            </div>
-            <Switch
-              checked={effects.reverbEnabled}
-              onCheckedChange={(v) => updateEffects("reverbEnabled", v)}
-              className="scale-50"
-              data-testid="switch-reverb"
-            />
-          </div>
+        <EffectSection
+          title="Reverb"
+          enabled={effects.reverbEnabled}
+          onToggle={(v) => updateEffects("reverbEnabled", v)}
+          testId="switch-reverb"
+        >
           <div className="flex justify-center gap-1">
-            <Knob
-              value={effects.reverbSize}
-              min={0}
-              max={100}
-              step={1}
-              label="Size"
-              unit="%"
-              onChange={(v) => updateEffects("reverbSize", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.reverbDecay}
-              min={0.1}
-              max={10}
-              step={0.1}
-              label="Decay"
-              unit="s"
-              onChange={(v) => updateEffects("reverbDecay", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.reverbMix}
-              min={0}
-              max={100}
-              step={1}
-              label="Mix"
-              unit="%"
-              onChange={(v) => updateEffects("reverbMix", v)}
-              size="xs"
-            />
+            <Knob value={effects.reverbSize} min={0} max={100} step={1} label="Sz" unit="%" onChange={(v) => updateEffects("reverbSize", v)} size="xs" />
+            <Knob value={effects.reverbDecay} min={0.1} max={10} step={0.1} label="Dc" unit="s" onChange={(v) => updateEffects("reverbDecay", v)} size="xs" />
+            <Knob value={effects.reverbMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("reverbMix", v)} size="xs" />
           </div>
-        </div>
+        </EffectSection>
 
-        <div className={`p-1.5 rounded border border-border/50 transition-opacity ${!effects.chorusEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-1">
-              <Volume2 className="w-2.5 h-2.5 text-accent" />
-              <span className="text-[10px] text-muted-foreground">Chorus</span>
-            </div>
-            <Switch
-              checked={effects.chorusEnabled}
-              onCheckedChange={(v) => updateEffects("chorusEnabled", v)}
-              className="scale-50"
-              data-testid="switch-chorus"
-            />
-          </div>
+        <EffectSection
+          title="Chorus"
+          enabled={effects.chorusEnabled}
+          onToggle={(v) => updateEffects("chorusEnabled", v)}
+          testId="switch-chorus"
+        >
           <div className="flex justify-center gap-1">
-            <Knob
-              value={effects.chorusRate}
-              min={0.1}
-              max={10}
-              step={0.1}
-              label="Rate"
-              unit="Hz"
-              onChange={(v) => updateEffects("chorusRate", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.chorusDepth}
-              min={0}
-              max={100}
-              step={1}
-              label="Depth"
-              unit="%"
-              onChange={(v) => updateEffects("chorusDepth", v)}
-              size="xs"
-            />
-            <Knob
-              value={effects.chorusMix}
-              min={0}
-              max={100}
-              step={1}
-              label="Mix"
-              unit="%"
-              onChange={(v) => updateEffects("chorusMix", v)}
-              size="xs"
-            />
+            <Knob value={effects.chorusRate} min={0.1} max={10} step={0.1} label="Rt" unit="Hz" onChange={(v) => updateEffects("chorusRate", v)} size="xs" />
+            <Knob value={effects.chorusDepth} min={0} max={100} step={1} label="Dp" unit="%" onChange={(v) => updateEffects("chorusDepth", v)} size="xs" />
+            <Knob value={effects.chorusMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("chorusMix", v)} size="xs" />
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        </EffectSection>
+      </div>
+    </CollapsiblePanel>
   );
 }
