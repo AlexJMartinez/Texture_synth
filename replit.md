@@ -1,7 +1,7 @@
 # OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-A professional web-based one-shot synthesizer built with React and Web Audio API. Create unique sounds for music production with 3-oscillator architecture, advanced synthesis engines, extensive effects processing, and WAV export. Features FM/AM/Modal/Additive/Granular synthesis for creating everything from clean tones to abrasive, impactful sounds.
+A professional web-based one-shot synthesizer built with React and Tone.js. Create unique sounds for music production with 3-oscillator architecture, advanced synthesis engines, extensive effects processing, and WAV export. Features FM/AM/Modal/Additive/Granular synthesis for creating everything from clean tones to abrasive, impactful sounds. All sounds are percussive by default with aggressive envelopes, targeting hyperpop-style hard-hitting sounds similar to Synplant VST.
 
 ## Features
 
@@ -37,6 +37,19 @@ A professional web-based one-shot synthesizer built with React and Web Audio API
 - **Reverb**: Convolution-based with impulse response generation, size, decay (0.1-10s), mix
 - **Chorus**: Dual LFO-modulated delays with rate (0.1-10Hz), depth, mix
 
+### Waveshaper (Dent-style)
+- 7 curve types: Softclip, hardclip, foldback, sinefold, chebyshev, asymmetric, tube
+- Drive control (0-100%)
+- Pre-filter (highpass) and post-filter (lowpass) options
+- Wet/dry mix control
+- 4x oversampling for alias-free distortion
+
+### Convolution Reverb
+- Custom IR import (WAV/AIFF files)
+- IR files stored in localStorage as base64
+- Wet/dry mix control
+- Generates synthetic impulse responses when no custom IR loaded
+
 ### Impact/Transient Tools
 - **Transient Shaper**: Attack boost/cut (-100 to +100%), sustain control (-100 to +100%)
 - **Hard Limiter**: Threshold (-30 to 0 dB), release time (10-500ms)
@@ -48,13 +61,14 @@ A professional web-based one-shot synthesizer built with React and Web Audio API
 - Normalization option
 
 ### Preset Management
-- 19 factory presets showcasing various sounds:
+- 36 factory presets showcasing various sounds:
   - Basic: Soft Pluck, Deep Bass, Sharp Click, Warm Pad, Dirty Synth, Comb Pluck, Space Delay, Chorus Strings
   - FM/AM: FM Bell, FM Brass, AM Tremolo
   - Modal: Modal Bell, Metal Hit, Industrial Clang
   - Additive: Organ Tones
   - Granular: Grain Cloud, Noise Burst
   - Impact: Impact Slam, Glitch Stab
+  - Waveshaper: Tube Warmth, Fold Crunch, Sine Destroyer, Cheby Brass, Hard Clip Perc
 - User presets with save/load/delete
 - Import/export presets as JSON
 
@@ -66,8 +80,8 @@ A professional web-based one-shot synthesizer built with React and Web Audio API
 ## Tech Stack
 - **Frontend**: React + TypeScript + Vite
 - **Styling**: Tailwind CSS with shadcn/ui components
-- **Audio**: Web Audio API with OfflineAudioContext for rendering
-- **State**: React hooks with localStorage for presets
+- **Audio**: Tone.js for audio context management, Web Audio API nodes for synthesis
+- **State**: React hooks with localStorage for presets and custom impulse responses
 
 ## Project Structure
 ```
@@ -81,6 +95,8 @@ client/src/
 │       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM
 │       ├── FilterPanel.tsx       # 9 filter types
 │       ├── EffectsPanel.tsx      # Distortion, delay, reverb, chorus, impact tools
+│       ├── WaveshaperPanel.tsx   # Dent-style waveshaper with 7 curves
+│       ├── ConvolverPanel.tsx    # Convolution reverb with IR import
 │       ├── SynthEngineSelector.tsx # Dropdown for Modal/Additive/Granular engines
 │       ├── OutputPanel.tsx       # Volume & pan
 │       ├── PresetPanel.tsx       # Preset management
@@ -98,15 +114,16 @@ shared/
 ```
 
 ## Audio Engine
-Integrated in Synthesizer.tsx using Web Audio API:
+Integrated in Synthesizer.tsx using Tone.js and Web Audio API:
 
-1. **Real-time playback**: AudioContext for live preview
-2. **Offline rendering**: OfflineAudioContext for WAV export
+1. **Real-time playback**: Tone.js-managed AudioContext for live preview
+2. **Offline rendering**: Tone.Offline for WAV export and waveform display
 3. **Signal chain**: 
-   - 3 Oscillators (mixed) → Filter (optional) → Effects → Panner → Gain → Output
+   - 3 Oscillators (mixed) → Filter (optional) → Waveshaper → Convolver → Effects → Panner → Gain → Output
 4. **Comb filter**: Delay node with feedback loop
-5. **Reverb**: ConvolverNode with generated impulse response
+5. **Reverb**: ConvolverNode with generated or custom impulse response
 6. **Chorus**: Dual LFO-modulated delay lines
+7. **Waveshaper**: 4x oversampling with 7 curve types
 
 ## Usage
 1. Click the trigger button or press Space to play
@@ -137,3 +154,6 @@ Compact 50% scale design for professional audio feel:
 - Presets stored in localStorage under 'synth-presets-v2' key
 - Old v1 presets automatically cleared on first load
 - Factory presets defined in shared/schema.ts
+- Custom IR files stored in localStorage (key: "synth-custom-irs") as base64-encoded audio buffers
+- Audio context unlocking uses Tone.start() for mobile compatibility
+- Default envelope: 2ms attack, 20ms hold, 200ms decay with transient shaper (+50 attack, -20 sustain) and limiter (-6dB threshold) enabled
