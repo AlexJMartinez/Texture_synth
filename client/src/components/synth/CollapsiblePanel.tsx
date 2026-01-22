@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
@@ -22,6 +22,10 @@ export function CollapsiblePanel({
   "data-testid": testId,
 }: CollapsiblePanelProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    setIsOpen(defaultOpen);
+  }, [defaultOpen]);
 
   return (
     <Card className={`synth-panel ${className}`} data-testid={testId}>

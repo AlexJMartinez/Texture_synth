@@ -3,7 +3,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode, AdditiveSynth, AdditivePartial } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode, AdditiveSynth, AdditivePartial, GranularSynth, GranularTexture } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 
 interface RandomizeControlsProps {
@@ -132,6 +132,15 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         spread: Math.round(randomInRange(0, 50 * chaos)),
         decaySlope: Math.round(randomInRange(0, 60 * chaos)),
       },
+      granular: {
+        enabled: Math.random() > 0.8,
+        density: Math.round(randomInRange(5, 50 * chaos + 10)),
+        grainSize: Math.round(randomInRange(10, 100)),
+        pitch: Math.round(randomInRange(100, 800, true)),
+        pitchSpray: Math.round(randomInRange(0, 60 * chaos)),
+        scatter: Math.round(randomInRange(0, 70 * chaos)),
+        texture: (["noise", "sine", "saw", "click"] as const)[Math.floor(Math.random() * 4)],
+      },
       output: {
         volume: 75,
         pan: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
@@ -247,6 +256,15 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         chorusRate: Math.round(mutateValue(currentParams.effects.chorusRate, 0.1, 10) * 10) / 10,
         chorusDepth: Math.round(mutateValue(currentParams.effects.chorusDepth, 0, 100)),
         chorusMix: Math.round(mutateValue(currentParams.effects.chorusMix, 0, 100)),
+      },
+      granular: {
+        enabled: currentParams.granular.enabled,
+        density: Math.round(mutateValue(currentParams.granular.density, 1, 100)),
+        grainSize: Math.round(mutateValue(currentParams.granular.grainSize, 5, 200)),
+        pitch: Math.round(mutateValue(currentParams.granular.pitch, 20, 2000, true)),
+        pitchSpray: Math.round(mutateValue(currentParams.granular.pitchSpray, 0, 100)),
+        scatter: Math.round(mutateValue(currentParams.granular.scatter, 0, 100)),
+        texture: currentParams.granular.texture,
       },
       output: {
         volume: currentParams.output.volume,

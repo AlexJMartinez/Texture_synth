@@ -11,6 +11,7 @@ interface KnobProps {
   logarithmic?: boolean;
   size?: "xs" | "sm" | "md" | "lg";
   accentColor?: "primary" | "accent";
+  "data-testid"?: string;
 }
 
 export function Knob({
@@ -24,6 +25,7 @@ export function Knob({
   logarithmic = false,
   size = "md",
   accentColor = "primary",
+  "data-testid": testId,
 }: KnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -116,7 +118,7 @@ export function Knob({
     : "bg-primary shadow-[0_0_6px_hsl(var(--primary)/0.5)]";
 
   return (
-    <div className="flex flex-col items-center gap-1.5" data-testid={`knob-${label.toLowerCase().replace(/\s/g, '-')}`}>
+    <div className="flex flex-col items-center gap-1.5" data-testid={testId || `knob-${label.toLowerCase().replace(/\s/g, '-')}`}>
       <div
         ref={knobRef}
         className={`relative ${sizeClasses[size]} rounded-full cursor-pointer select-none transition-transform ${isDragging ? 'scale-105' : ''}`}

@@ -11,6 +11,7 @@ import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { ModalPanel } from "@/components/synth/ModalPanel";
 import { AdditivePanel } from "@/components/synth/AdditivePanel";
+import { GranularPanel } from "@/components/synth/GranularPanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -424,6 +425,71 @@ export default function Synthesizer() {
       });
     }
 
+    if (params.granular.enabled) {
+      const granular = params.granular;
+      const grainCount = Math.round(granular.density);
+      const grainDuration = granular.grainSize / 1000;
+      const totalDuration = (params.envelopes.env1.attack + params.envelopes.env1.hold + params.envelopes.env1.decay) / 1000;
+      const timeSpread = totalDuration * (granular.scatter / 100);
+      
+      for (let i = 0; i < grainCount; i++) {
+        const grainOffset = (i / grainCount) * totalDuration + (Math.random() - 0.5) * timeSpread;
+        const grainStart = Math.max(0, now + grainOffset);
+        
+        const pitchVariation = 1 + (Math.random() - 0.5) * 2 * (granular.pitchSpray / 100);
+        const grainPitch = granular.pitch * pitchVariation;
+        
+        const grainGain = ctx.createGain();
+        grainGain.gain.setValueAtTime(0, grainStart);
+        grainGain.gain.linearRampToValueAtTime(0.15, grainStart + grainDuration * 0.1);
+        grainGain.gain.setValueAtTime(0.15, grainStart + grainDuration * 0.5);
+        grainGain.gain.linearRampToValueAtTime(0, grainStart + grainDuration);
+        
+        if (granular.texture === "noise") {
+          const noiseLength = Math.max(0.01, grainDuration);
+          const noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * noiseLength), ctx.sampleRate);
+          const noiseData = noiseBuffer.getChannelData(0);
+          for (let j = 0; j < noiseData.length; j++) {
+            noiseData[j] = (Math.random() * 2 - 1) * 0.8;
+          }
+          const noiseSource = ctx.createBufferSource();
+          noiseSource.buffer = noiseBuffer;
+          
+          const bandpass = ctx.createBiquadFilter();
+          bandpass.type = "bandpass";
+          bandpass.frequency.value = grainPitch;
+          bandpass.Q.value = 5;
+          
+          noiseSource.connect(bandpass);
+          bandpass.connect(grainGain);
+          grainGain.connect(masterGain);
+          noiseSource.start(grainStart);
+          noiseSource.stop(grainStart + grainDuration);
+        } else if (granular.texture === "click") {
+          const clickLength = 0.002;
+          const clickBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * clickLength), ctx.sampleRate);
+          const clickData = clickBuffer.getChannelData(0);
+          for (let j = 0; j < clickData.length; j++) {
+            clickData[j] = (j < clickData.length / 2) ? 1 : -1;
+          }
+          const clickSource = ctx.createBufferSource();
+          clickSource.buffer = clickBuffer;
+          clickSource.connect(grainGain);
+          grainGain.connect(masterGain);
+          clickSource.start(grainStart);
+        } else {
+          const grainOsc = ctx.createOscillator();
+          grainOsc.type = granular.texture === "saw" ? "sawtooth" : "sine";
+          grainOsc.frequency.value = grainPitch;
+          grainOsc.connect(grainGain);
+          grainGain.connect(masterGain);
+          grainOsc.start(grainStart);
+          grainOsc.stop(grainStart + grainDuration);
+          oscillators.push(grainOsc);
+        }
+      }
+    }
+
     const ampEnv = params.envelopes.env1;
     const attackEnd = now + ampEnv.attack / 1000;
     const holdEnd = attackEnd + ampEnv.hold / 1000;
@@ -626,7 +692,7 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
@@ -638,6 +704,13 @@ export default function Synthesizer() {
               <AdditivePanel
                 additive={params.additive}
                 onChange={(additive) => setParams({ ...params, additive })}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <GranularPanel
+                granular={params.granular}
+                onChange={(granular) => setParams({ ...params, granular })}
               />
               <EffectsPanel
                 effects={params.effects}

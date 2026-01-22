@@ -82,6 +82,16 @@ const AdditiveSynthSchema = z.object({
   decaySlope: z.number().min(0).max(100),
 });
 
+const GranularSynthSchema = z.object({
+  enabled: z.boolean(),
+  density: z.number().min(1).max(100),
+  grainSize: z.number().min(5).max(200),
+  pitch: z.number().min(20).max(2000),
+  pitchSpray: z.number().min(0).max(100),
+  scatter: z.number().min(0).max(100),
+  texture: z.enum(["noise", "sine", "saw", "click"]),
+});
+
 export const SynthParametersSchema = z.object({
   oscillators: z.object({
     osc1: OscillatorSchema,
@@ -107,6 +117,8 @@ export const SynthParametersSchema = z.object({
   modal: ModalSynthSchema,
   
   additive: AdditiveSynthSchema,
+  
+  granular: GranularSynthSchema,
   
   effects: z.object({
     saturation: z.number().min(0).max(100),
@@ -138,6 +150,8 @@ export type ModalMode = z.infer<typeof ModalModeSchema>;
 export type ModalSynth = z.infer<typeof ModalSynthSchema>;
 export type AdditivePartial = z.infer<typeof AdditivePartialSchema>;
 export type AdditiveSynth = z.infer<typeof AdditiveSynthSchema>;
+export type GranularSynth = z.infer<typeof GranularSynthSchema>;
+export type GranularTexture = GranularSynth["texture"];
 
 export const PresetSchema = z.object({
   id: z.string(),
@@ -230,6 +244,15 @@ export const defaultSynthParameters: SynthParameters = {
     },
     spread: 0,
     decaySlope: 0,
+  },
+  granular: {
+    enabled: false,
+    density: 30,
+    grainSize: 50,
+    pitch: 440,
+    pitchSpray: 20,
+    scatter: 30,
+    texture: "noise",
   },
   effects: {
     saturation: 0,
@@ -541,6 +564,32 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         decaySlope: 20,
       },
       effects: { ...defaultSynthParameters.effects, chorusEnabled: true, chorusRate: 1.2, chorusDepth: 40, chorusMix: 25 },
+    },
+  },
+  {
+    name: "Grain Cloud",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 50, hold: 300, decay: 1000, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      granular: {
+        enabled: true,
+        density: 40,
+        grainSize: 60,
+        pitch: 330,
+        pitchSpray: 25,
+        scatter: 40,
+        texture: "sine",
+      },
+      effects: { ...defaultSynthParameters.effects, reverbEnabled: true, reverbMix: 35, reverbDecay: 2.5 },
     },
   },
 ];
