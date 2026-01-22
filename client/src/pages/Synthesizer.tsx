@@ -9,9 +9,7 @@ import { PresetPanel } from "@/components/synth/PresetPanel";
 import { ExportPanel } from "@/components/synth/ExportPanel";
 import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
-import { ModalPanel } from "@/components/synth/ModalPanel";
-import { AdditivePanel } from "@/components/synth/AdditivePanel";
-import { GranularPanel } from "@/components/synth/GranularPanel";
+import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -789,20 +787,13 @@ export default function Synthesizer() {
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
               />
-              <ModalPanel
+              <SynthEngineSelector
                 modal={params.modal}
-                onChange={(modal) => setParams({ ...params, modal })}
-              />
-              <AdditivePanel
                 additive={params.additive}
-                onChange={(additive) => setParams({ ...params, additive })}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <GranularPanel
                 granular={params.granular}
-                onChange={(granular) => setParams({ ...params, granular })}
+                onModalChange={(modal) => setParams({ ...params, modal })}
+                onAdditiveChange={(additive) => setParams({ ...params, additive })}
+                onGranularChange={(granular) => setParams({ ...params, granular })}
               />
               <EffectsPanel
                 effects={params.effects}
