@@ -46,6 +46,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
     drift: Math.round(randomInRange(0, 50 * chaos)),
     level: Math.round(randomInRange(30, 100)),
+    fmEnabled: Math.random() > 0.7,
+    fmRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
+    fmDepth: Math.round(randomInRange(50, 500 * chaos)),
+    fmWaveform: randomWaveform(),
   });
 
   const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => ({
@@ -129,6 +133,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       detune: Math.round(mutateValue(osc.detune, -100, 100)),
       drift: Math.round(mutateValue(osc.drift, 0, 100)),
       level: Math.round(mutateValue(osc.level, 0, 100)),
+      fmEnabled: osc.fmEnabled,
+      fmRatio: Math.round(mutateValue(osc.fmRatio, 0.25, 16) * 4) / 4,
+      fmDepth: Math.round(mutateValue(osc.fmDepth, 0, 1000)),
+      fmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.fmWaveform,
     });
 
     const mutateEnv = (env: Envelope): Envelope => ({

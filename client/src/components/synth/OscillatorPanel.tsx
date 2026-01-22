@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Oscillator, WaveformType } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
+import { ChevronDown, ChevronRight, Radio } from "lucide-react";
 
 interface OscillatorPanelProps {
   oscillator: Oscillator;
@@ -13,18 +15,13 @@ interface OscillatorPanelProps {
 }
 
 export function OscillatorPanel({ oscillator, onChange, title, index }: OscillatorPanelProps) {
+  const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
+  
   const updateOscillator = <K extends keyof Oscillator>(
     key: K,
     value: Oscillator[K]
   ) => {
     onChange({ ...oscillator, [key]: value });
-  };
-
-  const waveformLabels: Record<WaveformType, string> = {
-    sine: "Sin",
-    triangle: "Tri",
-    sawtooth: "Saw",
-    square: "Sqr",
   };
 
   return (
@@ -104,6 +101,68 @@ export function OscillatorPanel({ oscillator, onChange, title, index }: Oscillat
             accentColor="primary"
             size="xs"
           />
+        </div>
+
+        <div className={`rounded border border-border/50 transition-opacity ${!oscillator.fmEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
+          <div className="flex items-center justify-between px-1.5 py-0.5">
+            <button
+              type="button"
+              onClick={() => setFmOpen(!fmOpen)}
+              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              {fmOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+              <Radio className="w-2.5 h-2.5 text-primary" />
+              FM
+            </button>
+            <Switch
+              checked={oscillator.fmEnabled}
+              onCheckedChange={(v) => updateOscillator("fmEnabled", v)}
+              className="scale-50"
+              data-testid={`switch-fm-${index}`}
+            />
+          </div>
+          {fmOpen && (
+            <div className="px-1.5 pb-1.5 space-y-1">
+              <Select
+                value={oscillator.fmWaveform}
+                onValueChange={(v) => updateOscillator("fmWaveform", v as WaveformType)}
+                disabled={!oscillator.fmEnabled}
+              >
+                <SelectTrigger className="h-5 text-[10px]" data-testid={`select-fm-waveform-${index}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sine">Sine</SelectItem>
+                  <SelectItem value="triangle">Triangle</SelectItem>
+                  <SelectItem value="sawtooth">Sawtooth</SelectItem>
+                  <SelectItem value="square">Square</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex justify-center gap-1">
+                <Knob
+                  value={oscillator.fmRatio}
+                  min={0.25}
+                  max={16}
+                  step={0.25}
+                  label="Ratio"
+                  onChange={(v) => updateOscillator("fmRatio", v)}
+                  accentColor="primary"
+                  size="xs"
+                />
+                <Knob
+                  value={oscillator.fmDepth}
+                  min={0}
+                  max={1000}
+                  step={10}
+                  label="Depth"
+                  unit="Hz"
+                  onChange={(v) => updateOscillator("fmDepth", v)}
+                  accentColor="accent"
+                  size="xs"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </CollapsiblePanel>

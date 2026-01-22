@@ -239,6 +239,21 @@ export default function Synthesizer() {
       const oscGain = ctx.createGain();
       oscGain.gain.value = osc.level / 100;
 
+      if (osc.fmEnabled && osc.fmDepth > 0) {
+        const modOsc = ctx.createOscillator();
+        modOsc.type = osc.fmWaveform;
+        modOsc.frequency.value = osc.pitch * osc.fmRatio;
+        
+        const modGain = ctx.createGain();
+        modGain.gain.value = osc.fmDepth;
+        
+        modOsc.connect(modGain);
+        modGain.connect(oscNode.frequency);
+        
+        modOsc.start(now);
+        modOsc.stop(now + durationSec);
+      }
+
       const pitchEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
         .filter(e => e.enabled && e.target === "pitch");
       
