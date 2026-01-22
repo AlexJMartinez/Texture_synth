@@ -1,14 +1,21 @@
 # OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-A professional web-based one-shot synthesizer built with React and Web Audio API. Create unique sounds for music production with 3-oscillator architecture, advanced routing, and extensive effects processing.
+A professional web-based one-shot synthesizer built with React and Web Audio API. Create unique sounds for music production with 3-oscillator architecture, advanced synthesis engines, extensive effects processing, and WAV export. Features FM/AM/Modal/Additive/Granular synthesis for creating everything from clean tones to abrasive, impactful sounds.
 
 ## Features
 
 ### Multi-Oscillator Architecture (3 OSC)
 - 4 waveforms: Sine, triangle, sawtooth, and square
 - Per-oscillator: Pitch (20-20000Hz), detune (-100 to +100 cents), drift (0-100%), level (0-100%)
+- FM synthesis per oscillator: ratio, depth, modulator waveform
+- AM synthesis per oscillator: ratio, depth, modulator waveform
 - Individual enable/disable switches
+
+### Advanced Synthesis Engines (Dropdown Selector)
+- **Modal Synthesis**: 4 resonant modes with ratio/decay/level controls, impact noise, metallic/percussive sounds
+- **Additive Synthesis**: 8 harmonic partials with individual levels, spread, and decay slope
+- **Granular Synthesis**: Grain clouds with density, size, pitch, spray, scatter, and texture (noise/sine/saw/click)
 
 ### 3-Envelope System with Routing
 - Attack/Hold/Decay (AHD) envelopes with linear, exponential, and logarithmic curves
@@ -30,13 +37,24 @@ A professional web-based one-shot synthesizer built with React and Web Audio API
 - **Reverb**: Convolution-based with impulse response generation, size, decay (0.1-10s), mix
 - **Chorus**: Dual LFO-modulated delays with rate (0.1-10Hz), depth, mix
 
+### Impact/Transient Tools
+- **Transient Shaper**: Attack boost/cut (-100 to +100%), sustain control (-100 to +100%)
+- **Hard Limiter**: Threshold (-30 to 0 dB), release time (10-500ms)
+- **Multiband Distortion**: 3-band frequency splitting with individual drive controls per band
+
 ### Output & Export
 - Volume and stereo panning controls
 - WAV export at 44.1kHz or 48kHz, mono or stereo
 - Normalization option
 
 ### Preset Management
-- 8 factory presets showcasing various sounds
+- 19 factory presets showcasing various sounds:
+  - Basic: Soft Pluck, Deep Bass, Sharp Click, Warm Pad, Dirty Synth, Comb Pluck, Space Delay, Chorus Strings
+  - FM/AM: FM Bell, FM Brass, AM Tremolo
+  - Modal: Modal Bell, Metal Hit, Industrial Clang
+  - Additive: Organ Tones
+  - Granular: Grain Cloud, Noise Burst
+  - Impact: Impact Slam, Glitch Stab
 - User presets with save/load/delete
 - Import/export presets as JSON
 
@@ -56,25 +74,27 @@ A professional web-based one-shot synthesizer built with React and Web Audio API
 client/src/
 ├── components/
 │   └── synth/
-│       ├── Knob.tsx           # Rotary knob control (xs/sm/md/lg sizes)
-│       ├── WaveformDisplay.tsx # Audio visualization
-│       ├── EnvelopePanel.tsx   # AHD envelope with routing
-│       ├── OscillatorPanel.tsx # Waveform & pitch controls
-│       ├── FilterPanel.tsx     # 9 filter types
-│       ├── EffectsPanel.tsx    # Distortion, delay, reverb, chorus
-│       ├── OutputPanel.tsx     # Volume & pan
-│       ├── PresetPanel.tsx     # Preset management
-│       ├── ExportPanel.tsx     # WAV export settings
-│       ├── TriggerButton.tsx   # Play button (sm/md/lg sizes)
+│       ├── Knob.tsx              # Rotary knob control (xs/sm/md/lg sizes)
+│       ├── WaveformDisplay.tsx   # Audio visualization
+│       ├── CollapsiblePanel.tsx  # Collapsible panel wrapper for sections
+│       ├── EnvelopePanel.tsx     # AHD envelope with routing
+│       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM
+│       ├── FilterPanel.tsx       # 9 filter types
+│       ├── EffectsPanel.tsx      # Distortion, delay, reverb, chorus, impact tools
+│       ├── SynthEngineSelector.tsx # Dropdown for Modal/Additive/Granular engines
+│       ├── OutputPanel.tsx       # Volume & pan
+│       ├── PresetPanel.tsx       # Preset management
+│       ├── ExportPanel.tsx       # WAV export settings
+│       ├── TriggerButton.tsx     # Play button (sm/md/lg sizes)
 │       ├── RandomizeControls.tsx
-│       └── WaveformIcons.tsx   # SVG waveform icons
+│       └── WaveformIcons.tsx     # SVG waveform icons
 ├── pages/
-│   └── Synthesizer.tsx        # Main synth with audio engine
+│   └── Synthesizer.tsx          # Main synth with audio engine
 └── lib/
     └── queryClient.ts
 
 shared/
-└── schema.ts                  # TypeScript types for all synth parameters
+└── schema.ts                    # TypeScript types for all synth parameters
 ```
 
 ## Audio Engine
@@ -110,6 +130,8 @@ Compact 50% scale design for professional audio feel:
 - xs/sm knobs and controls
 - 10px-xs font sizes
 - Reduced padding throughout
+- Collapsible panels for organized layout
+- Dropdown selector for synthesis engine switching
 
 ## Technical Notes
 - Presets stored in localStorage under 'synth-presets-v2' key
