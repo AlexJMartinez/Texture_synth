@@ -92,6 +92,30 @@ const GranularSynthSchema = z.object({
   texture: z.enum(["noise", "sine", "saw", "click"]),
 });
 
+export const WaveshaperCurve = z.enum([
+  "softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"
+]);
+export type WaveshaperCurve = z.infer<typeof WaveshaperCurve>;
+
+const WaveshaperSchema = z.object({
+  enabled: z.boolean(),
+  curve: WaveshaperCurve,
+  drive: z.number().min(0).max(100),
+  mix: z.number().min(0).max(100),
+  preFilterFreq: z.number().min(20).max(20000),
+  preFilterEnabled: z.boolean(),
+  postFilterFreq: z.number().min(20).max(20000),
+  postFilterEnabled: z.boolean(),
+  oversample: z.enum(["none", "2x", "4x"]),
+});
+
+const ConvolverSchema = z.object({
+  enabled: z.boolean(),
+  irName: z.string(),
+  mix: z.number().min(0).max(100),
+  useCustomIR: z.boolean(),
+});
+
 export const SynthParametersSchema = z.object({
   oscillators: z.object({
     osc1: OscillatorSchema,
@@ -119,6 +143,10 @@ export const SynthParametersSchema = z.object({
   additive: AdditiveSynthSchema,
   
   granular: GranularSynthSchema,
+  
+  waveshaper: WaveshaperSchema,
+  
+  convolver: ConvolverSchema,
   
   effects: z.object({
     saturation: z.number().min(0).max(100),
@@ -164,6 +192,8 @@ export type AdditivePartial = z.infer<typeof AdditivePartialSchema>;
 export type AdditiveSynth = z.infer<typeof AdditiveSynthSchema>;
 export type GranularSynth = z.infer<typeof GranularSynthSchema>;
 export type GranularTexture = GranularSynth["texture"];
+export type Waveshaper = z.infer<typeof WaveshaperSchema>;
+export type Convolver = z.infer<typeof ConvolverSchema>;
 
 export const PresetSchema = z.object({
   id: z.string(),
@@ -202,12 +232,31 @@ const defaultOscillator: Oscillator = {
 
 const defaultEnvelope: Envelope = {
   enabled: true,
-  attack: 10,
-  hold: 50,
-  decay: 500,
+  attack: 2,
+  hold: 20,
+  decay: 200,
   curve: "exponential",
   target: "amplitude",
   amount: 100,
+};
+
+const defaultWaveshaper: Waveshaper = {
+  enabled: false,
+  curve: "tube",
+  drive: 50,
+  mix: 100,
+  preFilterFreq: 200,
+  preFilterEnabled: false,
+  postFilterFreq: 8000,
+  postFilterEnabled: false,
+  oversample: "4x",
+};
+
+const defaultConvolver: Convolver = {
+  enabled: false,
+  irName: "none",
+  mix: 50,
+  useCustomIR: false,
 };
 
 export const defaultSynthParameters: SynthParameters = {
@@ -266,8 +315,10 @@ export const defaultSynthParameters: SynthParameters = {
     scatter: 30,
     texture: "noise",
   },
+  waveshaper: { ...defaultWaveshaper },
+  convolver: { ...defaultConvolver },
   effects: {
-    saturation: 0,
+    saturation: 20,
     bitcrusher: 16,
     delayEnabled: false,
     delayTime: 250,
@@ -281,12 +332,12 @@ export const defaultSynthParameters: SynthParameters = {
     chorusRate: 1.5,
     chorusDepth: 50,
     chorusMix: 30,
-    transientEnabled: false,
-    transientAttack: 0,
-    transientSustain: 0,
-    limiterEnabled: false,
+    transientEnabled: true,
+    transientAttack: 50,
+    transientSustain: -20,
+    limiterEnabled: true,
     limiterThreshold: -6,
-    limiterRelease: 100,
+    limiterRelease: 50,
     multibandEnabled: false,
     multibandLowFreq: 200,
     multibandHighFreq: 4000,
@@ -950,6 +1001,171 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         transientSustain: -50,
         limiterEnabled: true,
         limiterThreshold: -6,
+      },
+    },
+  },
+  {
+    name: "Tube Warmth",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 0, drift: 5, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 7, drift: 5, level: 70, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 5, hold: 50, decay: 400, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 3000, resonance: 4, type: "lowpass", combDelay: 5, gain: 0 },
+      waveshaper: {
+        enabled: true,
+        curve: "tube",
+        drive: 60,
+        mix: 100,
+        preFilterFreq: 150,
+        preFilterEnabled: true,
+        postFilterFreq: 8000,
+        postFilterEnabled: false,
+        oversample: "4x",
+      },
+      convolver: { ...defaultConvolver },
+    },
+  },
+  {
+    name: "Fold Crunch",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 110, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "triangle", pitch: 220, detune: 0, drift: 10, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 30, decay: 300, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      waveshaper: {
+        enabled: true,
+        curve: "foldback",
+        drive: 80,
+        mix: 100,
+        preFilterFreq: 200,
+        preFilterEnabled: false,
+        postFilterFreq: 6000,
+        postFilterEnabled: true,
+        oversample: "4x",
+      },
+      convolver: { ...defaultConvolver },
+      effects: {
+        ...defaultSynthParameters.effects,
+        transientEnabled: true,
+        transientAttack: 60,
+        transientSustain: -30,
+        limiterEnabled: true,
+        limiterThreshold: -6,
+      },
+    },
+  },
+  {
+    name: "Sine Destroyer",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 20, decay: 200, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      waveshaper: {
+        enabled: true,
+        curve: "sinefold",
+        drive: 90,
+        mix: 100,
+        preFilterFreq: 200,
+        preFilterEnabled: false,
+        postFilterFreq: 5000,
+        postFilterEnabled: true,
+        oversample: "4x",
+      },
+      convolver: { ...defaultConvolver },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 40,
+        limiterEnabled: true,
+        limiterThreshold: -3,
+      },
+    },
+  },
+  {
+    name: "Cheby Brass",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 0, drift: 8, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 5, drift: 8, level: 60, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 10, hold: 80, decay: 500, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 5, hold: 40, decay: 300, curve: "exponential", target: "filter", amount: 70 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 2000, resonance: 6, type: "lowpass", combDelay: 5, gain: 0 },
+      waveshaper: {
+        enabled: true,
+        curve: "chebyshev",
+        drive: 50,
+        mix: 80,
+        preFilterFreq: 200,
+        preFilterEnabled: false,
+        postFilterFreq: 8000,
+        postFilterEnabled: false,
+        oversample: "4x",
+      },
+      convolver: { ...defaultConvolver },
+    },
+  },
+  {
+    name: "Hard Clip Perc",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "square", pitch: 150, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 3, fmDepth: 200, fmWaveform: "sine", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "noise", pitch: 440, detune: 0, drift: 0, level: 40, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 10, decay: 100, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 60, curve: "exponential", target: "pitch", amount: -80 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 1000, resonance: 10, type: "lowpass", combDelay: 5, gain: 0 },
+      waveshaper: {
+        enabled: true,
+        curve: "hardclip",
+        drive: 70,
+        mix: 100,
+        preFilterFreq: 200,
+        preFilterEnabled: false,
+        postFilterFreq: 4000,
+        postFilterEnabled: true,
+        oversample: "4x",
+      },
+      convolver: { ...defaultConvolver },
+      effects: {
+        ...defaultSynthParameters.effects,
+        transientEnabled: true,
+        transientAttack: 100,
+        transientSustain: -50,
+        limiterEnabled: true,
+        limiterThreshold: -3,
       },
     },
   },

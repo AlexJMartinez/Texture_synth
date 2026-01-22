@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import * as Tone from "tone";
 import { WaveformDisplay } from "@/components/synth/WaveformDisplay";
 import { EnvelopePanel } from "@/components/synth/EnvelopePanel";
 import { OscillatorPanel } from "@/components/synth/OscillatorPanel";
@@ -10,15 +11,107 @@ import { ExportPanel } from "@/components/synth/ExportPanel";
 import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
+import { WaveshaperPanel } from "@/components/synth/WaveshaperPanel";
+import { ConvolverPanel } from "@/components/synth/ConvolverPanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
-  type Oscillator,
-  type Envelope,
+  type WaveshaperCurve,
   defaultSynthParameters, 
   defaultExportSettings 
 } from "@shared/schema";
 import { Zap } from "lucide-react";
+
+const IR_STORAGE_KEY = "synth-custom-irs";
+
+function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Array {
+  const samples = 8192;
+  const curve = new Float32Array(samples);
+  const amount = (drive / 100) * 10;
+  
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    
+    switch (type) {
+      case "softclip":
+        curve[i] = Math.tanh(x * (1 + amount * 2));
+        break;
+      case "hardclip":
+        const threshold = 1 / (1 + amount);
+        curve[i] = Math.max(-threshold, Math.min(threshold, x)) * (1 / threshold);
+        break;
+      case "foldback":
+        let folded = x * (1 + amount * 3);
+        while (Math.abs(folded) > 1) {
+          if (folded > 1) folded = 2 - folded;
+          else if (folded < -1) folded = -2 - folded;
+        }
+        curve[i] = folded;
+        break;
+      case "sinefold":
+        curve[i] = Math.sin(x * Math.PI * (1 + amount * 2));
+        break;
+      case "chebyshev":
+        const order = Math.floor(2 + amount * 8);
+        curve[i] = chebyshev(x, order);
+        break;
+      case "asymmetric":
+        if (x >= 0) {
+          curve[i] = Math.tanh(x * (1 + amount * 4));
+        } else {
+          curve[i] = Math.tanh(x * (1 + amount));
+        }
+        break;
+      case "tube":
+        const k = amount * 5 + 1;
+        curve[i] = (1 + k) * x / (1 + k * Math.abs(x));
+        break;
+      default:
+        curve[i] = x;
+    }
+  }
+  
+  return curve;
+}
+
+function chebyshev(x: number, order: number): number {
+  if (order === 0) return 1;
+  if (order === 1) return x;
+  let t0 = 1, t1 = x;
+  for (let i = 2; i <= order; i++) {
+    const t2 = 2 * x * t1 - t0;
+    t0 = t1;
+    t1 = t2;
+  }
+  return t1;
+}
+
+async function loadStoredIR(name: string): Promise<AudioBuffer | null> {
+  try {
+    const stored = localStorage.getItem(IR_STORAGE_KEY);
+    if (!stored) return null;
+    
+    const irs = JSON.parse(stored);
+    const ir = irs.find((ir: { name: string; data: string }) => ir.name === name);
+    if (!ir) return null;
+    
+    const binaryString = atob(ir.data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    
+    // Use Tone.js context for decoding audio data
+    await Tone.start();
+    const toneContext = Tone.getContext();
+    const audioBuffer = await toneContext.decodeAudioData(bytes.buffer.slice(0));
+    
+    return audioBuffer;
+  } catch (error) {
+    console.error("Failed to load stored IR:", error);
+    return null;
+  }
+}
 
 export default function Synthesizer() {
   const [params, setParams] = useState<SynthParameters>(defaultSynthParameters);
@@ -26,51 +119,10 @@ export default function Synthesizer() {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const customIRBufferRef = useRef<AudioBuffer | null>(null);
 
-  // Create, unlock, and return AudioContext - MUST be called from user gesture on iOS
-  const getOrCreateAudioContext = useCallback((): AudioContext => {
-    // Use webkitAudioContext for older iOS Safari
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    
-    // Create new context if needed
-    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
-      audioContextRef.current = new AudioContextClass();
-    }
-    
-    const ctx = audioContextRef.current;
-    
-    // Resume if suspended - must happen synchronously in user gesture
-    if (ctx.state === "suspended") {
-      ctx.resume();
-    }
-    
-    // Play silent buffer to fully unlock on iOS - this is critical
-    try {
-      const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-      const source = ctx.createBufferSource();
-      source.buffer = silentBuffer;
-      source.connect(ctx.destination);
-      source.start(0);
-    } catch (e) {
-      // Ignore - silent unlock failed but main audio may still work
-    }
-    
-    return ctx;
-  }, []);
-
-  const applyBitcrusher = useCallback((buffer: AudioBuffer, bitDepth: number): void => {
-    if (bitDepth >= 16) return;
-    
-    const step = Math.pow(0.5, bitDepth);
-    const invStep = 1 / step;
-    
-    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-      const data = buffer.getChannelData(channel);
-      for (let i = 0; i < data.length; i++) {
-        data[i] = Math.round(data[i] * invStep) * step;
-      }
-    }
+  const handleIRLoaded = useCallback((buffer: AudioBuffer) => {
+    customIRBufferRef.current = buffer;
   }, []);
 
   const createImpulseResponse = useCallback((ctx: BaseAudioContext, duration: number, decay: number): AudioBuffer => {
@@ -89,11 +141,25 @@ export default function Synthesizer() {
     return impulse;
   }, []);
 
-  const generateSound = useCallback((
+  const applyBitcrusher = useCallback((buffer: AudioBuffer, bitDepth: number): void => {
+    if (bitDepth >= 16) return;
+    
+    const step = Math.pow(0.5, bitDepth);
+    const invStep = 1 / step;
+    
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const data = buffer.getChannelData(channel);
+      for (let i = 0; i < data.length; i++) {
+        data[i] = Math.round(data[i] * invStep) * step;
+      }
+    }
+  }, []);
+
+  const generateSound = useCallback(async (
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
     duration: number
-  ): { oscillators: OscillatorNode[]; masterGain: GainNode } => {
+  ): Promise<{ masterGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
     
@@ -131,7 +197,6 @@ export default function Synthesizer() {
         masterGain.connect(filter);
         lastNode = filter;
         
-        const ampEnv = params.envelopes.env1;
         const filterEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
           .filter(e => e.enabled && e.target === "filter");
         
@@ -152,6 +217,46 @@ export default function Synthesizer() {
           );
           filter.frequency.linearRampToValueAtTime(params.filter.frequency, decayEnd);
         }
+      }
+    }
+
+    if (params.waveshaper.enabled) {
+      const waveshaper = ctx.createWaveShaper();
+      waveshaper.curve = createWaveshaperCurve(params.waveshaper.curve, params.waveshaper.drive);
+      waveshaper.oversample = params.waveshaper.oversample;
+      
+      if (params.waveshaper.preFilterEnabled) {
+        const preFilter = ctx.createBiquadFilter();
+        preFilter.type = "highpass";
+        preFilter.frequency.value = params.waveshaper.preFilterFreq;
+        lastNode.connect(preFilter);
+        lastNode = preFilter;
+      }
+      
+      if (params.waveshaper.mix < 100) {
+        const dryGain = ctx.createGain();
+        const wetGain = ctx.createGain();
+        const mixNode = ctx.createGain();
+        dryGain.gain.value = 1 - params.waveshaper.mix / 100;
+        wetGain.gain.value = params.waveshaper.mix / 100;
+        
+        lastNode.connect(dryGain);
+        lastNode.connect(waveshaper);
+        waveshaper.connect(wetGain);
+        dryGain.connect(mixNode);
+        wetGain.connect(mixNode);
+        lastNode = mixNode;
+      } else {
+        lastNode.connect(waveshaper);
+        lastNode = waveshaper;
+      }
+      
+      if (params.waveshaper.postFilterEnabled) {
+        const postFilter = ctx.createBiquadFilter();
+        postFilter.type = "lowpass";
+        postFilter.frequency.value = params.waveshaper.postFilterFreq;
+        lastNode.connect(postFilter);
+        lastNode = postFilter;
       }
     }
 
@@ -194,7 +299,35 @@ export default function Synthesizer() {
       delayWet.connect(effectsMixer);
     }
 
-    if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
+    if (params.convolver.enabled && params.convolver.useCustomIR && params.convolver.irName !== "none") {
+      let irBuffer = customIRBufferRef.current;
+      if (!irBuffer || params.convolver.irName !== "current") {
+        irBuffer = await loadStoredIR(params.convolver.irName);
+      }
+      
+      if (irBuffer) {
+        const convolver = ctx.createConvolver();
+        const irCopy = ctx.createBuffer(irBuffer.numberOfChannels, irBuffer.length, irBuffer.sampleRate);
+        for (let ch = 0; ch < irBuffer.numberOfChannels; ch++) {
+          irCopy.copyToChannel(irBuffer.getChannelData(ch), ch);
+        }
+        convolver.buffer = irCopy;
+        
+        const convolverWet = ctx.createGain();
+        const convolverDry = ctx.createGain();
+        convolverWet.gain.value = params.convolver.mix / 100;
+        convolverDry.gain.value = 1 - params.convolver.mix / 100;
+        
+        lastNode.connect(convolver);
+        convolver.connect(convolverWet);
+        lastNode.connect(convolverDry);
+        
+        const convolverMix = ctx.createGain();
+        convolverWet.connect(convolverMix);
+        convolverDry.connect(convolverMix);
+        convolverMix.connect(effectsMixer);
+      }
+    } else if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
       const convolver = ctx.createConvolver();
       const reverbDuration = 0.5 + (params.effects.reverbSize / 100) * 3;
       convolver.buffer = createImpulseResponse(ctx, reverbDuration, params.effects.reverbDecay);
@@ -250,7 +383,6 @@ export default function Synthesizer() {
       const attackAmount = params.effects.transientAttack / 100;
       const sustainAmount = params.effects.transientSustain / 100;
       
-      const attackTime = 0.01;
       const transientDuration = 0.05;
       
       if (attackAmount > 0) {
@@ -338,7 +470,6 @@ export default function Synthesizer() {
     outputNode.connect(panNode);
     panNode.connect(ctx.destination);
 
-    const oscillators: OscillatorNode[] = [];
     const oscConfigs = [
       { osc: params.oscillators.osc1, key: "osc1" },
       { osc: params.oscillators.osc2, key: "osc2" },
@@ -355,7 +486,6 @@ export default function Synthesizer() {
       let frequencyParam: AudioParam | null = null;
 
       if (osc.waveform === "noise") {
-        // Create noise buffer for noise waveform
         const bufferSize = Math.ceil(ctx.sampleRate * durationSec);
         const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const noiseData = noiseBuffer.getChannelData(0);
@@ -417,7 +547,6 @@ export default function Synthesizer() {
         amModOsc.stop(now + durationSec);
       }
 
-      // Apply pitch envelope only for non-noise oscillators
       if (frequencyParam) {
         const pitchEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
           .filter(e => e.enabled && e.target === "pitch");
@@ -473,9 +602,6 @@ export default function Synthesizer() {
       
       sourceNode.start(now);
       sourceNode.stop(now + durationSec);
-      if (sourceNode instanceof OscillatorNode) {
-        oscillators.push(sourceNode);
-      }
     }
 
     if (params.modal.enabled) {
@@ -525,7 +651,6 @@ export default function Synthesizer() {
         
         modeOsc.start(now);
         modeOsc.stop(now + mode.decay / 1000 + 0.1);
-        oscillators.push(modeOsc);
       }
     }
 
@@ -560,7 +685,6 @@ export default function Synthesizer() {
         const envDuration = (ampEnv.attack + ampEnv.hold + ampEnv.decay) / 1000 + 0.2;
         partialOsc.start(now);
         partialOsc.stop(now + envDuration);
-        oscillators.push(partialOsc);
       });
     }
 
@@ -624,7 +748,6 @@ export default function Synthesizer() {
           grainGain.connect(masterGain);
           grainOsc.start(grainStart);
           grainOsc.stop(grainStart + grainDuration);
-          oscillators.push(grainOsc);
         }
       }
     }
@@ -653,7 +776,7 @@ export default function Synthesizer() {
       masterGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
     }
 
-    return { oscillators, masterGain };
+    return { masterGain };
   }, [createImpulseResponse]);
 
   const getTotalDuration = useCallback((params: SynthParameters): number => {
@@ -663,63 +786,98 @@ export default function Synthesizer() {
     if (params.effects.delayEnabled) {
       baseDuration += params.effects.delayTime * 3;
     }
-    if (params.effects.reverbEnabled) {
+    if (params.effects.reverbEnabled || (params.convolver.enabled && params.convolver.useCustomIR)) {
       baseDuration += params.effects.reverbDecay * 1000;
     }
     
     return Math.min(baseDuration, 10000);
   }, []);
 
-  const handleTrigger = useCallback(() => {
-    // Get/create and unlock audio context - all in one call during user gesture
-    const ctx = getOrCreateAudioContext();
-
+  const handleTrigger = useCallback(async () => {
+    // Use Tone.js to start audio context (handles user gesture requirement)
+    await Tone.start();
+    
+    // Get the Tone.js-managed audio context
+    const ctx = Tone.getContext().rawContext as AudioContext;
+    
     setIsPlaying(true);
 
     const totalDuration = getTotalDuration(params);
     
-    const { oscillators } = generateSound(ctx, params, totalDuration);
+    // Play through live context
+    await generateSound(ctx, params, totalDuration);
 
-    if (oscillators.length > 0) {
-      oscillators[0].onended = () => {
-        setIsPlaying(false);
-      };
-    }
+    setTimeout(() => {
+      setIsPlaying(false);
+    }, totalDuration);
 
+    // Use Tone.Offline for rendering the waveform display
     const sampleRate = 44100;
-    const offlineCtx = new OfflineAudioContext(1, (totalDuration / 1000) * sampleRate, sampleRate);
-    generateSound(offlineCtx, params, totalDuration);
+    const durationInSeconds = totalDuration / 1000;
     
-    // Use .then() to avoid async/await which can break iOS audio unlock
-    offlineCtx.startRendering().then((buffer) => {
-      if (params.effects.bitcrusher < 16) {
-        applyBitcrusher(buffer, params.effects.bitcrusher);
-      }
-      setAudioBuffer(buffer);
-    });
-  }, [params, getOrCreateAudioContext, generateSound, applyBitcrusher, getTotalDuration]);
+    const buffer = await Tone.Offline(async (offlineCtx) => {
+      // Get the raw context for our generateSound function
+      const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+      await generateSound(rawCtx, params, totalDuration);
+    }, durationInSeconds);
+    
+    // Convert Tone.ToneAudioBuffer to AudioBuffer for waveform display
+    const audioBuffer = buffer.get() as AudioBuffer;
+    if (audioBuffer && params.effects.bitcrusher < 16) {
+      applyBitcrusher(audioBuffer, params.effects.bitcrusher);
+    }
+    if (audioBuffer) {
+      setAudioBuffer(audioBuffer);
+    }
+  }, [params, generateSound, applyBitcrusher, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
 
     try {
+      // Use Tone.js context management for export
+      await Tone.start();
+      
       const sampleRate = parseInt(exportSettings.sampleRate);
       const channels = exportSettings.channels === "stereo" ? 2 : 1;
       const duration = exportSettings.duration;
+      const durationInSeconds = duration / 1000;
 
-      const offlineCtx = new OfflineAudioContext(channels, (duration / 1000) * sampleRate, sampleRate);
-      generateSound(offlineCtx, params, duration);
+      // Use Tone.Offline for rendering
+      const toneBuffer = await Tone.Offline(async (offlineCtx) => {
+        const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+        await generateSound(rawCtx, params, duration);
+      }, durationInSeconds);
       
-      const renderedBuffer = await offlineCtx.startRendering();
+      const renderedBuffer = toneBuffer.get() as AudioBuffer;
+      if (!renderedBuffer) {
+        throw new Error("Failed to render audio buffer");
+      }
 
       if (params.effects.bitcrusher < 16) {
         applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
       }
 
+      // Handle mono/stereo conversion
       let finalBuffer = renderedBuffer;
+      if (channels === 1 && renderedBuffer.numberOfChannels > 1) {
+        // Mix down to mono
+        const monoCtx = new OfflineAudioContext(1, renderedBuffer.length, sampleRate);
+        const monoBuffer = monoCtx.createBuffer(1, renderedBuffer.length, sampleRate);
+        const monoData = monoBuffer.getChannelData(0);
+        for (let i = 0; i < renderedBuffer.length; i++) {
+          let sum = 0;
+          for (let ch = 0; ch < renderedBuffer.numberOfChannels; ch++) {
+            sum += renderedBuffer.getChannelData(ch)[i];
+          }
+          monoData[i] = sum / renderedBuffer.numberOfChannels;
+        }
+        finalBuffer = monoBuffer;
+      }
+      
       if (exportSettings.normalize) {
-        for (let channel = 0; channel < channels; channel++) {
-          const data = renderedBuffer.getChannelData(channel);
+        for (let channel = 0; channel < finalBuffer.numberOfChannels; channel++) {
+          const data = finalBuffer.getChannelData(channel);
           let max = 0;
           for (let i = 0; i < data.length; i++) {
             max = Math.max(max, Math.abs(data[i]));
@@ -775,7 +933,6 @@ export default function Synthesizer() {
       <div className="max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
           <div className="lg:col-span-9 space-y-2">
-            {/* Trigger + Waveform - always visible at top on mobile */}
             <div className="flex items-center gap-2 sticky top-0 z-10 bg-background py-1">
               <div className="flex-shrink-0">
                 <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
@@ -787,7 +944,6 @@ export default function Synthesizer() {
               />
             </div>
 
-            {/* Oscillators - 1 col on mobile, 3 on desktop */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               <OscillatorPanel
                 oscillator={params.oscillators.osc1}
@@ -809,7 +965,6 @@ export default function Synthesizer() {
               />
             </div>
 
-            {/* Envelopes - 1 col on mobile, 3 on desktop */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
               <EnvelopePanel
                 envelope={params.envelopes.env1}
@@ -831,7 +986,6 @@ export default function Synthesizer() {
               />
             </div>
 
-            {/* Filter, Engine, Effects, Output - responsive grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               <FilterPanel
                 filter={params.filter}
@@ -854,9 +1008,20 @@ export default function Synthesizer() {
                 onChange={(output) => setParams({ ...params, output })}
               />
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <WaveshaperPanel
+                waveshaper={params.waveshaper}
+                onChange={(waveshaper) => setParams({ ...params, waveshaper })}
+              />
+              <ConvolverPanel
+                convolver={params.convolver}
+                onChange={(convolver) => setParams({ ...params, convolver })}
+                onIRLoaded={handleIRLoaded}
+              />
+            </div>
           </div>
 
-          {/* Sidebar - shows below main content on mobile */}
           <div className="lg:col-span-3 space-y-2">
             <RandomizeControls
               currentParams={params}

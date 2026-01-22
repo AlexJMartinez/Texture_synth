@@ -3,7 +3,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode, AdditiveSynth, AdditivePartial, GranularSynth, GranularTexture } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 
 interface RandomizeControlsProps {
@@ -34,6 +34,10 @@ function randomFilterType(): FilterType {
 
 function randomTarget(): EnvelopeTarget {
   return (["amplitude", "filter", "pitch"] as const)[Math.floor(Math.random() * 3)];
+}
+
+function randomWaveshaperCurve(): WaveshaperCurve {
+  return (["softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"] as const)[Math.floor(Math.random() * 7)];
 }
 
 export function RandomizeControls({ currentParams, onRandomize }: RandomizeControlsProps) {
@@ -152,6 +156,23 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         pitchSpray: Math.round(randomInRange(0, 60 * chaos)),
         scatter: Math.round(randomInRange(0, 70 * chaos)),
         texture: (["noise", "sine", "saw", "click"] as const)[Math.floor(Math.random() * 4)],
+      },
+      waveshaper: {
+        enabled: Math.random() > 0.6,
+        curve: randomWaveshaperCurve(),
+        drive: Math.round(randomInRange(20, 80 * chaos)),
+        mix: Math.round(randomInRange(50, 100)),
+        preFilterFreq: Math.round(randomInRange(100, 500)),
+        preFilterEnabled: Math.random() > 0.7,
+        postFilterFreq: Math.round(randomInRange(4000, 12000)),
+        postFilterEnabled: Math.random() > 0.7,
+        oversample: (["none", "2x", "4x"] as const)[Math.floor(Math.random() * 3)],
+      },
+      convolver: {
+        enabled: currentParams.convolver.useCustomIR && Math.random() > 0.5,
+        irName: currentParams.convolver.irName,
+        mix: Math.round(randomInRange(30, 70)),
+        useCustomIR: currentParams.convolver.useCustomIR,
       },
       output: {
         volume: 75,
@@ -289,6 +310,23 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         pitchSpray: Math.round(mutateValue(currentParams.granular.pitchSpray, 0, 100)),
         scatter: Math.round(mutateValue(currentParams.granular.scatter, 0, 100)),
         texture: currentParams.granular.texture,
+      },
+      waveshaper: {
+        enabled: currentParams.waveshaper.enabled,
+        curve: Math.random() > 0.9 ? randomWaveshaperCurve() : currentParams.waveshaper.curve,
+        drive: Math.round(mutateValue(currentParams.waveshaper.drive, 0, 100)),
+        mix: Math.round(mutateValue(currentParams.waveshaper.mix, 0, 100)),
+        preFilterFreq: Math.round(mutateValue(currentParams.waveshaper.preFilterFreq, 20, 20000, true)),
+        preFilterEnabled: currentParams.waveshaper.preFilterEnabled,
+        postFilterFreq: Math.round(mutateValue(currentParams.waveshaper.postFilterFreq, 20, 20000, true)),
+        postFilterEnabled: currentParams.waveshaper.postFilterEnabled,
+        oversample: currentParams.waveshaper.oversample,
+      },
+      convolver: {
+        enabled: currentParams.convolver.enabled,
+        irName: currentParams.convolver.irName,
+        mix: Math.round(mutateValue(currentParams.convolver.mix, 0, 100)),
+        useCustomIR: currentParams.convolver.useCustomIR,
       },
       output: {
         volume: currentParams.output.volume,
