@@ -26,45 +26,38 @@ export default function Synthesizer() {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  const getAudioContext = useCallback(() => {
-    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
-      audioContextRef.current = new AudioContext();
-    }
-    return audioContextRef.current;
-  }, []);
-
-  // Mobile audio unlock - create and resume AudioContext on first user interaction
-  useEffect(() => {
-    const unlockAudio = async () => {
-      if (audioUnlocked) return;
-      
-      try {
-        const ctx = getAudioContext();
-        if (ctx.state === "suspended") {
-          await ctx.resume();
-        }
-        // Play a silent buffer to fully unlock audio on iOS
-        const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate);
-        const source = ctx.createBufferSource();
-        source.buffer = silentBuffer;
-        source.connect(ctx.destination);
-        source.start(0);
-        setAudioUnlocked(true);
-      } catch (e) {
-        console.warn("Audio unlock failed:", e);
-      }
-    };
-
-    const events = ["touchstart", "touchend", "mousedown", "click"];
-    events.forEach(event => document.addEventListener(event, unlockAudio, { once: true }));
+  // Create, unlock, and return AudioContext - MUST be called from user gesture on iOS
+  const getOrCreateAudioContext = useCallback((): AudioContext => {
+    // Use webkitAudioContext for older iOS Safari
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     
-    return () => {
-      events.forEach(event => document.removeEventListener(event, unlockAudio));
-    };
-  }, [audioUnlocked, getAudioContext]);
+    // Create new context if needed
+    if (!audioContextRef.current || audioContextRef.current.state === "closed") {
+      audioContextRef.current = new AudioContextClass();
+    }
+    
+    const ctx = audioContextRef.current;
+    
+    // Resume if suspended - must happen synchronously in user gesture
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+    
+    // Play silent buffer to fully unlock on iOS - this is critical
+    try {
+      const silentBuffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      const source = ctx.createBufferSource();
+      source.buffer = silentBuffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    } catch (e) {
+      // Ignore - silent unlock failed but main audio may still work
+    }
+    
+    return ctx;
+  }, []);
 
   const applyBitcrusher = useCallback((buffer: AudioBuffer, bitDepth: number): void => {
     if (bitDepth >= 16) return;
@@ -678,13 +671,8 @@ export default function Synthesizer() {
   }, []);
 
   const handleTrigger = useCallback(() => {
-    const ctx = getAudioContext();
-    
-    // Resume audio context synchronously - critical for iOS
-    // The resume() call must happen in the same call stack as user gesture
-    if (ctx.state === "suspended") {
-      ctx.resume();
-    }
+    // Get/create and unlock audio context - all in one call during user gesture
+    const ctx = getOrCreateAudioContext();
 
     setIsPlaying(true);
 
@@ -709,7 +697,7 @@ export default function Synthesizer() {
       }
       setAudioBuffer(buffer);
     });
-  }, [params, getAudioContext, generateSound, applyBitcrusher, getTotalDuration]);
+  }, [params, getOrCreateAudioContext, generateSound, applyBitcrusher, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
