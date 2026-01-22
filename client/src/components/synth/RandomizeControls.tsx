@@ -3,16 +3,12 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 
 interface RandomizeControlsProps {
   currentParams: SynthParameters;
   onRandomize: (params: SynthParameters) => void;
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
 }
 
 function randomInRange(min: number, max: number, logarithmic = false): number {
@@ -24,35 +20,81 @@ function randomInRange(min: number, max: number, logarithmic = false): number {
   return min + Math.random() * (max - min);
 }
 
+function randomWaveform(): WaveformType {
+  return (["sine", "triangle", "sawtooth", "square"] as const)[Math.floor(Math.random() * 4)];
+}
+
+function randomCurve(): EnvelopeCurve {
+  return (["linear", "exponential", "logarithmic"] as const)[Math.floor(Math.random() * 3)];
+}
+
+function randomFilterType(): FilterType {
+  return (["lowpass", "highpass", "bandpass", "notch", "comb"] as const)[Math.floor(Math.random() * 5)];
+}
+
+function randomTarget(): EnvelopeTarget {
+  return (["amplitude", "filter", "pitch"] as const)[Math.floor(Math.random() * 3)];
+}
+
 export function RandomizeControls({ currentParams, onRandomize }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
+
+  const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => ({
+    enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
+    waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
+    pitch: Math.round(randomInRange(55, 2000, true)),
+    detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
+    drift: Math.round(randomInRange(0, 50 * chaos)),
+    level: Math.round(randomInRange(30, 100)),
+  });
+
+  const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => ({
+    enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
+    attack: Math.round(randomInRange(0, 500 * chaos)),
+    hold: Math.round(randomInRange(0, 300 * chaos)),
+    decay: Math.round(randomInRange(50, 2000)),
+    curve: Math.random() > 0.5 ? current.curve : randomCurve(),
+    target: target,
+    amount: Math.round(randomInRange(20, 100)),
+  });
 
   const randomizeAll = () => {
     const chaos = chaosAmount / 100;
     
     const params: SynthParameters = {
-      oscillator: {
-        waveform: Math.random() > 0.5 ? currentParams.oscillator.waveform : 
-          (["sine", "triangle", "sawtooth", "square"] as const)[Math.floor(Math.random() * 4)],
-        pitch: Math.round(randomInRange(55, 2000, true)),
-        detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
-        drift: Math.round(randomInRange(0, 50 * chaos)),
+      oscillators: {
+        osc1: randomizeOsc(currentParams.oscillators.osc1, chaos, true),
+        osc2: randomizeOsc(currentParams.oscillators.osc2, chaos),
+        osc3: randomizeOsc(currentParams.oscillators.osc3, chaos),
       },
-      envelope: {
-        attack: Math.round(randomInRange(0, 500 * chaos)),
-        hold: Math.round(randomInRange(0, 300 * chaos)),
-        decay: Math.round(randomInRange(50, 2000)),
-        curve: (["linear", "exponential", "logarithmic"] as const)[Math.floor(Math.random() * 3)],
+      envelopes: {
+        env1: randomizeEnv(currentParams.envelopes.env1, chaos, "amplitude", true),
+        env2: randomizeEnv(currentParams.envelopes.env2, chaos, "filter"),
+        env3: randomizeEnv(currentParams.envelopes.env3, chaos, "pitch"),
       },
       filter: {
         enabled: Math.random() > 0.3,
         frequency: Math.round(randomInRange(200, 8000, true)),
         resonance: Math.round(randomInRange(0, 15) * 10) / 10,
-        type: (["lowpass", "highpass", "bandpass"] as const)[Math.floor(Math.random() * 3)],
+        type: randomFilterType(),
+        combDelay: Math.round(randomInRange(1, 10) * 10) / 10,
+        gain: Math.round(randomInRange(-12, 12)),
       },
       effects: {
         saturation: Math.round(randomInRange(0, 80 * chaos)),
         bitcrusher: Math.round(randomInRange(4, 16)),
+        delayEnabled: Math.random() > 0.6,
+        delayTime: Math.round(randomInRange(50, 500)),
+        delayFeedback: Math.round(randomInRange(20, 60)),
+        delayMix: Math.round(randomInRange(20, 50)),
+        reverbEnabled: Math.random() > 0.6,
+        reverbSize: Math.round(randomInRange(30, 80)),
+        reverbMix: Math.round(randomInRange(15, 40)),
+        reverbDecay: Math.round(randomInRange(1, 4) * 10) / 10,
+        chorusEnabled: Math.random() > 0.7,
+        chorusRate: Math.round(randomInRange(0.5, 3) * 10) / 10,
+        chorusDepth: Math.round(randomInRange(20, 60)),
+        chorusMix: Math.round(randomInRange(20, 40)),
       },
       output: {
         volume: 75,
@@ -65,11 +107,11 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
 
   const mutate = () => {
     const chaos = chaosAmount / 100;
-    const mutationStrength = 0.2 * chaos;
+    const strength = 0.2 * chaos;
 
     const mutateValue = (current: number, min: number, max: number, log = false): number => {
       const range = log ? Math.log(max) - Math.log(min) : max - min;
-      const mutation = (Math.random() - 0.5) * 2 * mutationStrength * range;
+      const mutation = (Math.random() - 0.5) * 2 * strength * range;
       
       if (log && min > 0) {
         const logCurrent = Math.log(current);
@@ -80,30 +122,59 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       return Math.max(min, Math.min(max, current + mutation * (max - min)));
     };
 
+    const mutateOsc = (osc: Oscillator): Oscillator => ({
+      enabled: osc.enabled,
+      waveform: Math.random() > 0.9 ? randomWaveform() : osc.waveform,
+      pitch: Math.round(mutateValue(osc.pitch, 20, 20000, true)),
+      detune: Math.round(mutateValue(osc.detune, -100, 100)),
+      drift: Math.round(mutateValue(osc.drift, 0, 100)),
+      level: Math.round(mutateValue(osc.level, 0, 100)),
+    });
+
+    const mutateEnv = (env: Envelope): Envelope => ({
+      enabled: env.enabled,
+      attack: Math.round(mutateValue(env.attack, 0, 2000)),
+      hold: Math.round(mutateValue(env.hold, 0, 2000)),
+      decay: Math.round(mutateValue(env.decay, 0, 5000)),
+      curve: env.curve,
+      target: env.target,
+      amount: Math.round(mutateValue(env.amount, -100, 100)),
+    });
+
     const params: SynthParameters = {
-      oscillator: {
-        waveform: Math.random() > 0.9 
-          ? (["sine", "triangle", "sawtooth", "square"] as const)[Math.floor(Math.random() * 4)]
-          : currentParams.oscillator.waveform,
-        pitch: Math.round(mutateValue(currentParams.oscillator.pitch, 20, 20000, true)),
-        detune: Math.round(mutateValue(currentParams.oscillator.detune, -100, 100)),
-        drift: Math.round(mutateValue(currentParams.oscillator.drift, 0, 100)),
+      oscillators: {
+        osc1: mutateOsc(currentParams.oscillators.osc1),
+        osc2: mutateOsc(currentParams.oscillators.osc2),
+        osc3: mutateOsc(currentParams.oscillators.osc3),
       },
-      envelope: {
-        attack: Math.round(mutateValue(currentParams.envelope.attack, 0, 2000)),
-        hold: Math.round(mutateValue(currentParams.envelope.hold, 0, 2000)),
-        decay: Math.round(mutateValue(currentParams.envelope.decay, 0, 5000)),
-        curve: currentParams.envelope.curve,
+      envelopes: {
+        env1: mutateEnv(currentParams.envelopes.env1),
+        env2: mutateEnv(currentParams.envelopes.env2),
+        env3: mutateEnv(currentParams.envelopes.env3),
       },
       filter: {
         enabled: currentParams.filter.enabled,
         frequency: Math.round(mutateValue(currentParams.filter.frequency, 20, 20000, true)),
         resonance: Math.round(mutateValue(currentParams.filter.resonance, 0, 30) * 10) / 10,
         type: currentParams.filter.type,
+        combDelay: Math.round(mutateValue(currentParams.filter.combDelay, 0.1, 50) * 10) / 10,
+        gain: Math.round(mutateValue(currentParams.filter.gain, -24, 24)),
       },
       effects: {
         saturation: Math.round(mutateValue(currentParams.effects.saturation, 0, 100)),
         bitcrusher: Math.round(mutateValue(currentParams.effects.bitcrusher, 1, 16)),
+        delayEnabled: currentParams.effects.delayEnabled,
+        delayTime: Math.round(mutateValue(currentParams.effects.delayTime, 0, 2000)),
+        delayFeedback: Math.round(mutateValue(currentParams.effects.delayFeedback, 0, 95)),
+        delayMix: Math.round(mutateValue(currentParams.effects.delayMix, 0, 100)),
+        reverbEnabled: currentParams.effects.reverbEnabled,
+        reverbSize: Math.round(mutateValue(currentParams.effects.reverbSize, 0, 100)),
+        reverbMix: Math.round(mutateValue(currentParams.effects.reverbMix, 0, 100)),
+        reverbDecay: Math.round(mutateValue(currentParams.effects.reverbDecay, 0.1, 10) * 10) / 10,
+        chorusEnabled: currentParams.effects.chorusEnabled,
+        chorusRate: Math.round(mutateValue(currentParams.effects.chorusRate, 0.1, 10) * 10) / 10,
+        chorusDepth: Math.round(mutateValue(currentParams.effects.chorusDepth, 0, 100)),
+        chorusMix: Math.round(mutateValue(currentParams.effects.chorusMix, 0, 100)),
       },
       output: {
         volume: currentParams.output.volume,
@@ -119,32 +190,34 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
   };
 
   return (
-    <div className="flex flex-col gap-3 p-4 rounded-lg bg-card border border-border" data-testid="randomize-controls">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col gap-2 p-2 rounded-lg bg-card border border-border" data-testid="randomize-controls">
+      <div className="flex items-center gap-1">
         <Button
           onClick={randomizeAll}
           variant="secondary"
-          className="flex-1"
+          size="sm"
+          className="flex-1 h-7 text-xs"
           data-testid="button-randomize"
         >
-          <Dices className="w-4 h-4 mr-2" />
-          Randomize
+          <Dices className="w-3 h-3 mr-1" />
+          Rand
         </Button>
         <Button
           onClick={mutate}
           variant="secondary"
-          className="flex-1"
+          size="sm"
+          className="flex-1 h-7 text-xs"
           data-testid="button-mutate"
         >
-          <Shuffle className="w-4 h-4 mr-2" />
+          <Shuffle className="w-3 h-3 mr-1" />
           Mutate
         </Button>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label className="text-xs text-muted-foreground">Chaos</Label>
-          <span className="text-xs font-mono text-foreground">{chaosAmount}%</span>
+          <Label className="text-[10px] text-muted-foreground">Chaos</Label>
+          <span className="text-[10px] font-mono text-foreground">{chaosAmount}%</span>
         </div>
         <Slider
           value={[chaosAmount]}
@@ -161,10 +234,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         onClick={reset}
         variant="ghost"
         size="sm"
-        className="text-xs text-muted-foreground"
+        className="text-[10px] text-muted-foreground h-6"
         data-testid="button-reset"
       >
-        Reset to Default
+        Reset
       </Button>
     </div>
   );

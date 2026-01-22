@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,18 +13,29 @@ interface PresetPanelProps {
   onLoadPreset: (params: SynthParameters) => void;
 }
 
+function isValidV2Preset(params: unknown): params is SynthParameters {
+  if (!params || typeof params !== 'object') return false;
+  const p = params as Record<string, unknown>;
+  return 'oscillators' in p && 'envelopes' in p && typeof p.oscillators === 'object';
+}
+
 export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
   const [presets, setPresets] = useState<Preset[]>(() => {
-    const stored = localStorage.getItem("synth-presets");
+    const stored = localStorage.getItem("synth-presets-v2");
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored) as Preset[];
+        return parsed.filter(p => isValidV2Preset(p.parameters));
       } catch {
         return [];
       }
     }
     return [];
   });
+
+  useEffect(() => {
+    localStorage.removeItem("synth-presets");
+  }, []);
   const [newPresetName, setNewPresetName] = useState("");
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
@@ -40,7 +51,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
 
     const updated = [...presets, preset];
     setPresets(updated);
-    localStorage.setItem("synth-presets", JSON.stringify(updated));
+    localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
     setNewPresetName("");
     setSaveDialogOpen(false);
   };
@@ -48,7 +59,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
   const deletePreset = (id: string) => {
     const updated = presets.filter((p) => p.id !== id);
     setPresets(updated);
-    localStorage.setItem("synth-presets", JSON.stringify(updated));
+    localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
   };
 
   const exportPresets = () => {
@@ -69,9 +80,10 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
     reader.onload = () => {
       try {
         const imported = JSON.parse(reader.result as string) as Preset[];
-        const updated = [...presets, ...imported];
+        const validImported = imported.filter(p => isValidV2Preset(p.parameters));
+        const updated = [...presets, ...validImported];
         setPresets(updated);
-        localStorage.setItem("synth-presets", JSON.stringify(updated));
+        localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
       } catch (err) {
         console.error("Failed to import presets:", err);
       }
@@ -87,11 +99,11 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
   }));
 
   return (
-    <Card className="synth-panel h-full" data-testid="panel-presets">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center justify-between text-sm font-medium">
-          <div className="flex items-center gap-2">
-            <Music className="w-4 h-4 text-primary" />
+    <Card className="synth-panel" data-testid="panel-presets">
+      <CardHeader className="pb-1 pt-2 px-2">
+        <CardTitle className="flex items-center justify-between text-xs font-medium">
+          <div className="flex items-center gap-1">
+            <Music className="w-3 h-3 text-primary" />
             Presets
           </div>
           <div className="flex gap-1">
@@ -156,16 +168,20 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <ScrollArea className="h-[280px] px-4 pb-4">
-          <div className="space-y-3">
+        <ScrollArea className="h-[180px] px-2 pb-2">
+          <div className="space-y-2">
             <div>
-              <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">Factory</h4>
-              <div className="space-y-1">
+              <h4 className="text-[10px] font-medium text-muted-foreground mb-1 px-1">Factory</h4>
+              <div className="space-y-0.5">
                 {fullFactoryPresets.map((preset) => (
                   <button
+                    type="button"
                     key={preset.id}
-                    onClick={() => onLoadPreset(preset.parameters)}
-                    className="w-full text-left px-3 py-2 rounded-md text-sm hover-elevate active-elevate-2 bg-muted/30 border border-border/50 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onLoadPreset(preset.parameters);
+                    }}
+                    className="w-full text-left px-2 py-1 rounded text-[10px] hover-elevate active-elevate-2 bg-muted/30 border border-border/50 transition-colors"
                     data-testid={`preset-factory-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
                   >
                     {preset.name}
@@ -176,15 +192,19 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
 
             {presets.length > 0 && (
               <div>
-                <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">User Presets</h4>
-                <div className="space-y-1">
+                <h4 className="text-[10px] font-medium text-muted-foreground mb-1 px-1">User</h4>
+                <div className="space-y-0.5">
                   {presets.map((preset) => (
                     <div
                       key={preset.id}
-                      className="flex items-center gap-2 px-3 py-2 rounded-md text-sm hover-elevate bg-muted/30 border border-border/50 group"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50 group"
                     >
                       <button
-                        onClick={() => onLoadPreset(preset.parameters)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLoadPreset(preset.parameters);
+                        }}
                         className="flex-1 text-left"
                         data-testid={`preset-user-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
                       >
@@ -193,14 +213,14 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           deletePreset(preset.id);
                         }}
                         data-testid={`button-delete-${preset.id}`}
                       >
-                        <Trash2 className="w-3 h-3 text-destructive" />
+                        <Trash2 className="w-2 h-2 text-destructive" />
                       </Button>
                     </div>
                   ))}

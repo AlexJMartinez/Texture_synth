@@ -1,46 +1,77 @@
 import { z } from "zod";
 
-// Oscillator waveform types
 export const WaveformType = z.enum(["sine", "triangle", "sawtooth", "square"]);
 export type WaveformType = z.infer<typeof WaveformType>;
 
-// Envelope curve types
 export const EnvelopeCurve = z.enum(["linear", "exponential", "logarithmic"]);
 export type EnvelopeCurve = z.infer<typeof EnvelopeCurve>;
 
-// Parameter definition for the synth
+export const FilterType = z.enum([
+  "lowpass", "highpass", "bandpass", "notch", "allpass", "peaking", "lowshelf", "highshelf", "comb"
+]);
+export type FilterType = z.infer<typeof FilterType>;
+
+export const EnvelopeTarget = z.enum(["amplitude", "filter", "pitch", "osc1", "osc2", "osc3"]);
+export type EnvelopeTarget = z.infer<typeof EnvelopeTarget>;
+
+const OscillatorSchema = z.object({
+  enabled: z.boolean(),
+  waveform: WaveformType,
+  pitch: z.number().min(20).max(20000),
+  detune: z.number().min(-100).max(100),
+  drift: z.number().min(0).max(100),
+  level: z.number().min(0).max(100),
+});
+
+const EnvelopeSchema = z.object({
+  enabled: z.boolean(),
+  attack: z.number().min(0).max(2000),
+  hold: z.number().min(0).max(2000),
+  decay: z.number().min(0).max(5000),
+  curve: EnvelopeCurve,
+  target: EnvelopeTarget,
+  amount: z.number().min(-100).max(100),
+});
+
 export const SynthParametersSchema = z.object({
-  // Oscillator
-  oscillator: z.object({
-    waveform: WaveformType,
-    pitch: z.number().min(20).max(20000),
-    detune: z.number().min(-100).max(100),
-    drift: z.number().min(0).max(100),
+  oscillators: z.object({
+    osc1: OscillatorSchema,
+    osc2: OscillatorSchema,
+    osc3: OscillatorSchema,
   }),
   
-  // Amplitude Envelope (AHD - Attack/Hold/Decay)
-  envelope: z.object({
-    attack: z.number().min(0).max(2000),
-    hold: z.number().min(0).max(2000),
-    decay: z.number().min(0).max(5000),
-    curve: EnvelopeCurve,
+  envelopes: z.object({
+    env1: EnvelopeSchema,
+    env2: EnvelopeSchema,
+    env3: EnvelopeSchema,
   }),
   
-  // Filter
   filter: z.object({
     enabled: z.boolean(),
     frequency: z.number().min(20).max(20000),
     resonance: z.number().min(0).max(30),
-    type: z.enum(["lowpass", "highpass", "bandpass"]),
+    type: FilterType,
+    combDelay: z.number().min(0.1).max(50),
+    gain: z.number().min(-24).max(24),
   }),
   
-  // Effects
   effects: z.object({
     saturation: z.number().min(0).max(100),
     bitcrusher: z.number().min(1).max(16),
+    delayEnabled: z.boolean(),
+    delayTime: z.number().min(0).max(2000),
+    delayFeedback: z.number().min(0).max(95),
+    delayMix: z.number().min(0).max(100),
+    reverbEnabled: z.boolean(),
+    reverbSize: z.number().min(0).max(100),
+    reverbMix: z.number().min(0).max(100),
+    reverbDecay: z.number().min(0.1).max(10),
+    chorusEnabled: z.boolean(),
+    chorusRate: z.number().min(0.1).max(10),
+    chorusDepth: z.number().min(0).max(100),
+    chorusMix: z.number().min(0).max(100),
   }),
   
-  // Output
   output: z.object({
     volume: z.number().min(0).max(100),
     pan: z.number().min(-100).max(100),
@@ -48,8 +79,9 @@ export const SynthParametersSchema = z.object({
 });
 
 export type SynthParameters = z.infer<typeof SynthParametersSchema>;
+export type Oscillator = z.infer<typeof OscillatorSchema>;
+export type Envelope = z.infer<typeof EnvelopeSchema>;
 
-// Preset schema
 export const PresetSchema = z.object({
   id: z.string(),
   name: z.string().min(1).max(50),
@@ -59,7 +91,6 @@ export const PresetSchema = z.object({
 
 export type Preset = z.infer<typeof PresetSchema>;
 
-// Export settings
 export const ExportSettingsSchema = z.object({
   sampleRate: z.enum(["44100", "48000"]),
   channels: z.enum(["mono", "stereo"]),
@@ -69,29 +100,59 @@ export const ExportSettingsSchema = z.object({
 
 export type ExportSettings = z.infer<typeof ExportSettingsSchema>;
 
-// Default parameters
+const defaultOscillator: Oscillator = {
+  enabled: true,
+  waveform: "sine",
+  pitch: 440,
+  detune: 0,
+  drift: 0,
+  level: 100,
+};
+
+const defaultEnvelope: Envelope = {
+  enabled: true,
+  attack: 10,
+  hold: 50,
+  decay: 500,
+  curve: "exponential",
+  target: "amplitude",
+  amount: 100,
+};
+
 export const defaultSynthParameters: SynthParameters = {
-  oscillator: {
-    waveform: "sine",
-    pitch: 440,
-    detune: 0,
-    drift: 0,
+  oscillators: {
+    osc1: { ...defaultOscillator, enabled: true },
+    osc2: { ...defaultOscillator, enabled: false, pitch: 880, waveform: "triangle", level: 50 },
+    osc3: { ...defaultOscillator, enabled: false, pitch: 220, waveform: "sawtooth", level: 30 },
   },
-  envelope: {
-    attack: 10,
-    hold: 50,
-    decay: 500,
-    curve: "exponential",
+  envelopes: {
+    env1: { ...defaultEnvelope, target: "amplitude", enabled: true },
+    env2: { ...defaultEnvelope, target: "filter", enabled: false, amount: 50 },
+    env3: { ...defaultEnvelope, target: "pitch", enabled: false, amount: 25 },
   },
   filter: {
     enabled: false,
     frequency: 2000,
     resonance: 5,
     type: "lowpass",
+    combDelay: 5,
+    gain: 0,
   },
   effects: {
     saturation: 0,
     bitcrusher: 16,
+    delayEnabled: false,
+    delayTime: 250,
+    delayFeedback: 30,
+    delayMix: 30,
+    reverbEnabled: false,
+    reverbSize: 50,
+    reverbMix: 20,
+    reverbDecay: 2,
+    chorusEnabled: false,
+    chorusRate: 1.5,
+    chorusDepth: 50,
+    chorusMix: 30,
   },
   output: {
     volume: 75,
@@ -106,50 +167,142 @@ export const defaultExportSettings: ExportSettings = {
   normalize: true,
 };
 
-// Factory presets
 export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
   {
     name: "Soft Pluck",
     parameters: {
       ...defaultSynthParameters,
-      oscillator: { waveform: "triangle", pitch: 880, detune: 0, drift: 5 },
-      envelope: { attack: 5, hold: 20, decay: 300, curve: "exponential" },
+      oscillators: {
+        osc1: { enabled: true, waveform: "triangle", pitch: 880, detune: 0, drift: 5, level: 100 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50 },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 5, hold: 20, decay: 300, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 0, decay: 200, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
     },
   },
   {
     name: "Deep Bass",
     parameters: {
       ...defaultSynthParameters,
-      oscillator: { waveform: "sawtooth", pitch: 55, detune: 0, drift: 0 },
-      envelope: { attack: 20, hold: 100, decay: 800, curve: "linear" },
-      filter: { enabled: true, frequency: 400, resonance: 8, type: "lowpass" },
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 55, detune: 0, drift: 0, level: 100 },
+        osc2: { enabled: true, waveform: "square", pitch: 55, detune: 5, drift: 0, level: 60 },
+        osc3: { enabled: false, waveform: "sine", pitch: 110, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 20, hold: 100, decay: 800, curve: "linear", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 5, hold: 50, decay: 400, curve: "exponential", target: "filter", amount: 80 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 400, resonance: 8, type: "lowpass", combDelay: 5, gain: 0 },
     },
   },
   {
     name: "Sharp Click",
     parameters: {
       ...defaultSynthParameters,
-      oscillator: { waveform: "square", pitch: 1200, detune: 0, drift: 10 },
-      envelope: { attack: 0, hold: 5, decay: 50, curve: "exponential" },
-      effects: { saturation: 30, bitcrusher: 16 },
+      oscillators: {
+        osc1: { enabled: true, waveform: "square", pitch: 1200, detune: 0, drift: 10, level: 100 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50 },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      effects: { ...defaultSynthParameters.effects, saturation: 30 },
     },
   },
   {
     name: "Warm Pad",
     parameters: {
       ...defaultSynthParameters,
-      oscillator: { waveform: "sine", pitch: 330, detune: 5, drift: 15 },
-      envelope: { attack: 200, hold: 300, decay: 1500, curve: "logarithmic" },
-      filter: { enabled: true, frequency: 1500, resonance: 3, type: "lowpass" },
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 330, detune: 5, drift: 15, level: 100 },
+        osc2: { enabled: true, waveform: "triangle", pitch: 660, detune: -3, drift: 10, level: 40 },
+        osc3: { enabled: true, waveform: "sine", pitch: 165, detune: 0, drift: 5, level: 50 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 200, hold: 300, decay: 1500, curve: "logarithmic", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 1500, resonance: 3, type: "lowpass", combDelay: 5, gain: 0 },
+      effects: { ...defaultSynthParameters.effects, reverbEnabled: true, reverbSize: 60, reverbMix: 30, reverbDecay: 3 },
     },
   },
   {
     name: "Dirty Synth",
     parameters: {
       ...defaultSynthParameters,
-      oscillator: { waveform: "sawtooth", pitch: 220, detune: 10, drift: 20 },
-      envelope: { attack: 10, hold: 50, decay: 400, curve: "linear" },
-      effects: { saturation: 60, bitcrusher: 8 },
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 10, drift: 20, level: 100 },
+        osc2: { enabled: true, waveform: "square", pitch: 221, detune: -5, drift: 15, level: 70 },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 10, hold: 50, decay: 400, curve: "linear", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      effects: { ...defaultSynthParameters.effects, saturation: 60, bitcrusher: 8 },
+    },
+  },
+  {
+    name: "Comb Pluck",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 0, level: 100 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50 },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 10, decay: 200, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 150, curve: "exponential", target: "filter", amount: 90 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 800, resonance: 15, type: "comb", combDelay: 2.27, gain: 0 },
+    },
+  },
+  {
+    name: "Space Delay",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "triangle", pitch: 660, detune: 0, drift: 5, level: 100 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50 },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 5, hold: 30, decay: 150, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      effects: { ...defaultSynthParameters.effects, delayEnabled: true, delayTime: 375, delayFeedback: 50, delayMix: 40 },
+    },
+  },
+  {
+    name: "Chorus Strings",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 0, drift: 8, level: 100 },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 7, drift: 8, level: 80 },
+        osc3: { enabled: true, waveform: "sawtooth", pitch: 220, detune: -7, drift: 8, level: 80 },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 150, hold: 200, decay: 800, curve: "logarithmic", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 3000, resonance: 2, type: "lowpass", combDelay: 5, gain: 0 },
+      effects: { ...defaultSynthParameters.effects, chorusEnabled: true, chorusRate: 0.8, chorusDepth: 40, chorusMix: 35 },
     },
   },
 ];

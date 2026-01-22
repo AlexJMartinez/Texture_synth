@@ -18,23 +18,23 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
 
   return (
     <Card className="synth-panel" data-testid="panel-output">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <Volume2 className="w-4 h-4 text-accent" />
+      <CardHeader className="pb-1 pt-2 px-2">
+        <CardTitle className="flex items-center gap-1 text-xs font-medium">
+          <Volume2 className="w-3 h-3 text-accent" />
           Output
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-center gap-6">
+      <CardContent className="space-y-2 px-2 pb-2">
+        <div className="flex justify-center gap-2">
           <Knob
             value={output.volume}
             min={0}
             max={100}
             step={1}
-            label="Volume"
+            label="Vol"
             unit="%"
             onChange={(v) => updateOutput("volume", v)}
-            size="lg"
+            size="sm"
             accentColor="accent"
           />
           <Knob
@@ -44,33 +44,13 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
             step={1}
             label="Pan"
             onChange={(v) => updateOutput("pan", v)}
-            size="md"
+            size="xs"
           />
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">L</span>
-            <span className="text-muted-foreground">Pan</span>
-            <span className="text-muted-foreground">R</span>
-          </div>
-          <div className="relative h-2 rounded-full bg-muted overflow-hidden">
-            <div 
-              className="absolute top-0 h-full w-1 rounded-full bg-accent transition-all"
-              style={{ 
-                left: `calc(${(output.pan + 100) / 2}% - 2px)`,
-                boxShadow: '0 0 8px hsl(var(--accent))',
-              }}
-            />
-            <div 
-              className="absolute top-0 left-1/2 h-full w-px bg-foreground/20"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-between px-2">
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-2 h-8 rounded-full bg-muted overflow-hidden relative">
+        <div className="flex justify-between px-2 gap-2">
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="w-1.5 h-6 rounded-full bg-muted overflow-hidden relative">
               <div 
                 className="absolute bottom-0 w-full rounded-full transition-all"
                 style={{ 
@@ -79,10 +59,20 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
                 }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">L</span>
+            <span className="text-[8px] text-muted-foreground">L</span>
           </div>
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-2 h-8 rounded-full bg-muted overflow-hidden relative">
+          <div className="flex-1 flex items-end">
+            <div className="relative h-1 rounded-full bg-muted overflow-hidden w-full">
+              <div 
+                className="absolute top-0 h-full w-0.5 rounded-full bg-accent transition-all"
+                style={{ 
+                  left: `calc(${(output.pan + 100) / 2}% - 1px)`,
+                }}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="w-1.5 h-6 rounded-full bg-muted overflow-hidden relative">
               <div 
                 className="absolute bottom-0 w-full rounded-full transition-all"
                 style={{ 
@@ -91,7 +81,7 @@ export function OutputPanel({ output, onChange }: OutputPanelProps) {
                 }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">R</span>
+            <span className="text-[8px] text-muted-foreground">R</span>
           </div>
         </div>
       </CardContent>

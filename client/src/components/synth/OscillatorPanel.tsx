@@ -1,69 +1,66 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Knob } from "./Knob";
-import type { SynthParameters, WaveformType } from "@shared/schema";
+import type { Oscillator, WaveformType } from "@shared/schema";
 import { Waves, Triangle, Square, SawWave } from "./WaveformIcons";
 
 interface OscillatorPanelProps {
-  oscillator: SynthParameters["oscillator"];
-  onChange: (oscillator: SynthParameters["oscillator"]) => void;
+  oscillator: Oscillator;
+  onChange: (oscillator: Oscillator) => void;
+  title: string;
+  index: number;
 }
 
-export function OscillatorPanel({ oscillator, onChange }: OscillatorPanelProps) {
-  const updateOscillator = <K extends keyof SynthParameters["oscillator"]>(
+export function OscillatorPanel({ oscillator, onChange, title, index }: OscillatorPanelProps) {
+  const updateOscillator = <K extends keyof Oscillator>(
     key: K,
-    value: SynthParameters["oscillator"][K]
+    value: Oscillator[K]
   ) => {
     onChange({ ...oscillator, [key]: value });
   };
 
-  const waveforms: { type: WaveformType; icon: React.ReactNode; label: string }[] = [
-    { type: "sine", icon: <Waves className="w-5 h-5" />, label: "Sine" },
-    { type: "triangle", icon: <Triangle className="w-5 h-5" />, label: "Triangle" },
-    { type: "sawtooth", icon: <SawWave className="w-5 h-5" />, label: "Saw" },
-    { type: "square", icon: <Square className="w-5 h-5" />, label: "Square" },
+  const waveforms: { type: WaveformType; icon: React.ReactNode }[] = [
+    { type: "sine", icon: <Waves className="w-3 h-3" /> },
+    { type: "triangle", icon: <Triangle className="w-3 h-3" /> },
+    { type: "sawtooth", icon: <SawWave className="w-3 h-3" /> },
+    { type: "square", icon: <Square className="w-3 h-3" /> },
   ];
 
-  const noteFromFreq = (freq: number): string => {
-    const notes = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-    const a4 = 440;
-    const semitones = Math.round(12 * Math.log2(freq / a4));
-    const noteIndex = (semitones % 12 + 12 + 9) % 12;
-    const octave = Math.floor((semitones + 9) / 12) + 4;
-    return `${notes[noteIndex]}${octave}`;
-  };
-
   return (
-    <Card className="synth-panel" data-testid="panel-oscillator">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <Waves className="w-4 h-4 text-accent" />
-          Oscillator
+    <Card className={`synth-panel transition-opacity ${!oscillator.enabled ? 'opacity-50' : ''}`} data-testid={`panel-oscillator-${index}`}>
+      <CardHeader className="pb-1 pt-2 px-2">
+        <CardTitle className="flex items-center justify-between text-xs font-medium">
+          <div className="flex items-center gap-1">
+            <Waves className="w-3 h-3 text-accent" />
+            {title}
+          </div>
+          <Switch
+            checked={oscillator.enabled}
+            onCheckedChange={(v) => updateOscillator("enabled", v)}
+            className="scale-75"
+            data-testid={`switch-osc-${index}`}
+          />
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-1.5">
-          <label className="text-xs text-muted-foreground">Waveform</label>
-          <div className="grid grid-cols-4 gap-1">
-            {waveforms.map(({ type, icon, label }) => (
-              <Button
-                key={type}
-                size="sm"
-                variant={oscillator.waveform === type ? "default" : "secondary"}
-                className={`h-12 flex flex-col gap-1 p-2 ${
-                  oscillator.waveform === type ? 'glow-primary' : ''
-                }`}
-                onClick={() => updateOscillator("waveform", type)}
-                data-testid={`button-waveform-${type}`}
-              >
-                {icon}
-                <span className="text-[10px]">{label}</span>
-              </Button>
-            ))}
-          </div>
+      <CardContent className="space-y-2 px-2 pb-2">
+        <div className="grid grid-cols-4 gap-0.5">
+          {waveforms.map(({ type, icon }) => (
+            <Button
+              key={type}
+              size="sm"
+              variant={oscillator.waveform === type ? "default" : "secondary"}
+              className={`h-6 p-1 ${oscillator.waveform === type ? 'glow-primary' : ''}`}
+              onClick={() => updateOscillator("waveform", type)}
+              disabled={!oscillator.enabled}
+              data-testid={`button-waveform-${type}-${index}`}
+            >
+              {icon}
+            </Button>
+          ))}
         </div>
 
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center gap-1">
           <Knob
             value={oscillator.pitch}
             min={20}
@@ -74,6 +71,7 @@ export function OscillatorPanel({ oscillator, onChange }: OscillatorPanelProps) 
             onChange={(v) => updateOscillator("pitch", v)}
             logarithmic
             accentColor="accent"
+            size="xs"
           />
           <Knob
             value={oscillator.detune}
@@ -83,6 +81,7 @@ export function OscillatorPanel({ oscillator, onChange }: OscillatorPanelProps) 
             label="Detune"
             unit="ct"
             onChange={(v) => updateOscillator("detune", v)}
+            size="xs"
           />
           <Knob
             value={oscillator.drift}
@@ -92,14 +91,19 @@ export function OscillatorPanel({ oscillator, onChange }: OscillatorPanelProps) 
             label="Drift"
             unit="%"
             onChange={(v) => updateOscillator("drift", v)}
+            size="xs"
           />
-        </div>
-
-        <div className="flex justify-center">
-          <div className="px-3 py-1.5 rounded-md bg-muted/50 border border-border">
-            <span className="text-xs text-muted-foreground">Note: </span>
-            <span className="text-sm font-mono text-foreground">{noteFromFreq(oscillator.pitch)}</span>
-          </div>
+          <Knob
+            value={oscillator.level}
+            min={0}
+            max={100}
+            step={1}
+            label="Level"
+            unit="%"
+            onChange={(v) => updateOscillator("level", v)}
+            accentColor="primary"
+            size="xs"
+          />
         </div>
       </CardContent>
     </Card>

@@ -1,64 +1,102 @@
-# OneShot Synth - Web Audio Generator
+# OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-A powerful web-based one-shot synthesizer built with React and Web Audio API. Create unique sounds for music production with FM synthesis capabilities, offline rendering, and WAV export.
+A professional web-based one-shot synthesizer built with React and Web Audio API. Create unique sounds for music production with 3-oscillator architecture, advanced routing, and extensive effects processing.
 
 ## Features
-- **Oscillator**: Sine, triangle, sawtooth, and square waveforms with pitch, detune, and drift controls
-- **Envelope**: Attack/Hold/Decay (AHD) envelope with linear, exponential, and logarithmic curves
-- **Filter**: Low-pass, high-pass, and band-pass filters with frequency and resonance controls
-- **Effects**: Saturation (waveshaping) and bit depth control
-- **Output**: Volume and stereo panning
-- **Presets**: Save/load custom presets, factory presets included
-- **Randomize**: Full randomization with chaos control, and gentle mutation
-- **Export**: Render to WAV at 44.1kHz or 48kHz, mono or stereo, with normalization option
-- **Waveform Display**: Real-time visualization of generated audio
+
+### Multi-Oscillator Architecture (3 OSC)
+- 4 waveforms: Sine, triangle, sawtooth, and square
+- Per-oscillator: Pitch (20-20000Hz), detune (-100 to +100 cents), drift (0-100%), level (0-100%)
+- Individual enable/disable switches
+
+### 3-Envelope System with Routing
+- Attack/Hold/Decay (AHD) envelopes with linear, exponential, and logarithmic curves
+- ENV1: Primary amplitude envelope
+- ENV2/ENV3: Assignable modulation envelopes with routing targets:
+  - Amplitude, Filter, Pitch, OSC1, OSC2, OSC3
+- Modulation amount control (0-100%)
+
+### Advanced Filters (9 types)
+- Standard: Low-pass, high-pass, band-pass
+- Advanced: Notch, allpass, peaking, lowshelf, highshelf
+- Comb filter with delay time control
+- Frequency (20-20000Hz) and resonance (0-30) controls
+
+### Effects Chain
+- **Distortion**: Saturation with adjustable waveshaping amount
+- **Bitcrusher**: Bit depth reduction (1-16 bits)
+- **Delay**: Time (0-2000ms), feedback (0-95%), wet/dry mix
+- **Reverb**: Convolution-based with impulse response generation, size, decay (0.1-10s), mix
+- **Chorus**: Dual LFO-modulated delays with rate (0.1-10Hz), depth, mix
+
+### Output & Export
+- Volume and stereo panning controls
+- WAV export at 44.1kHz or 48kHz, mono or stereo
+- Normalization option
+
+### Preset Management
+- 8 factory presets showcasing various sounds
+- User presets with save/load/delete
+- Import/export presets as JSON
+
+### Randomization
+- Full randomization with chaos control slider
+- Gentle mutation for variations
+- Reset to default
 
 ## Tech Stack
 - **Frontend**: React + TypeScript + Vite
 - **Styling**: Tailwind CSS with shadcn/ui components
 - **Audio**: Web Audio API with OfflineAudioContext for rendering
-- **State**: React hooks (no backend required for core functionality)
+- **State**: React hooks with localStorage for presets
 
 ## Project Structure
 ```
 client/src/
 ├── components/
-│   └── synth/           # Synthesizer UI components
-│       ├── Knob.tsx           # Rotary knob control
+│   └── synth/
+│       ├── Knob.tsx           # Rotary knob control (xs/sm/md/lg sizes)
 │       ├── WaveformDisplay.tsx # Audio visualization
-│       ├── EnvelopePanel.tsx   # AHD envelope controls
-│       ├── OscillatorPanel.tsx # Waveform & pitch
-│       ├── FilterPanel.tsx     # Filter controls
-│       ├── EffectsPanel.tsx    # Saturation & bitcrusher
+│       ├── EnvelopePanel.tsx   # AHD envelope with routing
+│       ├── OscillatorPanel.tsx # Waveform & pitch controls
+│       ├── FilterPanel.tsx     # 9 filter types
+│       ├── EffectsPanel.tsx    # Distortion, delay, reverb, chorus
 │       ├── OutputPanel.tsx     # Volume & pan
 │       ├── PresetPanel.tsx     # Preset management
 │       ├── ExportPanel.tsx     # WAV export settings
-│       ├── TriggerButton.tsx   # Play button
-│       ├── RandomizeControls.tsx # Randomize/mutate
+│       ├── TriggerButton.tsx   # Play button (sm/md/lg sizes)
+│       ├── RandomizeControls.tsx
 │       └── WaveformIcons.tsx   # SVG waveform icons
 ├── pages/
-│   └── Synthesizer.tsx  # Main synth page with audio engine
+│   └── Synthesizer.tsx        # Main synth with audio engine
 └── lib/
-    └── queryClient.ts   # React Query setup
+    └── queryClient.ts
 
 shared/
-└── schema.ts            # TypeScript types for synth parameters
+└── schema.ts                  # TypeScript types for all synth parameters
 ```
 
 ## Audio Engine
-The audio engine uses the Web Audio API and is integrated directly in the Synthesizer component:
+Integrated in Synthesizer.tsx using Web Audio API:
 
-1. **Real-time playback**: Uses AudioContext for live preview
-2. **Offline rendering**: Uses OfflineAudioContext for consistent WAV export
-3. **Signal chain**: Oscillator → Filter (optional) → Saturation → Panner → Gain → Output
+1. **Real-time playback**: AudioContext for live preview
+2. **Offline rendering**: OfflineAudioContext for WAV export
+3. **Signal chain**: 
+   - 3 Oscillators (mixed) → Filter (optional) → Effects → Panner → Gain → Output
+4. **Comb filter**: Delay node with feedback loop
+5. **Reverb**: ConvolverNode with generated impulse response
+6. **Chorus**: Dual LFO-modulated delay lines
 
 ## Usage
-1. Click the large trigger button or press Space to play a sound
-2. Adjust oscillator, envelope, filter, and effects parameters
-3. Use Randomize for new sounds, Mutate for variations
-4. Save presets for later use
-5. Export to WAV for use in DAWs
+1. Click the trigger button or press Space to play
+2. Toggle and adjust oscillators (OSC1/2/3)
+3. Configure envelopes and routing (ENV1/2/3)
+4. Select filter type and adjust parameters
+5. Enable and tweak effects (saturation, bitcrusher, delay, reverb, chorus)
+6. Use Randomize/Mutate for new sounds
+7. Save presets for later use
+8. Export to WAV for DAW integration
 
 ## Development Commands
 - `npm run dev` - Start development server
@@ -66,3 +104,14 @@ The audio engine uses the Web Audio API and is integrated directly in the Synthe
 
 ## Color Scheme
 Dark audio-themed UI with purple primary (#8B5CF6) and cyan accent (#14B8A6) colors.
+
+## UI Design
+Compact 50% scale design for professional audio feel:
+- xs/sm knobs and controls
+- 10px-xs font sizes
+- Reduced padding throughout
+
+## Technical Notes
+- Presets stored in localStorage under 'synth-presets-v2' key
+- Old v1 presets automatically cleared on first load
+- Factory presets defined in shared/schema.ts

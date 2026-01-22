@@ -24,51 +24,51 @@ export function ExportPanel({ settings, onChange, onExport, isExporting }: Expor
 
   return (
     <Card className="synth-panel" data-testid="panel-export">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium">
-          <FileAudio className="w-4 h-4 text-accent" />
-          Export WAV
+      <CardHeader className="pb-1 pt-2 px-2">
+        <CardTitle className="flex items-center gap-1 text-xs font-medium">
+          <FileAudio className="w-3 h-3 text-accent" />
+          Export
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Sample Rate</Label>
+      <CardContent className="space-y-2 px-2 pb-2 pt-0">
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="space-y-0.5">
+            <Label className="text-[10px] text-muted-foreground">Rate</Label>
             <Select
               value={settings.sampleRate}
               onValueChange={(v) => updateSettings("sampleRate", v as ExportSettings["sampleRate"])}
             >
-              <SelectTrigger className="h-8 text-xs" data-testid="select-sample-rate">
+              <SelectTrigger className="h-6 text-[10px]" data-testid="select-sample-rate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="44100">44.1 kHz</SelectItem>
-                <SelectItem value="48000">48 kHz</SelectItem>
+                <SelectItem value="44100">44.1k</SelectItem>
+                <SelectItem value="48000">48k</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Channels</Label>
+          <div className="space-y-0.5">
+            <Label className="text-[10px] text-muted-foreground">Ch</Label>
             <Select
               value={settings.channels}
               onValueChange={(v) => updateSettings("channels", v as ExportSettings["channels"])}
             >
-              <SelectTrigger className="h-8 text-xs" data-testid="select-channels">
+              <SelectTrigger className="h-6 text-[10px]" data-testid="select-channels">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mono">Mono</SelectItem>
-                <SelectItem value="stereo">Stereo</SelectItem>
+                <SelectItem value="mono">M</SelectItem>
+                <SelectItem value="stereo">St</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-xs text-muted-foreground">Duration</Label>
-            <span className="text-xs font-mono text-foreground">{settings.duration}ms</span>
+            <Label className="text-[10px] text-muted-foreground">Dur</Label>
+            <span className="text-[10px] font-mono text-foreground">{settings.duration}ms</span>
           </div>
           <Slider
             value={[settings.duration]}
@@ -79,17 +79,14 @@ export function ExportPanel({ settings, onChange, onExport, isExporting }: Expor
             className="w-full"
             data-testid="slider-duration"
           />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>100ms</span>
-            <span>10s</span>
-          </div>
         </div>
 
-        <div className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/30 border border-border/50">
-          <Label className="text-xs text-foreground">Normalize output</Label>
+        <div className="flex items-center justify-between py-1 px-2 rounded bg-muted/30 border border-border/50">
+          <Label className="text-[10px] text-foreground">Norm</Label>
           <Switch
             checked={settings.normalize}
             onCheckedChange={(v) => updateSettings("normalize", v)}
+            className="scale-75"
             data-testid="switch-normalize"
           />
         </div>
@@ -97,18 +94,19 @@ export function ExportPanel({ settings, onChange, onExport, isExporting }: Expor
         <Button
           onClick={onExport}
           disabled={isExporting}
-          className="w-full glow-accent"
+          size="sm"
+          className="w-full h-6 text-[10px] glow-accent"
           data-testid="button-export"
         >
           {isExporting ? (
             <>
-              <div className="w-4 h-4 mr-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              Rendering...
+              <div className="w-3 h-3 mr-1 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ...
             </>
           ) : (
             <>
-              <Download className="w-4 h-4 mr-2" />
-              Export WAV
+              <Download className="w-3 h-3 mr-1" />
+              Export
             </>
           )}
         </Button>

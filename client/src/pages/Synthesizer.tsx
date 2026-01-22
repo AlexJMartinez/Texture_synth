@@ -12,6 +12,8 @@ import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { 
   type SynthParameters, 
   type ExportSettings,
+  type Oscillator,
+  type Envelope,
   defaultSynthParameters, 
   defaultExportSettings 
 } from "@shared/schema";
@@ -46,28 +48,86 @@ export default function Synthesizer() {
     }
   }, []);
 
+  const createImpulseResponse = useCallback((ctx: BaseAudioContext, duration: number, decay: number): AudioBuffer => {
+    const sampleRate = ctx.sampleRate;
+    const length = Math.floor(sampleRate * duration);
+    const impulse = ctx.createBuffer(2, length, sampleRate);
+    
+    for (let channel = 0; channel < 2; channel++) {
+      const channelData = impulse.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        const t = i / sampleRate;
+        channelData[i] = (Math.random() * 2 - 1) * Math.exp(-t / decay);
+      }
+    }
+    
+    return impulse;
+  }, []);
+
   const generateSound = useCallback((
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
     duration: number
-  ): { source: OscillatorNode; gainNode: GainNode } => {
-    const osc = ctx.createOscillator();
-    osc.type = params.oscillator.waveform;
-    osc.frequency.value = params.oscillator.pitch;
-    osc.detune.value = params.oscillator.detune;
-
-    const gainNode = ctx.createGain();
-    gainNode.gain.value = 0.0001;
-
-    let lastNode: AudioNode = osc;
-
+  ): { oscillators: OscillatorNode[]; masterGain: GainNode } => {
+    const now = ctx.currentTime;
+    const durationSec = duration / 1000;
+    
+    const masterGain = ctx.createGain();
+    masterGain.gain.value = 0.0001;
+    
+    const panNode = ctx.createStereoPanner();
+    panNode.pan.value = params.output.pan / 100;
+    
+    let lastNode: AudioNode = masterGain;
+    
     if (params.filter.enabled) {
-      const filter = ctx.createBiquadFilter();
-      filter.type = params.filter.type;
-      filter.frequency.value = params.filter.frequency;
-      filter.Q.value = params.filter.resonance;
-      lastNode.connect(filter);
-      lastNode = filter;
+      if (params.filter.type === "comb") {
+        const delay = ctx.createDelay();
+        delay.delayTime.value = params.filter.combDelay / 1000;
+        const feedback = ctx.createGain();
+        feedback.gain.value = Math.min(0.95, params.filter.resonance / 30);
+        const combGain = ctx.createGain();
+        combGain.gain.value = 1;
+        
+        masterGain.connect(delay);
+        delay.connect(feedback);
+        feedback.connect(delay);
+        delay.connect(combGain);
+        masterGain.connect(combGain);
+        lastNode = combGain;
+      } else {
+        const filter = ctx.createBiquadFilter();
+        filter.type = params.filter.type as BiquadFilterType;
+        filter.frequency.value = params.filter.frequency;
+        filter.Q.value = params.filter.resonance;
+        if (params.filter.type === "peaking" || params.filter.type === "lowshelf" || params.filter.type === "highshelf") {
+          filter.gain.value = params.filter.gain;
+        }
+        masterGain.connect(filter);
+        lastNode = filter;
+        
+        const ampEnv = params.envelopes.env1;
+        const filterEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
+          .filter(e => e.enabled && e.target === "filter");
+        
+        for (const env of filterEnvs) {
+          const attackEnd = now + env.attack / 1000;
+          const holdEnd = attackEnd + env.hold / 1000;
+          const decayEnd = holdEnd + env.decay / 1000;
+          const modAmount = (env.amount / 100) * (params.filter.frequency * 2);
+          
+          filter.frequency.setValueAtTime(params.filter.frequency, now);
+          filter.frequency.linearRampToValueAtTime(
+            Math.max(20, Math.min(20000, params.filter.frequency + modAmount)), 
+            attackEnd
+          );
+          filter.frequency.setValueAtTime(
+            Math.max(20, Math.min(20000, params.filter.frequency + modAmount)), 
+            holdEnd
+          );
+          filter.frequency.linearRampToValueAtTime(params.filter.frequency, decayEnd);
+        }
+      }
     }
 
     if (params.effects.saturation > 0) {
@@ -86,53 +146,195 @@ export default function Synthesizer() {
       lastNode = waveshaper;
     }
 
-    const panNode = ctx.createStereoPanner();
-    panNode.pan.value = params.output.pan / 100;
-    lastNode.connect(panNode);
+    const dryGain = ctx.createGain();
+    dryGain.gain.value = 1;
+    lastNode.connect(dryGain);
+    
+    const effectsMixer = ctx.createGain();
+    effectsMixer.gain.value = 1;
+    dryGain.connect(effectsMixer);
 
-    panNode.connect(gainNode);
-    gainNode.connect(ctx.destination);
+    if (params.effects.delayEnabled && params.effects.delayMix > 0) {
+      const delayNode = ctx.createDelay(3);
+      delayNode.delayTime.value = params.effects.delayTime / 1000;
+      const delayFeedback = ctx.createGain();
+      delayFeedback.gain.value = params.effects.delayFeedback / 100;
+      const delayWet = ctx.createGain();
+      delayWet.gain.value = params.effects.delayMix / 100;
+      
+      lastNode.connect(delayNode);
+      delayNode.connect(delayFeedback);
+      delayFeedback.connect(delayNode);
+      delayNode.connect(delayWet);
+      delayWet.connect(effectsMixer);
+    }
 
-    const now = ctx.currentTime;
-    const attackEnd = now + params.envelope.attack / 1000;
-    const holdEnd = attackEnd + params.envelope.hold / 1000;
-    const decayEnd = holdEnd + params.envelope.decay / 1000;
+    if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
+      const convolver = ctx.createConvolver();
+      const reverbDuration = 0.5 + (params.effects.reverbSize / 100) * 3;
+      convolver.buffer = createImpulseResponse(ctx, reverbDuration, params.effects.reverbDecay);
+      const reverbWet = ctx.createGain();
+      reverbWet.gain.value = params.effects.reverbMix / 100;
+      
+      lastNode.connect(convolver);
+      convolver.connect(reverbWet);
+      reverbWet.connect(effectsMixer);
+    }
+
+    if (params.effects.chorusEnabled && params.effects.chorusMix > 0) {
+      const chorusDelay1 = ctx.createDelay();
+      const chorusDelay2 = ctx.createDelay();
+      chorusDelay1.delayTime.value = 0.02;
+      chorusDelay2.delayTime.value = 0.025;
+      
+      const lfo1 = ctx.createOscillator();
+      const lfo2 = ctx.createOscillator();
+      lfo1.frequency.value = params.effects.chorusRate;
+      lfo2.frequency.value = params.effects.chorusRate * 1.1;
+      
+      const lfoGain1 = ctx.createGain();
+      const lfoGain2 = ctx.createGain();
+      const depth = (params.effects.chorusDepth / 100) * 0.005;
+      lfoGain1.gain.value = depth;
+      lfoGain2.gain.value = depth;
+      
+      lfo1.connect(lfoGain1);
+      lfoGain1.connect(chorusDelay1.delayTime);
+      lfo2.connect(lfoGain2);
+      lfoGain2.connect(chorusDelay2.delayTime);
+      
+      lfo1.start(now);
+      lfo2.start(now);
+      lfo1.stop(now + durationSec);
+      lfo2.stop(now + durationSec);
+      
+      const chorusWet = ctx.createGain();
+      chorusWet.gain.value = params.effects.chorusMix / 100;
+      
+      lastNode.connect(chorusDelay1);
+      lastNode.connect(chorusDelay2);
+      chorusDelay1.connect(chorusWet);
+      chorusDelay2.connect(chorusWet);
+      chorusWet.connect(effectsMixer);
+    }
+
+    effectsMixer.connect(panNode);
+    panNode.connect(ctx.destination);
+
+    const oscillators: OscillatorNode[] = [];
+    const oscConfigs = [
+      { osc: params.oscillators.osc1, key: "osc1" },
+      { osc: params.oscillators.osc2, key: "osc2" },
+      { osc: params.oscillators.osc3, key: "osc3" },
+    ];
+
+    for (const { osc, key } of oscConfigs) {
+      if (!osc.enabled) continue;
+
+      const oscNode = ctx.createOscillator();
+      oscNode.type = osc.waveform;
+      oscNode.frequency.value = osc.pitch;
+      oscNode.detune.value = osc.detune;
+
+      const oscGain = ctx.createGain();
+      oscGain.gain.value = osc.level / 100;
+
+      const pitchEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
+        .filter(e => e.enabled && e.target === "pitch");
+      
+      for (const env of pitchEnvs) {
+        const attackEnd = now + env.attack / 1000;
+        const holdEnd = attackEnd + env.hold / 1000;
+        const decayEnd = holdEnd + env.decay / 1000;
+        const modAmount = (env.amount / 100) * osc.pitch * 0.5;
+        
+        oscNode.frequency.setValueAtTime(osc.pitch, now);
+        oscNode.frequency.linearRampToValueAtTime(
+          Math.max(20, osc.pitch + modAmount), 
+          attackEnd
+        );
+        oscNode.frequency.setValueAtTime(
+          Math.max(20, osc.pitch + modAmount), 
+          holdEnd
+        );
+        oscNode.frequency.linearRampToValueAtTime(osc.pitch, decayEnd);
+      }
+
+      const oscTargetEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
+        .filter(e => e.enabled && e.target === key);
+      
+      for (const env of oscTargetEnvs) {
+        const attackEnd = now + env.attack / 1000;
+        const holdEnd = attackEnd + env.hold / 1000;
+        const decayEnd = holdEnd + env.decay / 1000;
+        const baseLevel = osc.level / 100;
+        const modAmount = (env.amount / 100) * baseLevel;
+        
+        oscGain.gain.setValueAtTime(0.0001, now);
+        oscGain.gain.linearRampToValueAtTime(Math.max(0.0001, baseLevel + modAmount), attackEnd);
+        oscGain.gain.setValueAtTime(Math.max(0.0001, baseLevel + modAmount), holdEnd);
+        oscGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
+      }
+
+      if (osc.drift > 0) {
+        const driftAmount = osc.drift / 100;
+        const driftLfo = ctx.createOscillator();
+        const driftGain = ctx.createGain();
+        driftLfo.frequency.value = 2 + Math.random() * 3;
+        driftGain.gain.value = osc.pitch * 0.02 * driftAmount;
+        driftLfo.connect(driftGain);
+        driftGain.connect(oscNode.frequency);
+        driftLfo.start(now);
+        driftLfo.stop(now + durationSec);
+      }
+
+      oscNode.connect(oscGain);
+      oscGain.connect(masterGain);
+      
+      oscNode.start(now);
+      oscNode.stop(now + durationSec);
+      oscillators.push(oscNode);
+    }
+
+    const ampEnv = params.envelopes.env1;
+    const attackEnd = now + ampEnv.attack / 1000;
+    const holdEnd = attackEnd + ampEnv.hold / 1000;
+    const decayEnd = holdEnd + ampEnv.decay / 1000;
     const volume = Math.max(0.0001, params.output.volume / 100);
 
-    gainNode.gain.setValueAtTime(0.0001, now);
+    masterGain.gain.setValueAtTime(0.0001, now);
     
-    if (params.envelope.curve === "exponential") {
-      gainNode.gain.exponentialRampToValueAtTime(volume, attackEnd);
+    if (ampEnv.curve === "exponential") {
+      masterGain.gain.exponentialRampToValueAtTime(volume, attackEnd);
     } else {
-      gainNode.gain.linearRampToValueAtTime(volume, attackEnd);
+      masterGain.gain.linearRampToValueAtTime(volume, attackEnd);
     }
     
-    gainNode.gain.setValueAtTime(volume, holdEnd);
+    masterGain.gain.setValueAtTime(volume, holdEnd);
     
-    if (params.envelope.curve === "exponential") {
-      gainNode.gain.exponentialRampToValueAtTime(0.0001, decayEnd);
-    } else if (params.envelope.curve === "logarithmic") {
-      gainNode.gain.setTargetAtTime(0.0001, holdEnd, params.envelope.decay / 3000);
+    if (ampEnv.curve === "exponential") {
+      masterGain.gain.exponentialRampToValueAtTime(0.0001, decayEnd);
+    } else if (ampEnv.curve === "logarithmic") {
+      masterGain.gain.setTargetAtTime(0.0001, holdEnd, ampEnv.decay / 3000);
     } else {
-      gainNode.gain.linearRampToValueAtTime(0.0001, decayEnd);
+      masterGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
     }
 
-    if (params.oscillator.drift > 0) {
-      const driftAmount = params.oscillator.drift / 100;
-      const driftLfo = ctx.createOscillator();
-      const driftGain = ctx.createGain();
-      driftLfo.frequency.value = 2 + Math.random() * 3;
-      driftGain.gain.value = params.oscillator.pitch * 0.02 * driftAmount;
-      driftLfo.connect(driftGain);
-      driftGain.connect(osc.frequency);
-      driftLfo.start(now);
-      driftLfo.stop(now + duration / 1000);
+    return { oscillators, masterGain };
+  }, [createImpulseResponse]);
+
+  const getTotalDuration = useCallback((params: SynthParameters): number => {
+    const env1 = params.envelopes.env1;
+    let baseDuration = env1.attack + env1.hold + env1.decay + 100;
+    
+    if (params.effects.delayEnabled) {
+      baseDuration += params.effects.delayTime * 3;
     }
-
-    osc.start(now);
-    osc.stop(now + duration / 1000);
-
-    return { source: osc, gainNode };
+    if (params.effects.reverbEnabled) {
+      baseDuration += params.effects.reverbDecay * 1000;
+    }
+    
+    return Math.min(baseDuration, 10000);
   }, []);
 
   const handleTrigger = useCallback(async () => {
@@ -144,13 +346,15 @@ export default function Synthesizer() {
 
     setIsPlaying(true);
 
-    const totalDuration = params.envelope.attack + params.envelope.hold + params.envelope.decay + 100;
+    const totalDuration = getTotalDuration(params);
     
-    const { source } = generateSound(ctx, params, totalDuration);
+    const { oscillators } = generateSound(ctx, params, totalDuration);
 
-    source.onended = () => {
-      setIsPlaying(false);
-    };
+    if (oscillators.length > 0) {
+      oscillators[0].onended = () => {
+        setIsPlaying(false);
+      };
+    }
 
     const sampleRate = 44100;
     const offlineCtx = new OfflineAudioContext(1, (totalDuration / 1000) * sampleRate, sampleRate);
@@ -163,7 +367,7 @@ export default function Synthesizer() {
     }
     
     setAudioBuffer(buffer);
-  }, [params, getAudioContext, generateSound, applyBitcrusher]);
+  }, [params, getAudioContext, generateSound, applyBitcrusher, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -184,27 +388,16 @@ export default function Synthesizer() {
 
       let finalBuffer = renderedBuffer;
       if (exportSettings.normalize) {
-        const data = renderedBuffer.getChannelData(0);
-        let max = 0;
-        for (let i = 0; i < data.length; i++) {
-          max = Math.max(max, Math.abs(data[i]));
-        }
-        if (max > 0) {
-          const normalizeRatio = 0.95 / max;
+        for (let channel = 0; channel < channels; channel++) {
+          const data = renderedBuffer.getChannelData(channel);
+          let max = 0;
           for (let i = 0; i < data.length; i++) {
-            data[i] *= normalizeRatio;
+            max = Math.max(max, Math.abs(data[i]));
           }
-        }
-        if (channels === 2) {
-          const dataR = renderedBuffer.getChannelData(1);
-          let maxR = 0;
-          for (let i = 0; i < dataR.length; i++) {
-            maxR = Math.max(maxR, Math.abs(dataR[i]));
-          }
-          if (maxR > 0) {
-            const normalizeRatioR = 0.95 / maxR;
-            for (let i = 0; i < dataR.length; i++) {
-              dataR[i] *= normalizeRatioR;
+          if (max > 0) {
+            const normalizeRatio = 0.95 / max;
+            for (let i = 0; i < data.length; i++) {
+              data[i] *= normalizeRatio;
             }
           }
         }
@@ -222,7 +415,7 @@ export default function Synthesizer() {
     } finally {
       setIsExporting(false);
     }
-  }, [params, exportSettings, generateSound]);
+  }, [params, exportSettings, generateSound, applyBitcrusher]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -236,45 +429,76 @@ export default function Synthesizer() {
   }, [handleTrigger]);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
-      <header className="mb-6">
-        <div className="flex items-center justify-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
-            <Zap className="w-6 h-6 text-primary" />
+    <div className="min-h-screen bg-background p-2">
+      <header className="mb-2">
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
+            <Zap className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">OneShot Synth</h1>
-            <p className="text-sm text-muted-foreground">Web Audio One-Shot Generator</p>
+            <h1 className="text-lg font-bold tracking-tight text-foreground">OneShot Synth</h1>
+            <p className="text-[10px] text-muted-foreground">Multi-Oscillator One-Shot Generator</p>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          <div className="lg:col-span-8 space-y-4">
-            <div className="flex flex-col items-center gap-4 p-6 rounded-xl bg-card/50 border border-border">
-              <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} />
-              <p className="text-xs text-muted-foreground">Press Space or click to trigger</p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+          <div className="lg:col-span-9 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-shrink-0">
+                <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
+              </div>
+              <WaveformDisplay 
+                audioBuffer={audioBuffer} 
+                isPlaying={isPlaying}
+                className="h-16 flex-1"
+              />
             </div>
 
-            <WaveformDisplay 
-              audioBuffer={audioBuffer} 
-              isPlaying={isPlaying}
-              className="h-32"
-            />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-2">
               <OscillatorPanel
-                oscillator={params.oscillator}
-                onChange={(osc) => setParams({ ...params, oscillator: osc })}
+                oscillator={params.oscillators.osc1}
+                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
+                title="OSC 1"
+                index={1}
+              />
+              <OscillatorPanel
+                oscillator={params.oscillators.osc2}
+                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
+                title="OSC 2"
+                index={2}
+              />
+              <OscillatorPanel
+                oscillator={params.oscillators.osc3}
+                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
+                title="OSC 3"
+                index={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <EnvelopePanel
+                envelope={params.envelopes.env1}
+                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
+                title="ENV 1"
+                index={1}
               />
               <EnvelopePanel
-                envelope={params.envelope}
-                onChange={(env) => setParams({ ...params, envelope: env })}
+                envelope={params.envelopes.env2}
+                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
+                title="ENV 2"
+                index={2}
+              />
+              <EnvelopePanel
+                envelope={params.envelopes.env3}
+                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
+                title="ENV 3"
+                index={3}
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
@@ -290,7 +514,7 @@ export default function Synthesizer() {
             </div>
           </div>
 
-          <div className="lg:col-span-4 space-y-4">
+          <div className="lg:col-span-3 space-y-2">
             <RandomizeControls
               currentParams={params}
               onRandomize={setParams}
@@ -308,12 +532,6 @@ export default function Synthesizer() {
           </div>
         </div>
       </div>
-
-      <footer className="mt-8 text-center">
-        <p className="text-xs text-muted-foreground">
-          OneShot Synth - Web Audio API powered synthesizer
-        </p>
-      </footer>
     </div>
   );
 }

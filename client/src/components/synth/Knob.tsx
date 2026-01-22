@@ -9,7 +9,7 @@ interface KnobProps {
   unit?: string;
   onChange: (value: number) => void;
   logarithmic?: boolean;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   accentColor?: "primary" | "accent";
 }
 
@@ -31,15 +31,17 @@ export function Knob({
   const startValue = useRef(0);
 
   const sizeClasses = {
-    sm: "w-10 h-10",
-    md: "w-14 h-14",
-    lg: "w-18 h-18",
+    xs: "w-7 h-7",
+    sm: "w-9 h-9",
+    md: "w-11 h-11",
+    lg: "w-14 h-14",
   };
 
   const indicatorSize = {
-    sm: "w-0.5 h-3 top-1",
-    md: "w-1 h-4 top-1.5",
-    lg: "w-1 h-5 top-2",
+    xs: "w-0.5 h-2 top-0.5",
+    sm: "w-0.5 h-2.5 top-0.5",
+    md: "w-0.5 h-3 top-1",
+    lg: "w-1 h-4 top-1.5",
   };
 
   const normalizeValue = useCallback((val: number) => {

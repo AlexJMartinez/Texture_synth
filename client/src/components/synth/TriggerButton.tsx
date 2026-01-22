@@ -4,9 +4,10 @@ import { Play, Zap } from "lucide-react";
 interface TriggerButtonProps {
   onTrigger: () => void;
   isPlaying: boolean;
+  size?: "sm" | "md" | "lg";
 }
 
-export function TriggerButton({ onTrigger, isPlaying }: TriggerButtonProps) {
+export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButtonProps) {
   const [isPressed, setIsPressed] = useState(false);
 
   const handleTrigger = useCallback(() => {
@@ -15,11 +16,23 @@ export function TriggerButton({ onTrigger, isPlaying }: TriggerButtonProps) {
     setTimeout(() => setIsPressed(false), 150);
   }, [onTrigger]);
 
+  const sizeClasses = {
+    sm: "w-14 h-14",
+    md: "w-20 h-20",
+    lg: "w-28 h-28",
+  };
+
+  const iconSizes = {
+    sm: "w-6 h-6",
+    md: "w-8 h-8",
+    lg: "w-12 h-12",
+  };
+
   return (
     <button
       onClick={handleTrigger}
       className={`
-        relative w-28 h-28 rounded-full cursor-pointer select-none
+        relative ${sizeClasses[size]} rounded-full cursor-pointer select-none
         transition-all duration-150 ease-out
         flex items-center justify-center
         ${isPressed ? 'scale-95' : 'hover:scale-105'}
@@ -53,9 +66,9 @@ export function TriggerButton({ onTrigger, isPlaying }: TriggerButtonProps) {
       />
       
       {isPlaying ? (
-        <Zap className="w-12 h-12 text-white drop-shadow-lg" fill="currentColor" />
+        <Zap className={`${iconSizes[size]} text-white drop-shadow-lg`} fill="currentColor" />
       ) : (
-        <Play className="w-12 h-12 text-white drop-shadow-lg ml-1" fill="currentColor" />
+        <Play className={`${iconSizes[size]} text-white drop-shadow-lg ml-0.5`} fill="currentColor" />
       )}
 
       <div 
