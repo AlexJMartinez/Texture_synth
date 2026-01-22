@@ -60,6 +60,28 @@ const ModalSynthSchema = z.object({
   }),
 });
 
+const AdditivePartialSchema = z.object({
+  level: z.number().min(0).max(100),
+  detune: z.number().min(-100).max(100),
+});
+
+const AdditiveSynthSchema = z.object({
+  enabled: z.boolean(),
+  basePitch: z.number().min(20).max(2000),
+  partials: z.object({
+    p1: AdditivePartialSchema,
+    p2: AdditivePartialSchema,
+    p3: AdditivePartialSchema,
+    p4: AdditivePartialSchema,
+    p5: AdditivePartialSchema,
+    p6: AdditivePartialSchema,
+    p7: AdditivePartialSchema,
+    p8: AdditivePartialSchema,
+  }),
+  spread: z.number().min(0).max(100),
+  decaySlope: z.number().min(0).max(100),
+});
+
 export const SynthParametersSchema = z.object({
   oscillators: z.object({
     osc1: OscillatorSchema,
@@ -83,6 +105,8 @@ export const SynthParametersSchema = z.object({
   }),
   
   modal: ModalSynthSchema,
+  
+  additive: AdditiveSynthSchema,
   
   effects: z.object({
     saturation: z.number().min(0).max(100),
@@ -112,6 +136,8 @@ export type Oscillator = z.infer<typeof OscillatorSchema>;
 export type Envelope = z.infer<typeof EnvelopeSchema>;
 export type ModalMode = z.infer<typeof ModalModeSchema>;
 export type ModalSynth = z.infer<typeof ModalSynthSchema>;
+export type AdditivePartial = z.infer<typeof AdditivePartialSchema>;
+export type AdditiveSynth = z.infer<typeof AdditiveSynthSchema>;
 
 export const PresetSchema = z.object({
   id: z.string(),
@@ -188,6 +214,22 @@ export const defaultSynthParameters: SynthParameters = {
       mode3: { ratio: 5.4, decay: 300, level: 40 },
       mode4: { ratio: 8.93, decay: 200, level: 25 },
     },
+  },
+  additive: {
+    enabled: false,
+    basePitch: 220,
+    partials: {
+      p1: { level: 100, detune: 0 },
+      p2: { level: 50, detune: 0 },
+      p3: { level: 33, detune: 0 },
+      p4: { level: 25, detune: 0 },
+      p5: { level: 20, detune: 0 },
+      p6: { level: 17, detune: 0 },
+      p7: { level: 14, detune: 0 },
+      p8: { level: 12, detune: 0 },
+    },
+    spread: 0,
+    decaySlope: 0,
   },
   effects: {
     saturation: 0,
@@ -466,6 +508,39 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         },
       },
       effects: { ...defaultSynthParameters.effects, saturation: 15 },
+    },
+  },
+  {
+    name: "Organ Tones",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 20, hold: 200, decay: 800, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      additive: {
+        enabled: true,
+        basePitch: 220,
+        partials: {
+          p1: { level: 100, detune: 0 },
+          p2: { level: 80, detune: 0 },
+          p3: { level: 60, detune: 0 },
+          p4: { level: 50, detune: 0 },
+          p5: { level: 35, detune: 0 },
+          p6: { level: 25, detune: 0 },
+          p7: { level: 15, detune: 0 },
+          p8: { level: 10, detune: 0 },
+        },
+        spread: 0,
+        decaySlope: 20,
+      },
+      effects: { ...defaultSynthParameters.effects, chorusEnabled: true, chorusRate: 1.2, chorusDepth: 40, chorusMix: 25 },
     },
   },
 ];

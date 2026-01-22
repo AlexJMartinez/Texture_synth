@@ -10,6 +10,7 @@ import { ExportPanel } from "@/components/synth/ExportPanel";
 import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { ModalPanel } from "@/components/synth/ModalPanel";
+import { AdditivePanel } from "@/components/synth/AdditivePanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -388,6 +389,41 @@ export default function Synthesizer() {
       }
     }
 
+    if (params.additive.enabled) {
+      const additive = params.additive;
+      const partialKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"] as const;
+      
+      partialKeys.forEach((key, i) => {
+        const partial = additive.partials[key];
+        if (partial.level === 0) return;
+        
+        const harmonic = i + 1;
+        const partialOsc = ctx.createOscillator();
+        partialOsc.type = "sine";
+        
+        const spreadCents = (additive.spread / 100) * (harmonic - 1) * 10;
+        const baseFreq = additive.basePitch * harmonic;
+        const detunedFreq = baseFreq * Math.pow(2, (partial.detune + spreadCents) / 1200);
+        partialOsc.frequency.value = detunedFreq;
+        
+        const partialGain = ctx.createGain();
+        const baseLevel = partial.level / 100;
+        const slopeMultiplier = 1 - (additive.decaySlope / 100) * (harmonic - 1) / 7;
+        const finalLevel = baseLevel * Math.max(0.1, slopeMultiplier) * 0.2;
+        
+        partialGain.gain.setValueAtTime(finalLevel, now);
+        
+        partialOsc.connect(partialGain);
+        partialGain.connect(masterGain);
+        
+        const ampEnv = params.envelopes.env1;
+        const envDuration = (ampEnv.attack + ampEnv.hold + ampEnv.decay) / 1000 + 0.2;
+        partialOsc.start(now);
+        partialOsc.stop(now + envDuration);
+        oscillators.push(partialOsc);
+      });
+    }
+
     const ampEnv = params.envelopes.env1;
     const attackEnd = now + ampEnv.attack / 1000;
     const holdEnd = attackEnd + ampEnv.hold / 1000;
@@ -590,7 +626,7 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-2">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
@@ -598,6 +634,10 @@ export default function Synthesizer() {
               <ModalPanel
                 modal={params.modal}
                 onChange={(modal) => setParams({ ...params, modal })}
+              />
+              <AdditivePanel
+                additive={params.additive}
+                onChange={(additive) => setParams({ ...params, additive })}
               />
               <EffectsPanel
                 effects={params.effects}

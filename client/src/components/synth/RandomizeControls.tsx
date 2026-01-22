@@ -3,7 +3,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, ModalSynth, ModalMode, AdditiveSynth, AdditivePartial } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 
 interface RandomizeControlsProps {
@@ -116,6 +116,22 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         chorusDepth: Math.round(randomInRange(20, 60)),
         chorusMix: Math.round(randomInRange(20, 40)),
       },
+      additive: {
+        enabled: Math.random() > 0.8,
+        basePitch: Math.round(randomInRange(55, 440, true)),
+        partials: {
+          p1: { level: 100, detune: 0 },
+          p2: { level: Math.round(randomInRange(20, 80)), detune: Math.round(randomInRange(-20, 20)) },
+          p3: { level: Math.round(randomInRange(10, 60)), detune: Math.round(randomInRange(-20, 20)) },
+          p4: { level: Math.round(randomInRange(5, 50)), detune: Math.round(randomInRange(-20, 20)) },
+          p5: { level: Math.round(randomInRange(0, 40)), detune: Math.round(randomInRange(-20, 20)) },
+          p6: { level: Math.round(randomInRange(0, 35)), detune: Math.round(randomInRange(-20, 20)) },
+          p7: { level: Math.round(randomInRange(0, 30)), detune: Math.round(randomInRange(-20, 20)) },
+          p8: { level: Math.round(randomInRange(0, 25)), detune: Math.round(randomInRange(-20, 20)) },
+        },
+        spread: Math.round(randomInRange(0, 50 * chaos)),
+        decaySlope: Math.round(randomInRange(0, 60 * chaos)),
+      },
       output: {
         volume: 75,
         pan: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
@@ -199,6 +215,22 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
           mode3: { ratio: Math.round(mutateValue(currentParams.modal.modes.mode3.ratio, 0.5, 16) * 100) / 100, decay: Math.round(mutateValue(currentParams.modal.modes.mode3.decay, 10, 5000)), level: Math.round(mutateValue(currentParams.modal.modes.mode3.level, 0, 100)) },
           mode4: { ratio: Math.round(mutateValue(currentParams.modal.modes.mode4.ratio, 0.5, 16) * 100) / 100, decay: Math.round(mutateValue(currentParams.modal.modes.mode4.decay, 10, 5000)), level: Math.round(mutateValue(currentParams.modal.modes.mode4.level, 0, 100)) },
         },
+      },
+      additive: {
+        enabled: currentParams.additive.enabled,
+        basePitch: Math.round(mutateValue(currentParams.additive.basePitch, 20, 2000, true)),
+        partials: {
+          p1: { level: currentParams.additive.partials.p1.level, detune: 0 },
+          p2: { level: Math.round(mutateValue(currentParams.additive.partials.p2.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p2.detune, -100, 100)) },
+          p3: { level: Math.round(mutateValue(currentParams.additive.partials.p3.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p3.detune, -100, 100)) },
+          p4: { level: Math.round(mutateValue(currentParams.additive.partials.p4.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p4.detune, -100, 100)) },
+          p5: { level: Math.round(mutateValue(currentParams.additive.partials.p5.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p5.detune, -100, 100)) },
+          p6: { level: Math.round(mutateValue(currentParams.additive.partials.p6.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p6.detune, -100, 100)) },
+          p7: { level: Math.round(mutateValue(currentParams.additive.partials.p7.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p7.detune, -100, 100)) },
+          p8: { level: Math.round(mutateValue(currentParams.additive.partials.p8.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p8.detune, -100, 100)) },
+        },
+        spread: Math.round(mutateValue(currentParams.additive.spread, 0, 100)),
+        decaySlope: Math.round(mutateValue(currentParams.additive.decaySlope, 0, 100)),
       },
       effects: {
         saturation: Math.round(mutateValue(currentParams.effects.saturation, 0, 100)),
