@@ -50,6 +50,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     fmRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
     fmDepth: Math.round(randomInRange(50, 500 * chaos)),
     fmWaveform: randomWaveform(),
+    amEnabled: Math.random() > 0.75,
+    amRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
+    amDepth: Math.round(randomInRange(20, 80 * chaos)),
+    amWaveform: randomWaveform(),
   });
 
   const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => ({
@@ -137,6 +141,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       fmRatio: Math.round(mutateValue(osc.fmRatio, 0.25, 16) * 4) / 4,
       fmDepth: Math.round(mutateValue(osc.fmDepth, 0, 1000)),
       fmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.fmWaveform,
+      amEnabled: osc.amEnabled,
+      amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
+      amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
+      amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
     });
 
     const mutateEnv = (env: Envelope): Envelope => ({

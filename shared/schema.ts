@@ -25,6 +25,10 @@ const OscillatorSchema = z.object({
   fmRatio: z.number().min(0.25).max(16),
   fmDepth: z.number().min(0).max(1000),
   fmWaveform: WaveformType,
+  amEnabled: z.boolean(),
+  amRatio: z.number().min(0.25).max(16),
+  amDepth: z.number().min(0).max(100),
+  amWaveform: WaveformType,
 });
 
 const EnvelopeSchema = z.object({
@@ -115,6 +119,10 @@ const defaultOscillator: Oscillator = {
   fmRatio: 2,
   fmDepth: 100,
   fmWaveform: "sine",
+  amEnabled: false,
+  amRatio: 1,
+  amDepth: 50,
+  amWaveform: "sine",
 };
 
 const defaultEnvelope: Envelope = {
@@ -176,6 +184,8 @@ export const defaultExportSettings: ExportSettings = {
 };
 
 const defaultFmOsc = { fmEnabled: false, fmRatio: 2, fmDepth: 100, fmWaveform: "sine" as const };
+const defaultAmOsc = { amEnabled: false, amRatio: 1, amDepth: 50, amWaveform: "sine" as const };
+const defaultModOsc = { ...defaultFmOsc, ...defaultAmOsc };
 
 export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
   {
@@ -183,9 +193,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "triangle", pitch: 880, detune: 0, drift: 5, level: 100, ...defaultFmOsc },
-        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "triangle", pitch: 880, detune: 0, drift: 5, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 5, hold: 20, decay: 300, curve: "exponential", target: "amplitude", amount: 100 },
@@ -199,9 +209,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 55, detune: 0, drift: 0, level: 100, ...defaultFmOsc },
-        osc2: { enabled: true, waveform: "square", pitch: 55, detune: 5, drift: 0, level: 60, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 110, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 55, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 55, detune: 5, drift: 0, level: 60, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 110, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 20, hold: 100, decay: 800, curve: "linear", target: "amplitude", amount: 100 },
@@ -216,9 +226,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "square", pitch: 1200, detune: 0, drift: 10, level: 100, ...defaultFmOsc },
-        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "square", pitch: 1200, detune: 0, drift: 10, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "amplitude", amount: 100 },
@@ -233,9 +243,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sine", pitch: 330, detune: 5, drift: 15, level: 100, ...defaultFmOsc },
-        osc2: { enabled: true, waveform: "triangle", pitch: 660, detune: -3, drift: 10, level: 40, ...defaultFmOsc },
-        osc3: { enabled: true, waveform: "sine", pitch: 165, detune: 0, drift: 5, level: 50, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sine", pitch: 330, detune: 5, drift: 15, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "triangle", pitch: 660, detune: -3, drift: 10, level: 40, ...defaultModOsc },
+        osc3: { enabled: true, waveform: "sine", pitch: 165, detune: 0, drift: 5, level: 50, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 200, hold: 300, decay: 1500, curve: "logarithmic", target: "amplitude", amount: 100 },
@@ -251,9 +261,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 10, drift: 20, level: 100, ...defaultFmOsc },
-        osc2: { enabled: true, waveform: "square", pitch: 221, detune: -5, drift: 15, level: 70, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 10, drift: 20, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 221, detune: -5, drift: 15, level: 70, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 10, hold: 50, decay: 400, curve: "linear", target: "amplitude", amount: 100 },
@@ -268,9 +278,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultFmOsc },
-        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 0, hold: 10, decay: 200, curve: "exponential", target: "amplitude", amount: 100 },
@@ -285,9 +295,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "triangle", pitch: 660, detune: 0, drift: 5, level: 100, ...defaultFmOsc },
-        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "triangle", pitch: 660, detune: 0, drift: 5, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 5, hold: 30, decay: 150, curve: "exponential", target: "amplitude", amount: 100 },
@@ -302,9 +312,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 0, drift: 8, level: 100, ...defaultFmOsc },
-        osc2: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 7, drift: 8, level: 80, ...defaultFmOsc },
-        osc3: { enabled: true, waveform: "sawtooth", pitch: 220, detune: -7, drift: 8, level: 80, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 0, drift: 8, level: 100, ...defaultModOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 220, detune: 7, drift: 8, level: 80, ...defaultModOsc },
+        osc3: { enabled: true, waveform: "sawtooth", pitch: 220, detune: -7, drift: 8, level: 80, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 150, hold: 200, decay: 800, curve: "logarithmic", target: "amplitude", amount: 100 },
@@ -320,9 +330,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 3.5, fmDepth: 400, fmWaveform: "sine" },
-        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultFmOsc },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 3.5, fmDepth: 400, fmWaveform: "sine", ...defaultAmOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 0, hold: 50, decay: 2000, curve: "exponential", target: "amplitude", amount: 100 },
@@ -336,9 +346,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sine", pitch: 220, detune: 0, drift: 5, level: 100, fmEnabled: true, fmRatio: 1, fmDepth: 200, fmWaveform: "sine" },
-        osc2: { enabled: true, waveform: "sine", pitch: 220, detune: 3, drift: 3, level: 60, fmEnabled: true, fmRatio: 2, fmDepth: 150, fmWaveform: "sine" },
-        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultFmOsc },
+        osc1: { enabled: true, waveform: "sine", pitch: 220, detune: 0, drift: 5, level: 100, fmEnabled: true, fmRatio: 1, fmDepth: 200, fmWaveform: "sine", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "sine", pitch: 220, detune: 3, drift: 3, level: 60, fmEnabled: true, fmRatio: 2, fmDepth: 150, fmWaveform: "sine", ...defaultAmOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
         env1: { enabled: true, attack: 50, hold: 100, decay: 600, curve: "linear", target: "amplitude", amount: 100 },
@@ -346,6 +356,23 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
       },
       filter: { enabled: true, frequency: 2500, resonance: 4, type: "lowpass", combDelay: 5, gain: 0 },
+    },
+  },
+  {
+    name: "AM Tremolo",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 200, detune: 0, drift: 0, level: 100, ...defaultFmOsc, amEnabled: true, amRatio: 2.5, amDepth: 80, amWaveform: "sine" },
+        osc2: { enabled: true, waveform: "square", pitch: 200, detune: 5, drift: 0, level: 60, ...defaultFmOsc, amEnabled: true, amRatio: 3.5, amDepth: 60, amWaveform: "triangle" },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 5, hold: 50, decay: 400, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "filter", amount: 50 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      effects: { ...defaultSynthParameters.effects, saturation: 20 },
     },
   },
 ];

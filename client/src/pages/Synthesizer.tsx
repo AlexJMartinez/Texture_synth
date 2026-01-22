@@ -254,6 +254,31 @@ export default function Synthesizer() {
         modOsc.stop(now + durationSec);
       }
 
+      let finalGain = oscGain;
+      if (osc.amEnabled && osc.amDepth > 0) {
+        const depth = osc.amDepth / 100;
+        
+        const amModOsc = ctx.createOscillator();
+        amModOsc.type = osc.amWaveform;
+        amModOsc.frequency.value = osc.pitch * osc.amRatio;
+        
+        const amModGain = ctx.createGain();
+        amModGain.gain.value = depth * 0.5;
+        
+        const amOutputGain = ctx.createGain();
+        amOutputGain.gain.value = 1 - depth * 0.5;
+        
+        amModOsc.connect(amModGain);
+        amModGain.connect(amOutputGain.gain);
+        
+        oscGain.disconnect();
+        oscGain.connect(amOutputGain);
+        finalGain = amOutputGain;
+        
+        amModOsc.start(now);
+        amModOsc.stop(now + durationSec);
+      }
+
       const pitchEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
         .filter(e => e.enabled && e.target === "pitch");
       
@@ -304,7 +329,7 @@ export default function Synthesizer() {
       }
 
       oscNode.connect(oscGain);
-      oscGain.connect(masterGain);
+      finalGain.connect(masterGain);
       
       oscNode.start(now);
       oscNode.stop(now + durationSec);
