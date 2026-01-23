@@ -45,6 +45,60 @@ function randomInRange(min: number, max: number, logarithmic = false): number {
   return min + Math.random() * (max - min);
 }
 
+function randExp(min: number, max: number, bias = 2.5): number {
+  const t = Math.pow(Math.random(), bias);
+  return min + (max - min) * t;
+}
+
+function randomizeSubSafe(mutateFrom?: {
+  level?: number;
+  octave?: number;
+  filterFreq?: number;
+  drive?: number;
+  attack?: number;
+  decay?: number;
+  waveform?: "sine" | "triangle";
+  enabled?: boolean;
+  filterEnabled?: boolean;
+  hpFreq?: number;
+}): {
+  enabled: boolean;
+  octave: -2 | -1 | 0;
+  waveform: "sine" | "triangle";
+  level: number;
+  filterFreq: number;
+  hpFreq: number;
+  drive: number;
+  attack: number;
+  decay: number;
+  filterEnabled: boolean;
+} {
+  const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+  const mix = (cur: number, next: number, amt: number) => cur + (next - cur) * amt;
+  const amt = mutateFrom ? 0.35 : 1.0;
+  
+  const octave = (Math.random() < 0.75 ? -1 : -2) as -1 | -2;
+  const waveform: "sine" | "triangle" = (["sine", "triangle"] as const)[Math.floor(Math.random() * 2)];
+  const level = randExp(8, 35, 2.0);
+  const lpHz = randExp(80, 160, 1.7);
+  const drive = randExp(0, 25, 2.5);
+  const attack = randExp(2, 8, 1.3);
+  const decay = randExp(100, 450, 1.4);
+  
+  return {
+    enabled: mutateFrom?.enabled ?? true,
+    octave: mutateFrom?.octave != null ? (Math.random() < 0.9 ? (mutateFrom.octave as -2 | -1 | 0) : octave) : octave,
+    waveform: mutateFrom?.waveform ?? waveform,
+    level: mutateFrom?.level != null ? Math.round(clamp(mix(mutateFrom.level, level, amt), 4, 50)) : Math.round(level),
+    filterFreq: mutateFrom?.filterFreq != null ? Math.round(clamp(mix(mutateFrom.filterFreq, lpHz, amt), 60, 200)) : Math.round(lpHz),
+    hpFreq: 25,
+    drive: mutateFrom?.drive != null ? Math.round(clamp(mix(mutateFrom.drive, drive, amt), 0, 35)) : Math.round(drive),
+    attack: mutateFrom?.attack != null ? Math.round(clamp(mix(mutateFrom.attack, attack, amt), 1, 20)) : Math.round(attack),
+    decay: mutateFrom?.decay != null ? Math.round(clamp(mix(mutateFrom.decay, decay, amt), 50, 800)) : Math.round(decay),
+    filterEnabled: mutateFrom?.filterEnabled ?? true,
+  };
+}
+
 function randomWaveform(): WaveformType {
   return (["sine", "triangle", "sawtooth", "square"] as const)[Math.floor(Math.random() * 4)];
 }
@@ -225,18 +279,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         srrAmount: Math.round(randomInRange(4, 12)),
         noiseType: (["white", "pink", "brown"] as const)[Math.floor(Math.random() * 3)],
       },
-      subOsc: {
-        enabled: Math.random() > 0.6,
-        waveform: (["sine", "triangle"] as const)[Math.floor(Math.random() * 2)],
-        octave: ([-2, -1, 0] as const)[Math.floor(Math.random() * 3)],
-        level: Math.round(randomInRange(30, 80)),
-        attack: Math.round(randomInRange(0, 50)),
-        decay: Math.round(randomInRange(100, 1000)),
-        filterEnabled: Math.random() > 0.7,
-        filterFreq: Math.round(randomInRange(40, 150)),
-        hpFreq: Math.round(randomInRange(15, 40)),
-        drive: Math.round(randomInRange(0, 50)),
-      },
+      subOsc: randomizeSubSafe(),
       saturationChain: {
         enabled: Math.random() > 0.5,
         tapeEnabled: Math.random() > 0.4,
@@ -441,18 +484,18 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         srrAmount: Math.round(mutateValue(currentParams.clickLayer.srrAmount, 1, 16)),
         noiseType: currentParams.clickLayer.noiseType,
       },
-      subOsc: {
+      subOsc: randomizeSubSafe({
         enabled: currentParams.subOsc.enabled,
         waveform: currentParams.subOsc.waveform,
         octave: currentParams.subOsc.octave,
-        level: Math.round(mutateValue(currentParams.subOsc.level, 0, 100)),
-        attack: Math.round(mutateValue(currentParams.subOsc.attack, 0, 100)),
-        decay: Math.round(mutateValue(currentParams.subOsc.decay, 10, 2000)),
+        level: currentParams.subOsc.level,
+        attack: currentParams.subOsc.attack,
+        decay: currentParams.subOsc.decay,
         filterEnabled: currentParams.subOsc.filterEnabled,
-        filterFreq: Math.round(mutateValue(currentParams.subOsc.filterFreq, 20, 200)),
-        hpFreq: Math.round(mutateValue(currentParams.subOsc.hpFreq ?? 25, 10, 60)),
-        drive: Math.round(mutateValue(currentParams.subOsc.drive ?? 0, 0, 100)),
-      },
+        filterFreq: currentParams.subOsc.filterFreq,
+        hpFreq: currentParams.subOsc.hpFreq ?? 25,
+        drive: currentParams.subOsc.drive ?? 0,
+      }),
       saturationChain: {
         enabled: currentParams.saturationChain.enabled,
         tapeEnabled: currentParams.saturationChain.tapeEnabled,

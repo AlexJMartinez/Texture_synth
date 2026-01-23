@@ -1,0 +1,50 @@
+// randomizeSub.ts
+export type RNG = () => number; // returns 0..1
+
+const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+const pick = <T>(rng: RNG, arr: T[]) => arr[Math.floor(rng() * arr.length)];
+
+function randExp(rng: RNG, min: number, max: number, bias = 2.5) {
+  // bias > 1 favors the low end (useful for decay & level)
+  const t = Math.pow(rng(), bias);
+  return min + (max - min) * t;
+}
+
+export function randomizeSub(rng: RNG, mutateFrom?: Partial<{
+  level: number; octave: -1|-2; lpHz: number; drive: number;
+  envAttack: number; envHold: number; envDecay: number;
+  waveform: OscillatorType; enabled: boolean;
+}>) {
+  const enabled = mutateFrom?.enabled ?? true;
+
+  // Heaviness without wrecking headroom:
+  const octave = (rng() < 0.75 ? -1 : -2) as -1 | -2;           // mostly -1
+  const waveform = pick(rng, ["sine", "triangle"] as const);     // keep safe
+  const level = randExp(rng, 0.08, 0.35, 2.0);                   // subtle but present
+  const lpHz = randExp(rng, 80, 160, 1.7);                       // keep it low
+  const drive = randExp(rng, 0.0, 0.25, 2.5);                    // mild only
+
+  // Envelope: sub blooms after transient
+  const attack = randExp(rng, 0.002, 0.008, 1.3);                // 2–8ms
+  const hold = randExp(rng, 0.0, 0.02, 2.0);                     // 0–20ms
+  const decay = randExp(rng, 0.10, 0.45, 1.4);                   // 100–450ms
+
+  // Optional mutate behavior: nudge around current settings instead of reroll
+  const mix = (cur: number, next: number, amt: number) => cur + (next - cur) * amt;
+  const amt = mutateFrom ? 0.35 : 1.0;
+
+  return {
+    enabled,
+    octave: mutateFrom?.octave ? (rng() < 0.9 ? mutateFrom.octave : octave) : octave,
+    waveform: mutateFrom?.waveform ?? waveform,
+    level: mutateFrom?.level != null ? clamp(mix(mutateFrom.level, level, amt), 0.04, 0.5) : level,
+    lpHz: mutateFrom?.lpHz != null ? clamp(mix(mutateFrom.lpHz, lpHz, amt), 60, 220) : lpHz,
+    hpHz: 25,
+    drive: mutateFrom?.drive != null ? clamp(mix(mutateFrom.drive, drive, amt), 0, 0.35) : drive,
+    env: {
+      attack: mutateFrom?.envAttack != null ? clamp(mix(mutateFrom.envAttack, attack, amt), 0.001, 0.02) : attack,
+      hold: mutateFrom?.envHold != null ? clamp(mix(mutateFrom.envHold, hold, amt), 0.0, 0.05) : hold,
+      decay: mutateFrom?.envDecay != null ? clamp(mix(mutateFrom.envDecay, decay, amt), 0.05, 1.2) : decay,
+    }
+  };
+}
