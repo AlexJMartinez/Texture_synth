@@ -1,36 +1,37 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import type { Oscillator, WaveformType, ModRatioPreset } from "@shared/schema";
+import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
 import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle } from "lucide-react";
+import {
+  pitchToHz,
+  getKnobValue,
+  getKnobConfig,
+  handlePitchKnobChange,
+  normalizePitch,
+  PITCH_RANGES,
+  clamp,
+} from "@/lib/pitchUtils";
 
-type PitchMode = "hz" | "semitones" | "octaves";
-
-function hzToSemitones(hz: number, baseA4: number = 440): number {
-  return 12 * Math.log2(hz / baseA4) + 69;
-}
-
-function semitonesToHz(semitones: number, baseA4: number = 440): number {
-  return baseA4 * Math.pow(2, (semitones - 69) / 12);
-}
-
-function hzToOctave(hz: number, baseA4: number = 440): number {
-  return Math.log2(hz / baseA4) + 4;
-}
-
-function octaveToHz(octave: number, baseA4: number = 440): number {
-  return baseA4 * Math.pow(2, octave - 4);
+function randomizePitch(): PitchState {
+  const randomSt = Math.random() * 48 - 24;
+  return {
+    mode: "hz",
+    baseHz: 440,
+    st: randomSt,
+    cents: 0,
+  };
 }
 
 function randomizeOscillator(): Partial<Oscillator> {
   const waveforms: WaveformType[] = ["sine", "triangle", "sawtooth", "square"];
   return {
     waveform: waveforms[Math.floor(Math.random() * waveforms.length)],
-    pitch: Math.exp(Math.random() * (Math.log(5000) - Math.log(40)) + Math.log(40)),
+    pitch: randomizePitch(),
     detune: Math.floor(Math.random() * 60 - 30),
     drift: Math.floor(Math.random() * 40),
     level: Math.floor(50 + Math.random() * 50),
@@ -59,11 +60,12 @@ interface OscillatorPanelProps {
 }
 
 export function OscillatorPanel({ oscillator, onChange, title, index }: OscillatorPanelProps) {
+  const pitch = normalizePitch(oscillator.pitch);
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
   const [amOpen, setAmOpen] = useState(oscillator.amEnabled);
   const [pmOpen, setPmOpen] = useState(oscillator.pmEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
-  const [pitchMode, setPitchMode] = useState<PitchMode>("hz");
+  const prevStRef = useRef(pitch.st);
   
   const updateOscillator = <K extends keyof Oscillator>(
     key: K,
@@ -76,42 +78,22 @@ export function OscillatorPanel({ oscillator, onChange, title, index }: Oscillat
     onChange({ ...oscillator, ...randomizeOscillator() });
   };
 
-  const getPitchDisplayValue = (): number => {
-    switch (pitchMode) {
-      case "semitones":
-        return Math.round(hzToSemitones(oscillator.pitch) * 10) / 10;
-      case "octaves":
-        return Math.round(hzToOctave(oscillator.pitch) * 100) / 100;
-      default:
-        return oscillator.pitch;
-    }
+  const handlePitchModeChange = (mode: PitchModeType) => {
+    updateOscillator("pitch", { ...pitch, mode });
   };
 
-  const handlePitchChange = (value: number) => {
-    switch (pitchMode) {
-      case "semitones":
-        updateOscillator("pitch", Math.max(20, Math.min(20000, semitonesToHz(value))));
-        break;
-      case "octaves":
-        updateOscillator("pitch", Math.max(20, Math.min(20000, octaveToHz(value))));
-        break;
-      default:
-        updateOscillator("pitch", value);
-    }
+  const onPitchKnobChange = (value: number) => {
+    const newPitch = handlePitchKnobChange(pitch, value, prevStRef.current);
+    prevStRef.current = newPitch.st;
+    updateOscillator("pitch", newPitch);
   };
 
-  const getPitchConfig = () => {
-    switch (pitchMode) {
-      case "semitones":
-        return { min: 0, max: 127, step: 1, unit: "st", logarithmic: false };
-      case "octaves":
-        return { min: -2, max: 10, step: 0.1, unit: "oct", logarithmic: false };
-      default:
-        return { min: 20, max: 20000, step: 1, unit: "Hz", logarithmic: true };
-    }
+  const onCentsChange = (value: number) => {
+    updateOscillator("pitch", { ...pitch, cents: clamp(value, -100, 100) });
   };
 
-  const pitchConfig = getPitchConfig();
+  const pitchConfig = getKnobConfig(pitch.mode);
+  const pitchKnobValue = getKnobValue(pitch);
 
   return (
     <CollapsiblePanel
@@ -160,31 +142,41 @@ export function OscillatorPanel({ oscillator, onChange, title, index }: Oscillat
         <div className="flex items-center gap-1 mb-1">
           <span className="text-[9px] text-muted-foreground">Pitch:</span>
           <div className="flex gap-0.5">
-            {(["hz", "semitones", "octaves"] as PitchMode[]).map((mode) => (
+            {(["hz", "st", "oct"] as PitchModeType[]).map((mode) => (
               <Button
                 key={mode}
                 size="sm"
-                variant={pitchMode === mode ? "default" : "ghost"}
-                onClick={() => setPitchMode(mode)}
+                variant={pitch.mode === mode ? "default" : "ghost"}
+                onClick={() => handlePitchModeChange(mode)}
                 className="text-[8px] px-1.5 py-0"
                 data-testid={`btn-pitch-mode-${mode}-${index}`}
               >
-                {mode === "hz" ? "Hz" : mode === "semitones" ? "ST" : "Oct"}
+                {mode === "hz" ? "Hz" : mode === "st" ? "ST" : "Oct"}
               </Button>
             ))}
           </div>
         </div>
         <div className="flex justify-center gap-1">
           <Knob
-            value={getPitchDisplayValue()}
+            value={pitchKnobValue}
             min={pitchConfig.min}
             max={pitchConfig.max}
             step={pitchConfig.step}
             label="Pitch"
-            unit={pitchConfig.unit}
-            onChange={handlePitchChange}
+            unit={pitch.mode === "hz" ? "Hz" : pitch.mode === "st" ? "st" : "oct"}
+            onChange={onPitchKnobChange}
             logarithmic={pitchConfig.logarithmic}
             accentColor="accent"
+            size="xs"
+          />
+          <Knob
+            value={pitch.cents}
+            min={-100}
+            max={100}
+            step={1}
+            label="Cents"
+            unit="ct"
+            onChange={onCentsChange}
             size="xs"
           />
           <Knob

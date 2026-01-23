@@ -3,11 +3,32 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset, PitchState } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
+import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
+}
+
+function randomPitchState(minHz: number, maxHz: number): PitchState {
+  const logMin = Math.log(minHz);
+  const logMax = Math.log(maxHz);
+  const hz = Math.exp(logMin + Math.random() * (logMax - logMin));
+  return hzToPitchState(hz);
+}
+
+function mutatePitchState(current: PitchState | number | undefined, amount: number): PitchState {
+  const pitch = normalizePitch(current);
+  const currentHz = pitchToHz(pitch);
+  const logCurrent = Math.log(currentHz);
+  const mutation = (Math.random() - 0.5) * 2 * amount;
+  const newHz = Math.exp(logCurrent + mutation);
+  const clampedHz = Math.max(20, Math.min(20000, newHz));
+  return {
+    ...pitch,
+    st: 12 * Math.log(clampedHz / pitch.baseHz) / Math.log(2),
+  };
 }
 
 interface RandomizeControlsProps {
@@ -53,7 +74,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
       waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
-      pitch: Math.round(randomInRange(55, 2000, true)),
+      pitch: randomPitchState(55, 2000),
       detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
       drift: Math.round(randomInRange(0, 50 * chaos)),
       level: Math.round(randomInRange(30, 100)),
@@ -271,7 +292,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     const mutateOsc = (osc: Oscillator): Oscillator => ({
       enabled: osc.enabled,
       waveform: Math.random() > 0.9 ? randomWaveform() : osc.waveform,
-      pitch: Math.round(mutateValue(osc.pitch, 20, 20000, true)),
+      pitch: mutatePitchState(osc.pitch, strength),
       detune: Math.round(mutateValue(osc.detune, -100, 100)),
       drift: Math.round(mutateValue(osc.drift, 0, 100)),
       level: Math.round(mutateValue(osc.level, 0, 100)),

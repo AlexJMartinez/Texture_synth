@@ -195,3 +195,6 @@ Compact 50% scale design for professional audio feel:
 - Custom IR files stored in localStorage (key: "synth-custom-irs") as base64-encoded audio buffers
 - Audio context unlocking uses Tone.start() for mobile compatibility
 - Default envelope: 2ms attack, 20ms hold, 200ms decay with transient shaper (+50 attack, -20 sustain) and limiter (-6dB threshold) enabled
+- **Canonical Pitch Model**: Pitch is stored internally as `PitchState {mode, baseHz, st, cents}` rather than raw Hz. Converted to Hz only during audio generation using `pitchToHz()`. Supports Hz/Semitones/Octaves display modes with automatic quantization and hysteresis.
+- **Pitch Utilities**: `client/src/lib/pitchUtils.ts` provides pitch conversion functions. `normalizePitch()` handles backward compatibility with old numeric presets.
+- **Audio Retrigger**: Gain ramps (1-2ms fadeout before stopping, fadein on start) prevent audio pops/clicks during sound retriggering.

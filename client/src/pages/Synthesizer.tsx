@@ -25,6 +25,7 @@ import {
   defaultSynthParameters, 
   defaultExportSettings 
 } from "@shared/schema";
+import { pitchToHz } from "@/lib/pitchUtils";
 import { Zap } from "lucide-react";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
@@ -656,6 +657,7 @@ export default function Synthesizer() {
 
       const oscGain = ctx.createGain();
       oscGain.gain.value = osc.level / 100;
+      const oscPitchHz = pitchToHz(osc.pitch);
       
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
@@ -674,14 +676,14 @@ export default function Synthesizer() {
       } else {
         const oscNode = ctx.createOscillator();
         oscNode.type = osc.waveform as OscillatorType;
-        oscNode.frequency.value = osc.pitch;
+        oscNode.frequency.value = oscPitchHz;
         oscNode.detune.value = osc.detune;
         frequencyParam = oscNode.frequency;
 
         if (osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise") {
           const modOsc = ctx.createOscillator();
           modOsc.type = osc.fmWaveform as OscillatorType;
-          modOsc.frequency.value = osc.pitch * osc.fmRatio;
+          modOsc.frequency.value = oscPitchHz * osc.fmRatio;
           
           const modGain = ctx.createGain();
           let fmDepthValue = osc.fmDepth;
@@ -715,7 +717,7 @@ export default function Synthesizer() {
         if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
           const pmModOsc = ctx.createOscillator();
           pmModOsc.type = osc.pmWaveform as OscillatorType;
-          pmModOsc.frequency.value = osc.pitch * osc.pmRatio;
+          pmModOsc.frequency.value = oscPitchHz * osc.pmRatio;
           
           const pmModGain = ctx.createGain();
           const pmIndex = osc.pmDepth * 100;
@@ -756,7 +758,7 @@ export default function Synthesizer() {
         
         const amModOsc = ctx.createOscillator();
         amModOsc.type = osc.amWaveform as OscillatorType;
-        amModOsc.frequency.value = osc.pitch * osc.amRatio;
+        amModOsc.frequency.value = oscPitchHz * osc.amRatio;
         
         const amModGain = ctx.createGain();
         amModGain.gain.value = depth * 0.5;
@@ -783,18 +785,18 @@ export default function Synthesizer() {
           const attackEnd = now + env.attack / 1000;
           const holdEnd = attackEnd + env.hold / 1000;
           const decayEnd = holdEnd + env.decay / 1000;
-          const modAmount = (env.amount / 100) * osc.pitch * 0.5;
+          const modAmount = (env.amount / 100) * oscPitchHz * 0.5;
           
-          frequencyParam.setValueAtTime(osc.pitch, now);
+          frequencyParam.setValueAtTime(oscPitchHz, now);
           frequencyParam.linearRampToValueAtTime(
-            Math.max(20, osc.pitch + modAmount), 
+            Math.max(20, oscPitchHz + modAmount), 
             attackEnd
           );
           frequencyParam.setValueAtTime(
-            Math.max(20, osc.pitch + modAmount), 
+            Math.max(20, oscPitchHz + modAmount), 
             holdEnd
           );
-          frequencyParam.linearRampToValueAtTime(osc.pitch, decayEnd);
+          frequencyParam.linearRampToValueAtTime(oscPitchHz, decayEnd);
         }
 
         if (osc.drift > 0) {
@@ -802,7 +804,7 @@ export default function Synthesizer() {
           const driftLfo = ctx.createOscillator();
           const driftGain = ctx.createGain();
           driftLfo.frequency.value = 2 + Math.random() * 3;
-          driftGain.gain.value = osc.pitch * 0.02 * driftAmount;
+          driftGain.gain.value = oscPitchHz * 0.02 * driftAmount;
           driftLfo.connect(driftGain);
           driftGain.connect(frequencyParam);
           driftLfo.start(now);
@@ -909,7 +911,7 @@ export default function Synthesizer() {
 
     if (params.subOsc.enabled && params.subOsc.level > 0) {
       const sub = params.subOsc;
-      const baseFreq = params.oscillators.osc1.pitch;
+      const baseFreq = pitchToHz(params.oscillators.osc1.pitch);
       const subFreq = baseFreq * Math.pow(2, sub.octave);
       
       const subOsc = ctx.createOscillator();
