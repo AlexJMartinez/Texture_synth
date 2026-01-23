@@ -1,9 +1,23 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Envelope, EnvelopeCurve, EnvelopeTarget } from "@shared/schema";
-import { Clock } from "lucide-react";
+import { Clock, Shuffle } from "lucide-react";
+
+function randomizeEnvelope(): Partial<Envelope> {
+  const curves: EnvelopeCurve[] = ["linear", "exponential", "logarithmic"];
+  const targets: EnvelopeTarget[] = ["amplitude", "filter", "pitch", "osc1", "osc2", "osc3"];
+  return {
+    attack: Math.floor(Math.random() * 100),
+    hold: Math.floor(Math.random() * 100),
+    decay: Math.floor(50 + Math.random() * 500),
+    curve: curves[Math.floor(Math.random() * curves.length)],
+    target: targets[Math.floor(Math.random() * targets.length)],
+    amount: Math.floor(Math.random() * 100),
+  };
+}
 
 interface EnvelopePanelProps {
   envelope: Envelope;
@@ -20,6 +34,10 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
     onChange({ ...envelope, [key]: value });
   };
 
+  const handleRandomize = () => {
+    onChange({ ...envelope, ...randomizeEnvelope() });
+  };
+
   const totalDuration = envelope.attack + envelope.hold + envelope.decay;
   const attackWidth = (envelope.attack / Math.max(totalDuration, 1)) * 100;
   const holdWidth = (envelope.hold / Math.max(totalDuration, 1)) * 100;
@@ -33,12 +51,22 @@ export function EnvelopePanel({ envelope, onChange, title, index }: EnvelopePane
       data-testid={`panel-envelope-${index}`}
       className={`transition-opacity ${!envelope.enabled ? 'opacity-50' : ''}`}
       headerExtra={
-        <Switch
-          checked={envelope.enabled}
-          onCheckedChange={(v) => updateEnvelope("enabled", v)}
-          className="scale-75"
-          data-testid={`switch-env-${index}`}
-        />
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={handleRandomize}
+            data-testid={`btn-randomize-env-${index}`}
+          >
+            <Shuffle className="w-3 h-3" />
+          </Button>
+          <Switch
+            checked={envelope.enabled}
+            onCheckedChange={(v) => updateEnvelope("enabled", v)}
+            className="scale-75"
+            data-testid={`switch-env-${index}`}
+          />
+        </div>
       }
     >
       <div className="space-y-1.5">

@@ -17,6 +17,7 @@ import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
 import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
 import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
 import { MasteringPanel } from "@/components/synth/MasteringPanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -124,6 +125,9 @@ export default function Synthesizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
+  const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
+  const activeFadeGainRef = useRef<GainNode | null>(null);
+  const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleIRLoaded = useCallback((buffer: AudioBuffer) => {
     customIRBufferRef.current = buffer;
@@ -162,13 +166,21 @@ export default function Synthesizer() {
   const generateSound = useCallback(async (
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
-    duration: number
-  ): Promise<{ masterGain: GainNode }> => {
+    duration: number,
+    fadeGain?: GainNode,
+    sourcesCollector?: AudioScheduledSourceNode[]
+  ): Promise<{ masterGain: GainNode; fadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
     
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0.0001;
+    
+    const outputFadeGain = fadeGain || ctx.createGain();
+    if (!fadeGain) {
+      outputFadeGain.gain.setValueAtTime(0, now);
+      outputFadeGain.gain.linearRampToValueAtTime(1, now + 0.002);
+    }
     
     const panNode = ctx.createStereoPanner();
     panNode.pan.value = params.output.pan / 100;
@@ -630,7 +642,8 @@ export default function Synthesizer() {
     }
 
     outputNode.connect(panNode);
-    panNode.connect(ctx.destination);
+    panNode.connect(outputFadeGain);
+    outputFadeGain.connect(ctx.destination);
 
     const oscConfigs = [
       { osc: params.oscillators.osc1, key: "osc1" },
@@ -817,6 +830,9 @@ export default function Synthesizer() {
       
       sourceNode.start(now);
       sourceNode.stop(now + durationSec);
+      if (sourcesCollector) {
+        sourcesCollector.push(sourceNode);
+      }
     }
 
     if (params.clickLayer.enabled && params.clickLayer.level > 0) {
@@ -886,6 +902,9 @@ export default function Synthesizer() {
       
       clickSource.start(now);
       clickSource.stop(now + clickDecay + 0.01);
+      if (sourcesCollector) {
+        sourcesCollector.push(clickSource);
+      }
     }
 
     if (params.subOsc.enabled && params.subOsc.level > 0) {
@@ -922,6 +941,9 @@ export default function Synthesizer() {
       
       subOsc.start(now);
       subOsc.stop(now + subAttack + subDecay + 0.1);
+      if (sourcesCollector) {
+        sourcesCollector.push(subOsc);
+      }
     }
 
     if (params.modal.enabled) {
@@ -1096,7 +1118,7 @@ export default function Synthesizer() {
       masterGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
     }
 
-    return { masterGain };
+    return { masterGain, fadeGain: outputFadeGain };
   }, [createImpulseResponse]);
 
   const getTotalDuration = useCallback((params: SynthParameters): number => {
@@ -1119,16 +1141,60 @@ export default function Synthesizer() {
     
     // Get the Tone.js-managed audio context
     const ctx = Tone.getContext().rawContext as AudioContext;
+    const now = ctx.currentTime;
+    
+    // Clear previous timeout
+    if (playTimeoutRef.current) {
+      clearTimeout(playTimeoutRef.current);
+      playTimeoutRef.current = null;
+    }
+    
+    // Quickly fade out and stop any active sources to prevent pops/clicks
+    if (activeFadeGainRef.current) {
+      try {
+        activeFadeGainRef.current.gain.cancelScheduledValues(now);
+        activeFadeGainRef.current.gain.setValueAtTime(activeFadeGainRef.current.gain.value, now);
+        activeFadeGainRef.current.gain.linearRampToValueAtTime(0, now + 0.003);
+      } catch (e) {
+        // Ignore if gain node is disconnected
+      }
+    }
+    
+    // Stop all active sources after fadeout
+    setTimeout(() => {
+      for (const source of activeSourcesRef.current) {
+        try {
+          source.stop();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+      }
+      activeSourcesRef.current = [];
+    }, 5);
     
     setIsPlaying(true);
 
     const totalDuration = getTotalDuration(params);
     
-    // Play through live context
-    await generateSound(ctx, params, totalDuration);
+    // Create new fade gain for this sound
+    const fadeGain = ctx.createGain();
+    fadeGain.gain.setValueAtTime(0, now + 0.005);
+    fadeGain.gain.linearRampToValueAtTime(1, now + 0.008);
+    
+    // Track new sources
+    const newSources: AudioScheduledSourceNode[] = [];
+    
+    // Play through live context with source tracking
+    const result = await generateSound(ctx, params, totalDuration, fadeGain, newSources);
+    
+    // Store references for next retrigger
+    activeFadeGainRef.current = result.fadeGain;
+    activeSourcesRef.current = newSources;
 
-    setTimeout(() => {
+    playTimeoutRef.current = setTimeout(() => {
       setIsPlaying(false);
+      activeSourcesRef.current = [];
+      activeFadeGainRef.current = null;
     }, totalDuration);
 
     // Use Tone.Offline for rendering the waveform display
@@ -1237,80 +1303,113 @@ export default function Synthesizer() {
   }, [handleTrigger]);
 
   return (
-    <div className="min-h-screen bg-background p-2 overflow-x-hidden">
-      <header className="mb-2">
-        <div className="flex items-center justify-center gap-2">
-          <div className="w-6 h-6 rounded bg-primary/20 flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary" />
+    <div className="min-h-screen bg-background p-1.5 overflow-x-hidden">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center">
+              <Zap className="w-3 h-3 text-primary" />
+            </div>
+            <h1 className="text-sm font-bold tracking-tight text-foreground">OneShot</h1>
           </div>
-          <div>
-            <h1 className="text-lg font-bold tracking-tight text-foreground">OneShot Synth</h1>
-            <p className="text-[10px] text-muted-foreground">Multi-Oscillator One-Shot Generator</p>
+          <div className="flex-shrink-0">
+            <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
           </div>
+          <WaveformDisplay 
+            audioBuffer={audioBuffer} 
+            isPlaying={isPlaying}
+            className="h-12 flex-1"
+          />
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
-          <div className="lg:col-span-9 space-y-2">
-            <div className="flex items-center gap-2 sticky top-0 z-10 bg-background py-1">
-              <div className="flex-shrink-0">
-                <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
-              </div>
-              <WaveformDisplay 
-                audioBuffer={audioBuffer} 
-                isPlaying={isPlaying}
-                className="h-16 flex-1"
-              />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5">
+          <div className="lg:col-span-9 space-y-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+              <Tabs defaultValue="osc1" className="w-full">
+                <TabsList className="w-full h-7 grid grid-cols-3" data-testid="osc-tabs">
+                  <TabsTrigger value="osc1" className="text-xs h-6" data-testid="tab-osc1">OSC 1</TabsTrigger>
+                  <TabsTrigger value="osc2" className="text-xs h-6" data-testid="tab-osc2">OSC 2</TabsTrigger>
+                  <TabsTrigger value="osc3" className="text-xs h-6" data-testid="tab-osc3">OSC 3</TabsTrigger>
+                </TabsList>
+                <TabsContent value="osc1" className="mt-1">
+                  <OscillatorPanel
+                    oscillator={params.oscillators.osc1}
+                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
+                    title="OSC 1"
+                    index={1}
+                  />
+                </TabsContent>
+                <TabsContent value="osc2" className="mt-1">
+                  <OscillatorPanel
+                    oscillator={params.oscillators.osc2}
+                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
+                    title="OSC 2"
+                    index={2}
+                  />
+                </TabsContent>
+                <TabsContent value="osc3" className="mt-1">
+                  <OscillatorPanel
+                    oscillator={params.oscillators.osc3}
+                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
+                    title="OSC 3"
+                    index={3}
+                  />
+                </TabsContent>
+              </Tabs>
+
+              <Tabs defaultValue="env1" className="w-full">
+                <TabsList className="w-full h-7 grid grid-cols-3" data-testid="env-tabs">
+                  <TabsTrigger value="env1" className="text-xs h-6" data-testid="tab-env1">ENV 1</TabsTrigger>
+                  <TabsTrigger value="env2" className="text-xs h-6" data-testid="tab-env2">ENV 2</TabsTrigger>
+                  <TabsTrigger value="env3" className="text-xs h-6" data-testid="tab-env3">ENV 3</TabsTrigger>
+                </TabsList>
+                <TabsContent value="env1" className="mt-1">
+                  <EnvelopePanel
+                    envelope={params.envelopes.env1}
+                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
+                    title="ENV 1"
+                    index={1}
+                  />
+                </TabsContent>
+                <TabsContent value="env2" className="mt-1">
+                  <EnvelopePanel
+                    envelope={params.envelopes.env2}
+                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
+                    title="ENV 2"
+                    index={2}
+                  />
+                </TabsContent>
+                <TabsContent value="env3" className="mt-1">
+                  <EnvelopePanel
+                    envelope={params.envelopes.env3}
+                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
+                    title="ENV 3"
+                    index={3}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              <OscillatorPanel
-                oscillator={params.oscillators.osc1}
-                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
-                title="OSC 1"
-                index={1}
-              />
-              <OscillatorPanel
-                oscillator={params.oscillators.osc2}
-                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
-                title="OSC 2"
-                index={2}
-              />
-              <OscillatorPanel
-                oscillator={params.oscillators.osc3}
-                onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
-                title="OSC 3"
-                index={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              <EnvelopePanel
-                envelope={params.envelopes.env1}
-                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
-                title="ENV 1"
-                index={1}
-              />
-              <EnvelopePanel
-                envelope={params.envelopes.env2}
-                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
-                title="ENV 2"
-                index={2}
-              />
-              <EnvelopePanel
-                envelope={params.envelopes.env3}
-                onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
-                title="ENV 3"
-                index={3}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
               />
+              <ClickLayerPanel
+                clickLayer={params.clickLayer}
+                onChange={(clickLayer) => setParams({ ...params, clickLayer })}
+              />
+              <SubOscillatorPanel
+                subOsc={params.subOsc}
+                onChange={(subOsc) => setParams({ ...params, subOsc })}
+              />
+              <OutputPanel
+                output={params.output}
+                onChange={(output) => setParams({ ...params, output })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
               <SynthEngineSelector
                 modal={params.modal}
                 additive={params.additive}
@@ -1323,21 +1422,6 @@ export default function Synthesizer() {
                 effects={params.effects}
                 onChange={(effects) => setParams({ ...params, effects })}
               />
-              <OutputPanel
-                output={params.output}
-                onChange={(output) => setParams({ ...params, output })}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              <ClickLayerPanel
-                clickLayer={params.clickLayer}
-                onChange={(clickLayer) => setParams({ ...params, clickLayer })}
-              />
-              <SubOscillatorPanel
-                subOsc={params.subOsc}
-                onChange={(subOsc) => setParams({ ...params, subOsc })}
-              />
               <SaturationChainPanel
                 saturation={params.saturationChain}
                 onChange={(saturationChain) => setParams({ ...params, saturationChain })}
@@ -1348,7 +1432,7 @@ export default function Synthesizer() {
               />
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-1.5">
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}
@@ -1361,7 +1445,7 @@ export default function Synthesizer() {
             </div>
           </div>
 
-          <div className="lg:col-span-3 space-y-2">
+          <div className="lg:col-span-3 space-y-1.5">
             <RandomizeControls
               currentParams={params}
               onRandomize={setParams}

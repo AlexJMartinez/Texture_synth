@@ -8,6 +8,8 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 ### Multi-Oscillator Architecture (3 OSC)
 - 4 waveforms: Sine, triangle, sawtooth, and square
 - Per-oscillator: Pitch (20-20000Hz), detune (-100 to +100 cents), drift (0-100%), level (0-100%)
+- Pitch mode selector: Hz, Semitones (ST), or Octaves (Oct) display modes with automatic conversion
+- Per-module randomize button for quick sound design exploration
 - FM synthesis per oscillator: ratio presets (0.5, 1, 2, 3, 4, 6, 8, custom), depth, modulator waveform, feedback (0-100%)
 - PM synthesis per oscillator: DX7-style phase modulation via frequency deviation, ratio presets, modulation index (0-60), feedback (0-100%), modulator waveform (Note: Uses FM-style implementation for Web Audio API compatibility)
 - AM synthesis per oscillator: ratio, depth, modulator waveform

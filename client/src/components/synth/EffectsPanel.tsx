@@ -1,9 +1,29 @@
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { SynthParameters } from "@shared/schema";
-import { Sparkles, ChevronDown, ChevronRight } from "lucide-react";
+import { Sparkles, ChevronDown, ChevronRight, Shuffle } from "lucide-react";
+
+function randomizeEffects(): Partial<SynthParameters["effects"]> {
+  return {
+    saturation: Math.floor(Math.random() * 60),
+    bitcrusher: Math.floor(4 + Math.random() * 12),
+    delayEnabled: Math.random() > 0.6,
+    delayTime: Math.floor(50 + Math.random() * 500),
+    delayFeedback: Math.floor(Math.random() * 60),
+    delayMix: Math.floor(Math.random() * 50),
+    reverbEnabled: Math.random() > 0.5,
+    reverbSize: Math.random() * 0.8,
+    reverbDecay: 0.5 + Math.random() * 4,
+    reverbMix: Math.floor(Math.random() * 50),
+    chorusEnabled: Math.random() > 0.7,
+    chorusRate: 0.5 + Math.random() * 4,
+    chorusDepth: Math.floor(Math.random() * 60),
+    chorusMix: Math.floor(Math.random() * 50),
+  };
+}
 
 interface EffectsPanelProps {
   effects: SynthParameters["effects"];
@@ -52,12 +72,26 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
     onChange({ ...effects, [key]: value });
   };
 
+  const handleRandomize = () => {
+    onChange({ ...effects, ...randomizeEffects() });
+  };
+
   return (
     <CollapsiblePanel
       title="FX"
       icon={<Sparkles className="w-3 h-3 text-primary" />}
       defaultOpen={true}
       data-testid="panel-effects"
+      headerExtra={
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={handleRandomize}
+          data-testid="btn-randomize-effects"
+        >
+          <Shuffle className="w-3 h-3" />
+        </Button>
+      }
     >
       <div className="space-y-1">
         <div className="p-1 rounded bg-muted/30 border border-border/50">

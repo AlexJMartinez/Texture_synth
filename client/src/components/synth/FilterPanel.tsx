@@ -1,9 +1,21 @@
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { SynthParameters, FilterType } from "@shared/schema";
-import { SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal, Shuffle } from "lucide-react";
+
+function randomizeFilter(): Partial<SynthParameters["filter"]> {
+  const types: FilterType[] = ["lowpass", "highpass", "bandpass", "notch", "allpass", "peaking", "lowshelf", "highshelf", "comb"];
+  return {
+    type: types[Math.floor(Math.random() * types.length)],
+    frequency: Math.exp(Math.random() * (Math.log(15000) - Math.log(100)) + Math.log(100)),
+    resonance: Math.random() * 20,
+    combDelay: Math.floor(5 + Math.random() * 45),
+    gain: Math.floor(Math.random() * 24 - 12),
+  };
+}
 
 interface FilterPanelProps {
   filter: SynthParameters["filter"];
@@ -18,6 +30,10 @@ export function FilterPanel({ filter, onChange }: FilterPanelProps) {
     onChange({ ...filter, [key]: value });
   };
 
+  const handleRandomize = () => {
+    onChange({ ...filter, ...randomizeFilter() });
+  };
+
   const showCombDelay = filter.type === "comb";
   const showGain = filter.type === "peaking" || filter.type === "lowshelf" || filter.type === "highshelf";
 
@@ -29,12 +45,22 @@ export function FilterPanel({ filter, onChange }: FilterPanelProps) {
       data-testid="panel-filter"
       className={`transition-opacity ${!filter.enabled ? 'opacity-50' : ''}`}
       headerExtra={
-        <Switch
-          checked={filter.enabled}
-          onCheckedChange={(v) => updateFilter("enabled", v)}
-          className="scale-75"
-          data-testid="switch-filter"
-        />
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={handleRandomize}
+            data-testid="btn-randomize-filter"
+          >
+            <Shuffle className="w-3 h-3" />
+          </Button>
+          <Switch
+            checked={filter.enabled}
+            onCheckedChange={(v) => updateFilter("enabled", v)}
+            className="scale-75"
+            data-testid="switch-filter"
+          />
+        </div>
       }
     >
       <div className="space-y-1.5">
