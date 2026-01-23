@@ -29,7 +29,9 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - Waveforms: Sine, Triangle
 - Octave selection: -2, -1, 0 (relative to main oscillators)
 - Dedicated attack/decay envelope (0-2000ms)
+- Highpass filter (10-60Hz) for safety/rumble removal
 - Optional lowpass filter (20-200Hz) for focused sub frequencies
+- Soft-clip drive (0-100%) for mild harmonic saturation
 - Level control (0-100%)
 
 ### Advanced Synthesis Engines (Dropdown Selector)

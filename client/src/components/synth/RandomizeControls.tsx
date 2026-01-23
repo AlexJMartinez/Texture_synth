@@ -234,6 +234,8 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         decay: Math.round(randomInRange(100, 1000)),
         filterEnabled: Math.random() > 0.7,
         filterFreq: Math.round(randomInRange(40, 150)),
+        hpFreq: Math.round(randomInRange(15, 40)),
+        drive: Math.round(randomInRange(0, 50)),
       },
       saturationChain: {
         enabled: Math.random() > 0.5,
@@ -448,6 +450,8 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         decay: Math.round(mutateValue(currentParams.subOsc.decay, 10, 2000)),
         filterEnabled: currentParams.subOsc.filterEnabled,
         filterFreq: Math.round(mutateValue(currentParams.subOsc.filterFreq, 20, 200)),
+        hpFreq: Math.round(mutateValue(currentParams.subOsc.hpFreq ?? 25, 10, 60)),
+        drive: Math.round(mutateValue(currentParams.subOsc.drive ?? 0, 0, 100)),
       },
       saturationChain: {
         enabled: currentParams.saturationChain.enabled,

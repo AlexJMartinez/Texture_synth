@@ -96,11 +96,22 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
             accentColor="accent"
             size="xs"
           />
+          <Knob
+            value={subOsc.drive ?? 0}
+            min={0}
+            max={100}
+            step={1}
+            label="Drive"
+            unit="%"
+            onChange={(v) => update("drive", v)}
+            accentColor="accent"
+            size="xs"
+          />
         </div>
 
         <div className={`rounded border border-border/50 p-1.5 ${!subOsc.filterEnabled ? 'opacity-50' : ''}`}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] text-muted-foreground">LPF</span>
+            <span className="text-[10px] text-muted-foreground">Filters</span>
             <Switch
               checked={subOsc.filterEnabled}
               onCheckedChange={(v) => update("filterEnabled", v)}
@@ -108,13 +119,24 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
               data-testid="switch-sub-filter"
             />
           </div>
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-1">
+            <Knob
+              value={subOsc.hpFreq ?? 25}
+              min={10}
+              max={60}
+              step={1}
+              label="HP"
+              unit="Hz"
+              onChange={(v) => update("hpFreq", v)}
+              accentColor="accent"
+              size="xs"
+            />
             <Knob
               value={subOsc.filterFreq}
               min={20}
               max={200}
               step={5}
-              label="Freq"
+              label="LP"
               unit="Hz"
               onChange={(v) => update("filterFreq", v)}
               accentColor="accent"

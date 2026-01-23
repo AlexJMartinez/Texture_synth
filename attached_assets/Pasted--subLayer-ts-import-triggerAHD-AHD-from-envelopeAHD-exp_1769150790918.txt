@@ -1,0 +1,74 @@
+// subLayer.ts
+import { triggerAHD, AHD } from "./envelopeAHD";
+
+export type SubParams = {
+  enabled: boolean;
+  waveform: OscillatorType;     // "sine" | "triangle" (start here)
+  level: number;               // 0..1
+  octave: -1 | -2;             // -1 = one octave down, -2 = two octaves down
+  lpHz: number;                // e.g. 110
+  hpHz: number;                // e.g. 25 (optional safety)
+  env: AHD;                    // separate AHD from main
+  drive: number;               // 0..1 mild
+};
+
+export function addSubLayer(opts: {
+  ctx: BaseAudioContext;       // AudioContext or OfflineAudioContext
+  destination: AudioNode;      // voice bus (pre-master amp env is fine; post is also ok)
+  t0: number;                  // trigger time
+  baseHz: number;              // voice base pitch in Hz
+  sub: SubParams;
+}) {
+  const { ctx, destination, t0, baseHz, sub } = opts;
+  if (!sub.enabled || sub.level <= 0) return { stopAt: t0 };
+
+  const subHz = baseHz * Math.pow(2, sub.octave); // octave is negative
+
+  const osc = ctx.createOscillator();
+  osc.type = sub.waveform ?? "sine";
+  osc.frequency.setValueAtTime(subHz, t0);
+
+  // Sub amp envelope
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(1e-5, t0);
+
+  // Filters (keep sub disciplined)
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(Math.max(10, sub.hpHz ?? 20), t0);
+  hp.Q.setValueAtTime(0.707, t0);
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(Math.max(40, sub.lpHz ?? 120), t0);
+  lp.Q.setValueAtTime(0.707, t0);
+
+  // Mild drive (optional)
+  const drive = ctx.createWaveShaper();
+  drive.curve = makeSoftClipCurve(sub.drive ?? 0);
+  drive.oversample = "2x";
+
+  // Level trim
+  const trim = ctx.createGain();
+  trim.gain.setValueAtTime(sub.level, t0);
+
+  osc.connect(g).connect(hp).connect(lp).connect(drive).connect(trim).connect(destination);
+
+  const stopAt = triggerAHD(g.gain, t0, sub.env, 1.0, { startFromCurrent: false });
+  osc.start(t0);
+  osc.stop(stopAt + 0.03);
+
+  return { stopAt };
+}
+
+function makeSoftClipCurve(amount01: number, n = 1024) {
+  // amount01: 0..1 (keep subtle for sub)
+  const a = Math.max(0, Math.min(1, amount01));
+  const k = 1 + a * 20; // intensity
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.tanh(k * x) / Math.tanh(k);
+  }
+  return curve;
+}

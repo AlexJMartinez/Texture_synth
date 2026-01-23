@@ -908,35 +908,51 @@ export default function Synthesizer() {
       
       const subOsc = ctx.createOscillator();
       subOsc.type = sub.waveform;
-      subOsc.frequency.value = Math.max(20, Math.min(200, subFreq));
+      subOsc.frequency.setValueAtTime(Math.max(20, subFreq), now);
       
-      let subNode: AudioNode = subOsc;
+      const subEnvGain = ctx.createGain();
+      subEnvGain.gain.setValueAtTime(EPS, now);
       
-      if (sub.filterEnabled) {
-        const subFilter = ctx.createBiquadFilter();
-        subFilter.type = "lowpass";
-        subFilter.frequency.value = sub.filterFreq;
-        subFilter.Q.value = 0.707;
-        subOsc.connect(subFilter);
-        subNode = subFilter;
-      }
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.setValueAtTime(Math.max(10, sub.hpFreq ?? 25), now);
+      hp.Q.setValueAtTime(0.707, now);
       
-      const subGain = ctx.createGain();
-      const subLevel = (sub.level / 100) * 0.6;
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.setValueAtTime(sub.filterEnabled ? Math.max(40, sub.filterFreq) : 200, now);
+      lp.Q.setValueAtTime(0.707, now);
+      
+      const makeSoftClipCurve = (amount01: number, n = 1024) => {
+        const a = Math.max(0, Math.min(1, amount01));
+        const k = 1 + a * 20;
+        const curve = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const x = (i / (n - 1)) * 2 - 1;
+          curve[i] = Math.tanh(k * x) / Math.tanh(k);
+        }
+        return curve;
+      };
+      
+      const drive = ctx.createWaveShaper();
+      drive.curve = makeSoftClipCurve((sub.drive ?? 0) / 100);
+      drive.oversample = "2x";
+      
+      const trim = ctx.createGain();
+      trim.gain.setValueAtTime(sub.level / 100, now);
+      
+      subOsc.connect(subEnvGain).connect(hp).connect(lp).connect(drive).connect(trim).connect(masterGain);
+      
       const subAttack = sub.attack / 1000;
       const subDecay = sub.decay / 1000;
-      
-      triggerAHD(subGain.gain, now, {
+      const stopAt = triggerAHD(subEnvGain.gain, now, {
         attack: subAttack,
         hold: 0,
         decay: subDecay
-      }, subLevel, { startFromCurrent: false });
-      
-      subNode.connect(subGain);
-      subGain.connect(masterGain);
+      }, 1.0, { startFromCurrent: false });
       
       subOsc.start(now);
-      subOsc.stop(now + subAttack + subDecay + 0.1);
+      subOsc.stop(stopAt + 0.03);
       if (sourcesCollector) {
         sourcesCollector.push(subOsc);
       }
