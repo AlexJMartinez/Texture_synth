@@ -538,51 +538,44 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
   };
 
   return (
-    <div className="flex flex-col gap-2 p-2 rounded-lg bg-card border border-border" data-testid="randomize-controls">
-      <div className="flex items-center gap-1">
-        <Button
-          onClick={randomizeAll}
-          variant="secondary"
-          size="sm"
-          className="flex-1 h-7 text-xs"
-          data-testid="button-randomize"
-        >
-          <Dices className="w-3 h-3 mr-1" />
-          Rand
-        </Button>
-        <Button
-          onClick={mutate}
-          variant="secondary"
-          size="sm"
-          className="flex-1 h-7 text-xs"
-          data-testid="button-mutate"
-        >
-          <Shuffle className="w-3 h-3 mr-1" />
-          Mutate
-        </Button>
-      </div>
-
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <Label className="text-[10px] text-muted-foreground">Chaos</Label>
-          <span className="text-[10px] font-mono text-foreground">{chaosAmount}%</span>
-        </div>
+    <div className="flex items-center gap-1" data-testid="randomize-controls">
+      <Button
+        onClick={randomizeAll}
+        variant="secondary"
+        size="sm"
+        className="h-6 text-[10px] px-2"
+        data-testid="button-randomize"
+      >
+        <Dices className="w-3 h-3 mr-1" />
+        Rand
+      </Button>
+      <Button
+        onClick={mutate}
+        variant="secondary"
+        size="sm"
+        className="h-6 text-[10px] px-2"
+        data-testid="button-mutate"
+      >
+        <Shuffle className="w-3 h-3 mr-1" />
+        Mutate
+      </Button>
+      <div className="flex items-center gap-1 px-1">
+        <span className="text-[9px] text-muted-foreground whitespace-nowrap">{chaosAmount}%</span>
         <Slider
           value={[chaosAmount]}
           onValueChange={([v]) => setChaosAmount(v)}
           min={10}
           max={100}
           step={5}
-          className="w-full"
+          className="w-12"
           data-testid="slider-chaos"
         />
       </div>
-
       <Button
         onClick={reset}
         variant="ghost"
         size="sm"
-        className="text-[10px] text-muted-foreground h-6"
+        className="h-6 text-[10px] px-2 text-muted-foreground"
         data-testid="button-reset"
       >
         Reset

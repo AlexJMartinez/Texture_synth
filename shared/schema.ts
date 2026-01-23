@@ -346,7 +346,7 @@ export const ExportSettingsSchema = z.object({
 export type ExportSettings = z.infer<typeof ExportSettingsSchema>;
 
 const defaultOscillator: Oscillator = {
-  enabled: true,
+  enabled: false,
   waveform: "sine",
   pitch: hzToPitch(440),
   detune: 0,
@@ -413,14 +413,14 @@ const defaultSaturationChain: SaturationChain = {
 };
 
 const defaultMastering: Mastering = {
-  compressorEnabled: true,
+  compressorEnabled: false,
   compressorThreshold: -12,
   compressorRatio: 4,
   compressorAttack: 5,
   compressorRelease: 100,
   compressorKnee: 6,
   compressorMakeup: 3,
-  exciterEnabled: true,
+  exciterEnabled: false,
   exciterFreq: 6000,
   exciterAmount: 30,
   exciterMix: 50,
@@ -429,7 +429,7 @@ const defaultMastering: Mastering = {
 };
 
 const defaultEnvelope: Envelope = {
-  enabled: true,
+  enabled: false,
   attack: 2,
   hold: 20,
   decay: 200,
@@ -459,12 +459,12 @@ const defaultConvolver: Convolver = {
 
 export const defaultSynthParameters: SynthParameters = {
   oscillators: {
-    osc1: { ...defaultOscillator, enabled: true },
+    osc1: { ...defaultOscillator, enabled: false },
     osc2: { ...defaultOscillator, enabled: false, pitch: hzToPitch(880), waveform: "triangle", level: 50 },
     osc3: { ...defaultOscillator, enabled: false, pitch: hzToPitch(220), waveform: "sawtooth", level: 30 },
   },
   envelopes: {
-    env1: { ...defaultEnvelope, target: "amplitude", enabled: true },
+    env1: { ...defaultEnvelope, target: "amplitude", enabled: false },
     env2: { ...defaultEnvelope, target: "filter", enabled: false, amount: 50 },
     env3: { ...defaultEnvelope, target: "pitch", enabled: false, amount: 25 },
   },
@@ -534,10 +534,10 @@ export const defaultSynthParameters: SynthParameters = {
     chorusRate: 1.5,
     chorusDepth: 50,
     chorusMix: 30,
-    transientEnabled: true,
+    transientEnabled: false,
     transientAttack: 50,
     transientSustain: -20,
-    limiterEnabled: true,
+    limiterEnabled: false,
     limiterThreshold: -6,
     limiterRelease: 50,
     multibandEnabled: false,

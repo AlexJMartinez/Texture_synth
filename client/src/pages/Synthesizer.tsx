@@ -1333,35 +1333,37 @@ export default function Synthesizer() {
   }, [handleTrigger]);
 
   return (
-    <div className="min-h-screen bg-background p-1.5 overflow-x-hidden">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-2 mb-1.5">
-          <div className="flex items-center gap-1.5">
-            <div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center">
-              <Zap className="w-3 h-3 text-primary" />
+    <div className="h-screen bg-background p-1 overflow-hidden flex flex-col">
+      <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 min-h-0">
+        <div className="flex items-center gap-1.5 mb-1 shrink-0">
+          <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded bg-primary/20 flex items-center justify-center">
+              <Zap className="w-2.5 h-2.5 text-primary" />
             </div>
-            <h1 className="text-sm font-bold tracking-tight text-foreground">OneShot</h1>
+            <h1 className="text-xs font-bold tracking-tight text-foreground">OneShot</h1>
           </div>
-          <div className="flex-shrink-0">
-            <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
-          </div>
+          <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
           <WaveformDisplay 
             audioBuffer={audioBuffer} 
             isPlaying={isPlaying}
-            className="h-12 flex-1"
+            className="h-8 flex-1"
+          />
+          <RandomizeControls
+            currentParams={params}
+            onRandomize={setParams}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-1.5">
-          <div className="lg:col-span-9 space-y-1.5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-1 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+          <div className="lg:col-span-10 space-y-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
               <Tabs defaultValue="osc1" className="w-full">
-                <TabsList className="w-full h-7 grid grid-cols-3" data-testid="osc-tabs">
-                  <TabsTrigger value="osc1" className="text-xs h-6" data-testid="tab-osc1">OSC 1</TabsTrigger>
-                  <TabsTrigger value="osc2" className="text-xs h-6" data-testid="tab-osc2">OSC 2</TabsTrigger>
-                  <TabsTrigger value="osc3" className="text-xs h-6" data-testid="tab-osc3">OSC 3</TabsTrigger>
+                <TabsList className="w-full h-6 grid grid-cols-3" data-testid="osc-tabs">
+                  <TabsTrigger value="osc1" className="text-[10px] h-5" data-testid="tab-osc1">OSC 1</TabsTrigger>
+                  <TabsTrigger value="osc2" className="text-[10px] h-5" data-testid="tab-osc2">OSC 2</TabsTrigger>
+                  <TabsTrigger value="osc3" className="text-[10px] h-5" data-testid="tab-osc3">OSC 3</TabsTrigger>
                 </TabsList>
-                <TabsContent value="osc1" className="mt-1">
+                <TabsContent value="osc1" className="mt-0.5">
                   <OscillatorPanel
                     oscillator={params.oscillators.osc1}
                     onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
@@ -1369,7 +1371,7 @@ export default function Synthesizer() {
                     index={1}
                   />
                 </TabsContent>
-                <TabsContent value="osc2" className="mt-1">
+                <TabsContent value="osc2" className="mt-0.5">
                   <OscillatorPanel
                     oscillator={params.oscillators.osc2}
                     onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
@@ -1377,7 +1379,7 @@ export default function Synthesizer() {
                     index={2}
                   />
                 </TabsContent>
-                <TabsContent value="osc3" className="mt-1">
+                <TabsContent value="osc3" className="mt-0.5">
                   <OscillatorPanel
                     oscillator={params.oscillators.osc3}
                     onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
@@ -1388,26 +1390,26 @@ export default function Synthesizer() {
               </Tabs>
 
               <Tabs defaultValue="filter" className="w-full">
-                <TabsList className="w-full h-7 grid grid-cols-3" data-testid="env-tabs">
-                  <TabsTrigger value="filter" className="text-xs h-6" data-testid="tab-filter-env">Filter</TabsTrigger>
-                  <TabsTrigger value="pitch" className="text-xs h-6" data-testid="tab-pitch-env">Pitch</TabsTrigger>
-                  <TabsTrigger value="amp" className="text-xs h-6" data-testid="tab-amp-env">Amp</TabsTrigger>
+                <TabsList className="w-full h-6 grid grid-cols-3" data-testid="env-tabs">
+                  <TabsTrigger value="filter" className="text-[10px] h-5" data-testid="tab-filter-env">Filter</TabsTrigger>
+                  <TabsTrigger value="pitch" className="text-[10px] h-5" data-testid="tab-pitch-env">Pitch</TabsTrigger>
+                  <TabsTrigger value="amp" className="text-[10px] h-5" data-testid="tab-amp-env">Amp</TabsTrigger>
                 </TabsList>
-                <TabsContent value="filter" className="mt-1">
+                <TabsContent value="filter" className="mt-0.5">
                   <EnvelopePanel
                     envelope={params.envelopes.env1}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
                     type="filter"
                   />
                 </TabsContent>
-                <TabsContent value="pitch" className="mt-1">
+                <TabsContent value="pitch" className="mt-0.5">
                   <EnvelopePanel
                     envelope={params.envelopes.env2}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
                     type="pitch"
                   />
                 </TabsContent>
-                <TabsContent value="amp" className="mt-1">
+                <TabsContent value="amp" className="mt-0.5">
                   <EnvelopePanel
                     envelope={params.envelopes.env3}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
@@ -1417,7 +1419,7 @@ export default function Synthesizer() {
               </Tabs>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
@@ -1436,7 +1438,7 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
               <SynthEngineSelector
                 modal={params.modal}
                 additive={params.additive}
@@ -1459,7 +1461,7 @@ export default function Synthesizer() {
               />
             </div>
             
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-1">
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}
@@ -1472,11 +1474,7 @@ export default function Synthesizer() {
             </div>
           </div>
 
-          <div className="lg:col-span-3 space-y-1.5">
-            <RandomizeControls
-              currentParams={params}
-              onRandomize={setParams}
-            />
+          <div className="lg:col-span-2 space-y-1">
             <PresetPanel
               currentParams={params}
               onLoadPreset={setParams}

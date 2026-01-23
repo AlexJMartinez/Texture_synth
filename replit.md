@@ -188,6 +188,9 @@ Compact 50% scale design for professional audio feel:
 - Reduced padding throughout
 - Collapsible panels for organized layout
 - Dropdown selector for synthesis engine switching
+- Randomize controls in header bar (horizontal layout)
+- Double-click/double-tap any knob to reset to default value
+- All modules OFF by default until user enables or hits Randomize
 
 ## Technical Notes
 - Presets stored in localStorage under 'synth-presets-v2' key
@@ -195,7 +198,7 @@ Compact 50% scale design for professional audio feel:
 - Factory presets defined in shared/schema.ts
 - Custom IR files stored in localStorage (key: "synth-custom-irs") as base64-encoded audio buffers
 - Audio context unlocking uses Tone.start() for mobile compatibility
-- Default envelope: 2ms attack, 20ms hold, 200ms decay with transient shaper (+50 attack, -20 sustain) and limiter (-6dB threshold) enabled
+- **Default State**: All modules disabled by default (oscillators, envelopes, effects, mastering). User must enable modules manually or use Randomize. Reset returns all modules to disabled state.
 - **Canonical Pitch Model**: Pitch is stored internally as `PitchState {mode, baseHz, st, cents}` rather than raw Hz. Converted to Hz only during audio generation using `pitchToHz()`. Supports Hz/Semitones/Octaves display modes with automatic quantization and hysteresis.
 - **Pitch Utilities**: `client/src/lib/pitchUtils.ts` provides pitch conversion functions. `normalizePitch()` handles backward compatibility with old numeric presets.
 - **Audio Retrigger**: Gain ramps (1-2ms fadeout before stopping, fadein on start) prevent audio pops/clicks during sound retriggering.

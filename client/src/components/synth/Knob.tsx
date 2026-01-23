@@ -12,6 +12,7 @@ interface KnobProps {
   size?: "xs" | "sm" | "md" | "lg";
   accentColor?: "primary" | "accent";
   showValueOnHover?: boolean;
+  defaultValue?: number;
   "data-testid"?: string;
 }
 
@@ -27,6 +28,7 @@ export function Knob({
   size = "md",
   accentColor = "primary",
   showValueOnHover = true,
+  defaultValue,
   "data-testid": testId,
 }: KnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
@@ -34,6 +36,20 @@ export function Knob({
   const [isHovering, setIsHovering] = useState(false);
   const startY = useRef(0);
   const startValue = useRef(0);
+  const lastTapTime = useRef(0);
+
+  const handleDoubleClick = useCallback(() => {
+    const resetValue = defaultValue !== undefined ? defaultValue : min;
+    onChange(resetValue);
+  }, [defaultValue, min, onChange]);
+
+  const handleTouchEnd = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapTime.current < 300) {
+      handleDoubleClick();
+    }
+    lastTapTime.current = now;
+  }, [handleDoubleClick]);
 
   const sizeClasses = {
     xs: "w-7 h-7",
@@ -139,6 +155,8 @@ export function Knob({
             : 'inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 4px 8px rgba(0,0,0,0.4)',
         }}
         onMouseDown={handleMouseDown}
+        onDoubleClick={handleDoubleClick}
+        onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
         <div
