@@ -16,9 +16,18 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 
 ### Click Layer (Transient Generator)
 - Ultra-fast noise transient layer (1-10ms decay) for percussive attack
+- Noise types: White, Pink (Voss-McCartney algorithm), Brown (Brownian motion)
 - Filter options: Highpass or Bandpass
 - Filter frequency (1000-15000Hz) and Q (1-10)
 - Optional sample rate reduction (SRR) for crushed/bitcrushed clicks
+- Level control (0-100%)
+
+### Sub Oscillator (Low-End Layer)
+- Dedicated sub bass layer for deep low-end weight
+- Waveforms: Sine, Triangle
+- Octave selection: -2, -1, 0 (relative to main oscillators)
+- Dedicated attack/decay envelope (0-2000ms)
+- Optional lowpass filter (20-200Hz) for focused sub frequencies
 - Level control (0-100%)
 
 ### Advanced Synthesis Engines (Dropdown Selector)
@@ -59,6 +68,19 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - Wet/dry mix control
 - Generates synthetic impulse responses when no custom IR loaded
 
+### Multi-Stage Saturation Chain
+- 3-stage saturation for rich harmonic content
+- **Tape**: Soft saturation with warmth control for analog character
+- **Tube**: Vacuum tube emulation with bias control for even harmonics
+- **Transistor**: Hard clipping with asymmetry control for aggressive odd harmonics
+- Individual enable/drive controls per stage
+- Global wet/dry mix control
+
+### Mastering Section
+- **Soft-Knee Compressor**: Threshold, ratio, attack (0.1-100ms), release (10-1000ms), knee (0-20dB), makeup gain
+- **HF Exciter**: Harmonic enhancement for high frequencies (frequency, amount, mix)
+- **Stereo Widener**: Mid/side processing for stereo width control (50-200%)
+
 ### Impact/Transient Tools
 - **Transient Shaper**: Attack boost/cut (-100 to +100%), sustain control (-100 to +100%)
 - **Hard Limiter**: Threshold (-30 to 0 dB), release time (10-500ms)
@@ -70,7 +92,7 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - Normalization option
 
 ### Preset Management
-- 36 factory presets showcasing various sounds:
+- 41 factory presets showcasing various sounds:
   - Basic: Soft Pluck, Deep Bass, Sharp Click, Warm Pad, Dirty Synth, Comb Pluck, Space Delay, Chorus Strings
   - FM/AM: FM Bell, FM Brass, AM Tremolo
   - Modal: Modal Bell, Metal Hit, Industrial Clang
@@ -78,6 +100,7 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
   - Granular: Grain Cloud, Noise Burst
   - Impact: Impact Slam, Glitch Stab
   - Waveshaper: Tube Warmth, Fold Crunch, Sine Destroyer, Cheby Brass, Hard Clip Perc
+  - SOPHIE-style: SOPHIE Punch, Hyperpop Kick, Metal Snare, Glass Shatter, Sub Thump
 - User presets with save/load/delete
 - Import/export presets as JSON
 
@@ -102,9 +125,12 @@ client/src/
 │       ├── CollapsiblePanel.tsx  # Collapsible panel wrapper for sections
 │       ├── EnvelopePanel.tsx     # AHD envelope with routing
 │       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM/PM
-│       ├── ClickLayerPanel.tsx   # Click layer transient generator
+│       ├── ClickLayerPanel.tsx   # Click layer transient generator with noise types
+│       ├── SubOscillatorPanel.tsx # Sub oscillator for low-end weight
 │       ├── FilterPanel.tsx       # 9 filter types
 │       ├── EffectsPanel.tsx      # Distortion, delay, reverb, chorus, impact tools
+│       ├── SaturationChainPanel.tsx # Multi-stage saturation (tape/tube/transistor)
+│       ├── MasteringPanel.tsx    # Compressor, exciter, stereo widener
 │       ├── WaveshaperPanel.tsx   # Dent-style waveshaper with 7 curves
 │       ├── ConvolverPanel.tsx    # Convolution reverb with IR import
 │       ├── SynthEngineSelector.tsx # Dropdown for Modal/Additive/Granular engines
@@ -129,7 +155,7 @@ Integrated in Synthesizer.tsx using Tone.js and Web Audio API:
 1. **Real-time playback**: Tone.js-managed AudioContext for live preview
 2. **Offline rendering**: Tone.Offline for WAV export and waveform display
 3. **Signal chain**: 
-   - 3 Oscillators (mixed) → Filter (optional) → Waveshaper → Convolver → Effects → Panner → Gain → Output
+   - Sources: 3 Oscillators + Click Layer + Sub Osc (mixed) → Filter (optional) → Waveshaper → Convolver → Effects → Saturation Chain → Mastering (Compressor → Exciter → Stereo Widener) → Limiter → Panner → Gain → Output
 4. **Comb filter**: Delay node with feedback loop
 5. **Reverb**: ConvolverNode with generated or custom impulse response
 6. **Chorus**: Dual LFO-modulated delay lines
