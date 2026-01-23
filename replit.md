@@ -93,6 +93,8 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - Volume and stereo panning controls
 - WAV export at 44.1kHz or 48kHz, mono or stereo
 - Normalization option
+- **Mobile-friendly export**: iOS audio preview with long-press save, Web Share API for sharing to other apps
+- Export success state with filename display, Save/Share buttons, and re-export option
 
 ### Preset Management
 - 41 factory presets showcasing various sounds:
