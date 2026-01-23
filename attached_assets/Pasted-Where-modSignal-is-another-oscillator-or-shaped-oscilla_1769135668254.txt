@@ -1,0 +1,68 @@
+Where modSignal is another oscillator (or shaped oscillator), and I(t) is your index envelope.
+
+SOPHIE-ish hits often use:
+	•	audio-rate modulator
+	•	index envelope that starts huge
+	•	carrier pitch envelope sweeping hard
+	•	then clip/fold to “solidify” it
+
+⸻
+
+3) “Abrasive FM” without losing punch: do distortion after dynamics, not before
+
+A common mistake is to distort early and then your transient flattens into mush.
+
+A good chain for one-shots:
+	1.	Generate (PM/FM/sync)
+	2.	DC block (highpass ~10–30 Hz)
+	3.	Waveshaper (tanh / fold / clip)
+	4.	Post-filter (LPF to tame alias fizz, or BPF for “plastic”)
+	5.	Transient shaper / soft limiter (or just a fast compressor)
+	6.	Optional bitcrush/SRR very subtly
+	7.	Final limiter & normalize
+
+Key trick: oversample around the nonlinearity (2x–8x) or you’ll get brittle alias hash that’s hard to control.
+
+⸻
+
+4) The “SOPHIE punch” envelope behavior (this matters more than the synth type)
+
+Use very fast exponential envelopes:
+	•	Amp: instant-ish attack (0–1 ms), decay 30–200 ms
+	•	Pitch: attack 0 ms, decay 5–40 ms, depth 12–36 semitones
+	•	FM/PM index: attack 0 ms, decay 2–30 ms (often even faster than pitch)
+
+Implementation details
+	•	Use exponential segments (or exp curves) so it feels “physical.”
+	•	Clamp envelope minimums to avoid denormals (or flush-to-zero).
+
+⸻
+
+5) 3 “signature” operator topologies worth implementing
+
+These three cover a ton of the sound design space:
+
+Topology 1: 2-op PM “zap”
+	•	Modulator -> Carrier phase
+	•	Modulator ratio: 1–8
+	•	Index env: very high -> low quickly
+
+Topology 2: Feedback operator (abrasion generator)
+	•	m = sin(phase_m + fb * m_prev)
+	•	Feed m into carrier phase
+	•	This gives tearing/noisy metallic edges fast.
+
+Topology 3: 3-op stack (complexity without chaos)
+	•	op1 modulates op2, op2 modulates carrier
+	•	Put the highest index on op1->op2, and moderate on op2->carrier
+	•	Great for “designed” harshness that still reads as a hit
+
+⸻
+
+6) “Plastic / metallic” tones: resonators and modal banks
+
+A lot of those “solid object” hits feel like a struck resonant body.
+
+Implement either:
+	•	Comb resonator (easy)
+	•	Modal synthesis: sum of damped sines
