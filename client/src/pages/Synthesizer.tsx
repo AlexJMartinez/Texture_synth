@@ -7,7 +7,7 @@ import { FilterPanel } from "@/components/synth/FilterPanel";
 import { EffectsPanel } from "@/components/synth/EffectsPanel";
 import { OutputPanel } from "@/components/synth/OutputPanel";
 import { PresetPanel } from "@/components/synth/PresetPanel";
-import { ExportPanel } from "@/components/synth/ExportPanel";
+import { ExportPanel, type ExportResult } from "@/components/synth/ExportPanel";
 import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
@@ -126,6 +126,7 @@ export default function Synthesizer() {
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
@@ -1308,18 +1309,44 @@ export default function Synthesizer() {
       }
 
       const wavBlob = audioBufferToWav(finalBuffer);
+      const filename = `oneshot-${Date.now()}.wav`;
       const url = URL.createObjectURL(wavBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `oneshot-${Date.now()}.wav`;
-      a.click();
-      URL.revokeObjectURL(url);
+      
+      setExportResult(prev => {
+        if (prev?.url) URL.revokeObjectURL(prev.url);
+        return { blob: wavBlob, url, filename };
+      });
+      
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      
+      if (!isIOS) {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+      }
     } catch (err) {
       console.error("Export failed:", err);
     } finally {
       setIsExporting(false);
     }
   }, [params, exportSettings, generateSound, applyBitcrusher]);
+
+  const clearExportResult = useCallback(() => {
+    if (exportResult?.url) {
+      URL.revokeObjectURL(exportResult.url);
+    }
+    setExportResult(null);
+  }, [exportResult]);
+
+  useEffect(() => {
+    return () => {
+      if (exportResult?.url) {
+        URL.revokeObjectURL(exportResult.url);
+      }
+    };
+  }, [exportResult]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1484,6 +1511,8 @@ export default function Synthesizer() {
               onChange={setExportSettings}
               onExport={handleExport}
               isExporting={isExporting}
+              exportResult={exportResult}
+              onClearResult={clearExportResult}
             />
           </div>
         </div>
