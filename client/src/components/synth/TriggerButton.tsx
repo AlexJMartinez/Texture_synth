@@ -96,32 +96,19 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
         }}
       />
 
-      <svg 
-        className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
-        viewBox="0 0 100 100"
-      >
-        <circle
-          cx="50"
-          cy="50"
-          r="48"
-          fill="none"
-          stroke="rgba(255,255,255,0.1)"
-          strokeWidth="1"
-        />
-        {isPlaying && (
-          <circle
-            cx="50"
-            cy="50"
-            r="48"
-            fill="none"
-            stroke="rgba(255,255,255,0.4)"
-            strokeWidth="2"
-            strokeDasharray="30 10"
-            className="animate-spin"
-            style={{ animationDuration: '3s' }}
-          />
-        )}
-      </svg>
+      <div 
+        className={`
+          absolute inset-0 rounded-full pointer-events-none
+          transition-all duration-300
+          ${isPlaying ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}
+        `}
+        style={{
+          background: 'transparent',
+          boxShadow: isPlaying 
+            ? '0 0 20px hsl(280, 70%, 60%, 0.6), 0 0 40px hsl(280, 70%, 55%, 0.4), inset 0 0 20px hsl(280, 70%, 70%, 0.2)'
+            : 'none',
+        }}
+      />
     </button>
   );
 }

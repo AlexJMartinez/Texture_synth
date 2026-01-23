@@ -202,17 +202,17 @@ export function ExportPanel({ settings, onChange, onExport, isExporting, exportR
 
         <div className="space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-muted-foreground">Dur</Label>
-            <span className="text-[10px] font-mono text-foreground">{settings.duration}ms</span>
+            <Label className="text-[10px] text-muted-foreground">Tail</Label>
+            <span className="text-[10px] font-mono text-foreground">+{settings.tailExtension}ms</span>
           </div>
           <Slider
-            value={[settings.duration]}
-            onValueChange={([v]) => updateSettings("duration", v)}
-            min={100}
-            max={10000}
+            value={[settings.tailExtension]}
+            onValueChange={([v]) => updateSettings("tailExtension", v)}
+            min={0}
+            max={5000}
             step={100}
             className="w-full"
-            data-testid="slider-duration"
+            data-testid="slider-tail-extension"
           />
         </div>
 

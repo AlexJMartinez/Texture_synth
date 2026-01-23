@@ -78,14 +78,12 @@ export function WaveformDisplay({ audioBuffer, isPlaying, className = "" }: Wave
       style={{
         background: 'linear-gradient(to bottom, hsl(var(--card)), hsl(var(--background)))',
         boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4)',
-        minHeight: '60px',
       }}
       data-testid="waveform-display"
     >
       <div 
         ref={containerRef} 
         className="w-full h-full"
-        style={{ minHeight: '60px' }}
       />
       {!audioBuffer && (
         <div className="absolute inset-0 flex items-center justify-center">

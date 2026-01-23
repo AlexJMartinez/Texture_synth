@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import * as Tone from "tone";
-import { WaveformDisplay } from "@/components/synth/WaveformDisplay";
+import { WaveformDisplay3D } from "@/components/synth/WaveformDisplay3D";
 import { EnvelopePanel } from "@/components/synth/EnvelopePanel";
 import { OscillatorPanel } from "@/components/synth/OscillatorPanel";
 import { FilterPanel } from "@/components/synth/FilterPanel";
@@ -1252,21 +1252,24 @@ export default function Synthesizer() {
     setIsExporting(true);
 
     try {
-      // Use Tone.js context management for export
       await Tone.start();
       
-      const sampleRate = parseInt(exportSettings.sampleRate);
+      const targetSampleRate = parseInt(exportSettings.sampleRate);
       const channels = exportSettings.channels === "stereo" ? 2 : 1;
-      const duration = exportSettings.duration;
-      const durationInSeconds = duration / 1000;
-
-      // Use Tone.Offline for rendering
+      const tailExtension = exportSettings.tailExtension;
+      
+      // Calculate total duration including tail for reverb/delay decay
+      const baseDuration = getTotalDuration(params);
+      const totalDuration = baseDuration + tailExtension;
+      const durationInSeconds = totalDuration / 1000;
+      
+      // Re-render with tail extension to capture reverb/delay decay
       const toneBuffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, duration);
+        await generateSound(rawCtx, params, totalDuration);
       }, durationInSeconds);
       
-      const renderedBuffer = toneBuffer.get() as AudioBuffer;
+      let renderedBuffer = toneBuffer.get() as AudioBuffer;
       if (!renderedBuffer) {
         throw new Error("Failed to render audio buffer");
       }
@@ -1275,23 +1278,37 @@ export default function Synthesizer() {
         applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
       }
 
-      // Handle mono/stereo conversion
+      // Handle sample rate conversion if needed
       let finalBuffer = renderedBuffer;
-      if (channels === 1 && renderedBuffer.numberOfChannels > 1) {
-        // Mix down to mono
-        const monoCtx = new OfflineAudioContext(1, renderedBuffer.length, sampleRate);
-        const monoBuffer = monoCtx.createBuffer(1, renderedBuffer.length, sampleRate);
+      if (targetSampleRate !== renderedBuffer.sampleRate) {
+        const resampleCtx = new OfflineAudioContext(
+          renderedBuffer.numberOfChannels,
+          Math.ceil(renderedBuffer.length * targetSampleRate / renderedBuffer.sampleRate),
+          targetSampleRate
+        );
+        const bufferSource = resampleCtx.createBufferSource();
+        bufferSource.buffer = renderedBuffer;
+        bufferSource.connect(resampleCtx.destination);
+        bufferSource.start();
+        finalBuffer = await resampleCtx.startRendering();
+      }
+      
+      // Handle mono conversion
+      if (channels === 1 && finalBuffer.numberOfChannels > 1) {
+        const monoBuffer = new OfflineAudioContext(1, finalBuffer.length, finalBuffer.sampleRate)
+          .createBuffer(1, finalBuffer.length, finalBuffer.sampleRate);
         const monoData = monoBuffer.getChannelData(0);
-        for (let i = 0; i < renderedBuffer.length; i++) {
+        for (let i = 0; i < finalBuffer.length; i++) {
           let sum = 0;
-          for (let ch = 0; ch < renderedBuffer.numberOfChannels; ch++) {
-            sum += renderedBuffer.getChannelData(ch)[i];
+          for (let ch = 0; ch < finalBuffer.numberOfChannels; ch++) {
+            sum += finalBuffer.getChannelData(ch)[i];
           }
-          monoData[i] = sum / renderedBuffer.numberOfChannels;
+          monoData[i] = sum / finalBuffer.numberOfChannels;
         }
         finalBuffer = monoBuffer;
       }
       
+      // Normalize if requested
       if (exportSettings.normalize) {
         for (let channel = 0; channel < finalBuffer.numberOfChannels; channel++) {
           const data = finalBuffer.getChannelData(channel);
@@ -1331,7 +1348,7 @@ export default function Synthesizer() {
     } finally {
       setIsExporting(false);
     }
-  }, [params, exportSettings, generateSound, applyBitcrusher]);
+  }, [params, exportSettings, generateSound, applyBitcrusher, getTotalDuration]);
 
   const clearExportResult = useCallback(() => {
     if (exportResult?.url) {
@@ -1362,22 +1379,24 @@ export default function Synthesizer() {
   return (
     <div className="h-screen bg-background p-1 overflow-hidden flex flex-col">
       <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 min-h-0">
-        <div className="flex items-center gap-1.5 mb-1 shrink-0">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded bg-primary/20 flex items-center justify-center">
-              <Zap className="w-2.5 h-2.5 text-primary" />
+        <div className="flex flex-col md:flex-row md:items-center gap-1 mb-1 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
+              <div className="w-4 h-4 rounded bg-primary/20 flex items-center justify-center">
+                <Zap className="w-2.5 h-2.5 text-primary" />
+              </div>
+              <h1 className="text-xs font-bold tracking-tight text-foreground">OneShot</h1>
             </div>
-            <h1 className="text-xs font-bold tracking-tight text-foreground">OneShot</h1>
+            <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
+            <RandomizeControls
+              currentParams={params}
+              onRandomize={setParams}
+            />
           </div>
-          <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
-          <WaveformDisplay 
+          <WaveformDisplay3D 
             audioBuffer={audioBuffer} 
             isPlaying={isPlaying}
-            className="h-8 flex-1"
-          />
-          <RandomizeControls
-            currentParams={params}
-            onRandomize={setParams}
+            className="h-12 md:h-10 flex-1 min-w-0 md:min-w-[200px]"
           />
         </div>
 
