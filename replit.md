@@ -198,3 +198,8 @@ Compact 50% scale design for professional audio feel:
 - **Canonical Pitch Model**: Pitch is stored internally as `PitchState {mode, baseHz, st, cents}` rather than raw Hz. Converted to Hz only during audio generation using `pitchToHz()`. Supports Hz/Semitones/Octaves display modes with automatic quantization and hysteresis.
 - **Pitch Utilities**: `client/src/lib/pitchUtils.ts` provides pitch conversion functions. `normalizePitch()` handles backward compatibility with old numeric presets.
 - **Audio Retrigger**: Gain ramps (1-2ms fadeout before stopping, fadein on start) prevent audio pops/clicks during sound retriggering.
+- **AHD Envelope System**: Uses `client/src/lib/envelopeAHD.ts` with `triggerAHD()` for all envelopes. Features:
+  - `setTargetAtTime` for smooth exponential curves (timeConstant = segment/5 reaches ~99% by segment end)
+  - `cancelAndHoldAtTime` when available for click-free retriggers
+  - EPS (1e-5) to avoid exponential-to-zero pitfall
+  - `stopWithFade()` for smooth fadeouts on retrigger

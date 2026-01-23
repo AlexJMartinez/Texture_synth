@@ -26,6 +26,7 @@ import {
   defaultExportSettings 
 } from "@shared/schema";
 import { pitchToHz } from "@/lib/pitchUtils";
+import { triggerAHD, stopWithFade, EPS } from "@/lib/envelopeAHD";
 import { Zap } from "lucide-react";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
@@ -179,8 +180,11 @@ export default function Synthesizer() {
     
     const outputFadeGain = fadeGain || ctx.createGain();
     if (!fadeGain) {
-      outputFadeGain.gain.setValueAtTime(0, now);
-      outputFadeGain.gain.linearRampToValueAtTime(1, now + 0.002);
+      triggerAHD(outputFadeGain.gain, now, {
+        attack: 0.002,
+        hold: durationSec,
+        decay: 0.002
+      }, 1.0, { startFromCurrent: false });
     }
     
     const panNode = ctx.createStereoPanner();
@@ -401,19 +405,15 @@ export default function Synthesizer() {
       const sustainAmount = params.effects.transientSustain / 100;
       
       const transientDuration = 0.05;
+      const transientPeak = 1 + attackAmount * 0.5;
+      const sustainLevel = 1 + sustainAmount * 0.3;
       
-      if (attackAmount > 0) {
-        transientGain.gain.setValueAtTime(1 + attackAmount * 0.5, now);
-        transientGain.gain.linearRampToValueAtTime(1, now + transientDuration);
-      } else if (attackAmount < 0) {
-        transientGain.gain.setValueAtTime(1 + attackAmount * 0.5, now);
-        transientGain.gain.linearRampToValueAtTime(1, now + transientDuration);
+      if (attackAmount !== 0) {
+        transientGain.gain.setValueAtTime(Math.max(EPS, transientPeak), now);
+        transientGain.gain.setTargetAtTime(sustainLevel, now, transientDuration / 5);
+        transientGain.gain.setValueAtTime(sustainLevel, now + transientDuration);
       } else {
-        transientGain.gain.setValueAtTime(1, now);
-      }
-      
-      if (sustainAmount !== 0) {
-        transientGain.gain.linearRampToValueAtTime(1 + sustainAmount * 0.3, now + transientDuration + 0.01);
+        transientGain.gain.setValueAtTime(sustainLevel, now);
       }
       
       outputNode.connect(transientGain);
@@ -689,13 +689,13 @@ export default function Synthesizer() {
           let fmDepthValue = osc.fmDepth;
           
           if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const baseDepth = osc.fmDepth;
+            const baseDepth = Math.max(EPS, osc.fmDepth);
             const peakDepth = baseDepth + (osc.indexEnvDepth * 50);
-            modGain.gain.setValueAtTime(peakDepth, now);
-            modGain.gain.exponentialRampToValueAtTime(
-              Math.max(baseDepth, 0.01), 
-              now + osc.indexEnvDecay / 1000
-            );
+            triggerAHD(modGain.gain, now, {
+              attack: 0.0005,
+              hold: 0,
+              decay: osc.indexEnvDecay / 1000
+            }, peakDepth, { startFromCurrent: false });
           } else {
             modGain.gain.value = fmDepthValue;
           }
@@ -723,13 +723,13 @@ export default function Synthesizer() {
           const pmIndex = osc.pmDepth * 100;
           
           if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const basePmDepth = pmIndex;
+            const basePmDepth = Math.max(EPS, pmIndex);
             const peakPmDepth = basePmDepth + (osc.indexEnvDepth * 100);
-            pmModGain.gain.setValueAtTime(peakPmDepth, now);
-            pmModGain.gain.exponentialRampToValueAtTime(
-              Math.max(basePmDepth, 0.01),
-              now + osc.indexEnvDecay / 1000
-            );
+            triggerAHD(pmModGain.gain, now, {
+              attack: 0.0005,
+              hold: 0,
+              decay: osc.indexEnvDecay / 1000
+            }, peakPmDepth, { startFromCurrent: false });
           } else {
             pmModGain.gain.value = pmIndex;
           }
@@ -816,16 +816,15 @@ export default function Synthesizer() {
         .filter(e => e.enabled && e.target === key);
       
       for (const env of oscTargetEnvs) {
-        const attackEnd = now + env.attack / 1000;
-        const holdEnd = attackEnd + env.hold / 1000;
-        const decayEnd = holdEnd + env.decay / 1000;
         const baseLevel = osc.level / 100;
         const modAmount = (env.amount / 100) * baseLevel;
+        const peakLevel = Math.max(EPS, baseLevel + modAmount);
         
-        oscGain.gain.setValueAtTime(0.0001, now);
-        oscGain.gain.linearRampToValueAtTime(Math.max(0.0001, baseLevel + modAmount), attackEnd);
-        oscGain.gain.setValueAtTime(Math.max(0.0001, baseLevel + modAmount), holdEnd);
-        oscGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
+        triggerAHD(oscGain.gain, now, {
+          attack: env.attack / 1000,
+          hold: env.hold / 1000,
+          decay: env.decay / 1000
+        }, peakLevel, { startFromCurrent: false });
       }
 
       finalGain.connect(masterGain);
@@ -895,8 +894,11 @@ export default function Synthesizer() {
       
       const clickGain = ctx.createGain();
       const clickLevel = (click.level / 100) * 0.8;
-      clickGain.gain.setValueAtTime(clickLevel, now);
-      clickGain.gain.exponentialRampToValueAtTime(0.0001, now + clickDecay);
+      triggerAHD(clickGain.gain, now, {
+        attack: 0.0005,
+        hold: 0,
+        decay: clickDecay
+      }, clickLevel, { startFromCurrent: false });
       
       clickSource.connect(clickFilter);
       clickNode.connect(clickGain);
@@ -934,9 +936,11 @@ export default function Synthesizer() {
       const subAttack = sub.attack / 1000;
       const subDecay = sub.decay / 1000;
       
-      subGain.gain.setValueAtTime(0.0001, now);
-      subGain.gain.linearRampToValueAtTime(subLevel, now + subAttack);
-      subGain.gain.exponentialRampToValueAtTime(0.0001, now + subAttack + subDecay);
+      triggerAHD(subGain.gain, now, {
+        attack: subAttack,
+        hold: 0,
+        decay: subDecay
+      }, subLevel, { startFromCurrent: false });
       
       subNode.connect(subGain);
       subGain.connect(masterGain);
@@ -969,8 +973,11 @@ export default function Synthesizer() {
         
         const noiseGain = ctx.createGain();
         const noiseLevel = modal.impactNoise / 100;
-        noiseGain.gain.setValueAtTime(noiseLevel * 0.5, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + modal.impactDecay / 1000);
+        triggerAHD(noiseGain.gain, now, {
+          attack: 0.0005,
+          hold: 0,
+          decay: modal.impactDecay / 1000
+        }, noiseLevel * 0.5, { startFromCurrent: false });
         
         noiseSource.connect(noiseGain);
         noiseGain.connect(masterGain);
@@ -987,8 +994,11 @@ export default function Synthesizer() {
         
         const modeGain = ctx.createGain();
         const modeLevel = mode.level / 100;
-        modeGain.gain.setValueAtTime(modeLevel * 0.25, now);
-        modeGain.gain.exponentialRampToValueAtTime(0.0001, now + mode.decay / 1000);
+        triggerAHD(modeGain.gain, now, {
+          attack: 0.0005,
+          hold: 0,
+          decay: mode.decay / 1000
+        }, modeLevel * 0.25, { startFromCurrent: false });
         
         modeOsc.connect(modeGain);
         modeGain.connect(masterGain);
@@ -1020,7 +1030,12 @@ export default function Synthesizer() {
         const slopeMultiplier = 1 - (additive.decaySlope / 100) * (harmonic - 1) / 7;
         const finalLevel = baseLevel * Math.max(0.1, slopeMultiplier) * 0.2;
         
-        partialGain.gain.setValueAtTime(finalLevel, now);
+        const ampEnvForPartial = params.envelopes.env1;
+        triggerAHD(partialGain.gain, now, {
+          attack: ampEnvForPartial.attack / 1000,
+          hold: ampEnvForPartial.hold / 1000,
+          decay: ampEnvForPartial.decay / 1000
+        }, finalLevel, { startFromCurrent: false });
         
         partialOsc.connect(partialGain);
         partialGain.connect(masterGain);
@@ -1047,10 +1062,11 @@ export default function Synthesizer() {
         const grainPitch = granular.pitch * pitchVariation;
         
         const grainGain = ctx.createGain();
-        grainGain.gain.setValueAtTime(0, grainStart);
-        grainGain.gain.linearRampToValueAtTime(0.15, grainStart + grainDuration * 0.1);
-        grainGain.gain.setValueAtTime(0.15, grainStart + grainDuration * 0.5);
-        grainGain.gain.linearRampToValueAtTime(0, grainStart + grainDuration);
+        triggerAHD(grainGain.gain, grainStart, {
+          attack: grainDuration * 0.1,
+          hold: grainDuration * 0.4,
+          decay: grainDuration * 0.5
+        }, 0.15, { startFromCurrent: false });
         
         if (granular.texture === "noise") {
           const noiseLength = Math.max(0.01, grainDuration);
@@ -1097,28 +1113,13 @@ export default function Synthesizer() {
     }
 
     const ampEnv = params.envelopes.env1;
-    const attackEnd = now + ampEnv.attack / 1000;
-    const holdEnd = attackEnd + ampEnv.hold / 1000;
-    const decayEnd = holdEnd + ampEnv.decay / 1000;
-    const volume = Math.max(0.0001, params.output.volume / 100);
+    const volume = Math.max(EPS, params.output.volume / 100);
 
-    masterGain.gain.setValueAtTime(0.0001, now);
-    
-    if (ampEnv.curve === "exponential") {
-      masterGain.gain.exponentialRampToValueAtTime(volume, attackEnd);
-    } else {
-      masterGain.gain.linearRampToValueAtTime(volume, attackEnd);
-    }
-    
-    masterGain.gain.setValueAtTime(volume, holdEnd);
-    
-    if (ampEnv.curve === "exponential") {
-      masterGain.gain.exponentialRampToValueAtTime(0.0001, decayEnd);
-    } else if (ampEnv.curve === "logarithmic") {
-      masterGain.gain.setTargetAtTime(0.0001, holdEnd, ampEnv.decay / 3000);
-    } else {
-      masterGain.gain.linearRampToValueAtTime(0.0001, decayEnd);
-    }
+    triggerAHD(masterGain.gain, now, {
+      attack: ampEnv.attack / 1000,
+      hold: ampEnv.hold / 1000,
+      decay: ampEnv.decay / 1000
+    }, volume, { startFromCurrent: false });
 
     return { masterGain, fadeGain: outputFadeGain };
   }, [createImpulseResponse]);
@@ -1154,9 +1155,7 @@ export default function Synthesizer() {
     // Quickly fade out and stop any active sources to prevent pops/clicks
     if (activeFadeGainRef.current) {
       try {
-        activeFadeGainRef.current.gain.cancelScheduledValues(now);
-        activeFadeGainRef.current.gain.setValueAtTime(activeFadeGainRef.current.gain.value, now);
-        activeFadeGainRef.current.gain.linearRampToValueAtTime(0, now + 0.003);
+        stopWithFade(activeFadeGainRef.current.gain, now, 0.003);
       } catch (e) {
         // Ignore if gain node is disconnected
       }
@@ -1180,8 +1179,12 @@ export default function Synthesizer() {
     
     // Create new fade gain for this sound
     const fadeGain = ctx.createGain();
-    fadeGain.gain.setValueAtTime(0, now + 0.005);
-    fadeGain.gain.linearRampToValueAtTime(1, now + 0.008);
+    fadeGain.gain.value = EPS;
+    triggerAHD(fadeGain.gain, now + 0.003, {
+      attack: 0.005,
+      hold: getTotalDuration(params) / 1000,
+      decay: 0.005
+    }, 1.0, { startFromCurrent: false });
     
     // Track new sources
     const newSources: AudioScheduledSourceNode[] = [];
