@@ -115,6 +115,51 @@ const ClickLayerSchema = z.object({
   filterQ: z.number().min(1).max(10),
   srrEnabled: z.boolean(),
   srrAmount: z.number().min(1).max(16),
+  noiseType: z.enum(["white", "pink", "brown"]),
+});
+
+export const SubWaveformType = z.enum(["sine", "triangle"]);
+export type SubWaveformType = z.infer<typeof SubWaveformType>;
+
+const SubOscillatorSchema = z.object({
+  enabled: z.boolean(),
+  waveform: SubWaveformType,
+  octave: z.number().min(-2).max(0),
+  level: z.number().min(0).max(100),
+  attack: z.number().min(0).max(100),
+  decay: z.number().min(10).max(2000),
+  filterEnabled: z.boolean(),
+  filterFreq: z.number().min(20).max(200),
+});
+
+const SaturationChainSchema = z.object({
+  enabled: z.boolean(),
+  tapeEnabled: z.boolean(),
+  tapeDrive: z.number().min(0).max(100),
+  tapeWarmth: z.number().min(0).max(100),
+  tubeEnabled: z.boolean(),
+  tubeDrive: z.number().min(0).max(100),
+  tubeBias: z.number().min(0).max(100),
+  transistorEnabled: z.boolean(),
+  transistorDrive: z.number().min(0).max(100),
+  transistorAsymmetry: z.number().min(0).max(100),
+  mix: z.number().min(0).max(100),
+});
+
+const MasteringSchema = z.object({
+  compressorEnabled: z.boolean(),
+  compressorThreshold: z.number().min(-40).max(0),
+  compressorRatio: z.number().min(1).max(20),
+  compressorAttack: z.number().min(0.1).max(100),
+  compressorRelease: z.number().min(10).max(1000),
+  compressorKnee: z.number().min(0).max(40),
+  compressorMakeup: z.number().min(0).max(24),
+  exciterEnabled: z.boolean(),
+  exciterFreq: z.number().min(2000).max(12000),
+  exciterAmount: z.number().min(0).max(100),
+  exciterMix: z.number().min(0).max(100),
+  stereoEnabled: z.boolean(),
+  stereoWidth: z.number().min(0).max(200),
 });
 
 export const WaveshaperCurve = z.enum([
@@ -171,6 +216,12 @@ export const SynthParametersSchema = z.object({
   
   clickLayer: ClickLayerSchema,
   
+  subOsc: SubOscillatorSchema,
+  
+  saturationChain: SaturationChainSchema,
+  
+  mastering: MasteringSchema,
+  
   waveshaper: WaveshaperSchema,
   
   convolver: ConvolverSchema,
@@ -220,6 +271,10 @@ export type AdditiveSynth = z.infer<typeof AdditiveSynthSchema>;
 export type GranularSynth = z.infer<typeof GranularSynthSchema>;
 export type GranularTexture = GranularSynth["texture"];
 export type ClickLayer = z.infer<typeof ClickLayerSchema>;
+export type NoiseType = ClickLayer["noiseType"];
+export type SubOscillator = z.infer<typeof SubOscillatorSchema>;
+export type SaturationChain = z.infer<typeof SaturationChainSchema>;
+export type Mastering = z.infer<typeof MasteringSchema>;
 export type Waveshaper = z.infer<typeof WaveshaperSchema>;
 export type Convolver = z.infer<typeof ConvolverSchema>;
 
@@ -277,7 +332,49 @@ const defaultClickLayer: ClickLayer = {
   filterFreq: 5000,
   filterQ: 3,
   srrEnabled: false,
-  srrAmount: 4,
+  srrAmount: 8,
+  noiseType: "white",
+};
+
+const defaultSubOsc: SubOscillator = {
+  enabled: false,
+  waveform: "sine",
+  octave: -1,
+  level: 60,
+  attack: 0,
+  decay: 300,
+  filterEnabled: false,
+  filterFreq: 80,
+};
+
+const defaultSaturationChain: SaturationChain = {
+  enabled: false,
+  tapeEnabled: true,
+  tapeDrive: 30,
+  tapeWarmth: 40,
+  tubeEnabled: false,
+  tubeDrive: 20,
+  tubeBias: 50,
+  transistorEnabled: false,
+  transistorDrive: 40,
+  transistorAsymmetry: 30,
+  mix: 100,
+};
+
+const defaultMastering: Mastering = {
+  compressorEnabled: true,
+  compressorThreshold: -12,
+  compressorRatio: 4,
+  compressorAttack: 5,
+  compressorRelease: 100,
+  compressorKnee: 6,
+  compressorMakeup: 3,
+  exciterEnabled: true,
+  exciterFreq: 6000,
+  exciterAmount: 30,
+  exciterMix: 50,
+  stereoEnabled: false,
+  stereoWidth: 100,
 };
 
 const defaultEnvelope: Envelope = {
@@ -366,6 +463,9 @@ export const defaultSynthParameters: SynthParameters = {
     texture: "noise",
   },
   clickLayer: { ...defaultClickLayer },
+  subOsc: { ...defaultSubOsc },
+  saturationChain: { ...defaultSaturationChain },
+  mastering: { ...defaultMastering },
   waveshaper: { ...defaultWaveshaper },
   convolver: { ...defaultConvolver },
   effects: {
@@ -1235,6 +1335,156 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         transientSustain: -50,
         limiterEnabled: true,
         limiterThreshold: -3,
+      },
+    },
+  },
+  {
+    name: "SOPHIE Punch",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 80, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 4, fmRatioPreset: "4" as const, fmDepth: 600, fmWaveform: "sine", fmFeedback: 0.3, ...defaultAmOsc, pmEnabled: true, pmRatio: 2, pmRatioPreset: "2" as const, pmDepth: 25, pmWaveform: "sine", pmFeedback: 0.2, indexEnvEnabled: true, indexEnvDecay: 8, indexEnvDepth: 40 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 10, decay: 150, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 80, curve: "exponential", target: "pitch", amount: -100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      clickLayer: { enabled: true, level: 70, decay: 2, filterType: "highpass", filterFreq: 8000, filterQ: 6, srrEnabled: false, srrAmount: 4, noiseType: "white" },
+      subOsc: { enabled: true, waveform: "sine", octave: -1, level: 80, attack: 0, decay: 200, filterEnabled: true, filterFreq: 60 },
+      saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 40, tapeWarmth: 30, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: true, transistorDrive: 60, transistorAsymmetry: 40, mix: 100 },
+      mastering: { compressorEnabled: true, compressorThreshold: -8, compressorRatio: 6, compressorAttack: 2, compressorRelease: 80, compressorKnee: 3, compressorMakeup: 6, exciterEnabled: true, exciterFreq: 5000, exciterAmount: 50, exciterMix: 60, stereoEnabled: false, stereoWidth: 100 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 30,
+        transientEnabled: true,
+        transientAttack: 80,
+        transientSustain: -40,
+        limiterEnabled: true,
+        limiterThreshold: -3,
+        limiterRelease: 30,
+      },
+    },
+  },
+  {
+    name: "Hyperpop Kick",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 60, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 0.5, fmRatioPreset: "0.5" as const, fmDepth: 300, fmWaveform: "sine", fmFeedback: 0.15, ...defaultAmOsc, pmEnabled: false, pmRatio: 2, pmRatioPreset: "2" as const, pmDepth: 10, pmWaveform: "sine", pmFeedback: 0, indexEnvEnabled: true, indexEnvDecay: 5, indexEnvDepth: 30 },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 15, decay: 200, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 3, decay: 40, curve: "exponential", target: "pitch", amount: -100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      clickLayer: { enabled: true, level: 60, decay: 1.5, filterType: "bandpass", filterFreq: 6000, filterQ: 8, srrEnabled: true, srrAmount: 6, noiseType: "pink" },
+      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 90, attack: 0, decay: 250, filterEnabled: true, filterFreq: 40 },
+      saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 50, tapeWarmth: 50, tubeEnabled: true, tubeDrive: 30, tubeBias: 60, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 100 },
+      mastering: { compressorEnabled: true, compressorThreshold: -6, compressorRatio: 8, compressorAttack: 1, compressorRelease: 60, compressorKnee: 0, compressorMakeup: 8, exciterEnabled: true, exciterFreq: 4000, exciterAmount: 40, exciterMix: 50, stereoEnabled: false, stereoWidth: 100 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        transientEnabled: true,
+        transientAttack: 100,
+        transientSustain: -60,
+        limiterEnabled: true,
+        limiterThreshold: -2,
+        limiterRelease: 20,
+      },
+    },
+  },
+  {
+    name: "Metal Snare",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "triangle", pitch: 180, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 3, fmRatioPreset: "3" as const, fmDepth: 500, fmWaveform: "square", fmFeedback: 0.4, ...defaultAmOsc, ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "noise", pitch: 440, detune: 0, drift: 0, level: 60, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 8, decay: 120, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 60, curve: "exponential", target: "pitch", amount: -80 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 2500, resonance: 8, type: "bandpass", combDelay: 5, gain: 0 },
+      clickLayer: { enabled: true, level: 80, decay: 2.5, filterType: "highpass", filterFreq: 5000, filterQ: 4, srrEnabled: true, srrAmount: 8, noiseType: "white" },
+      saturationChain: { enabled: true, tapeEnabled: false, tapeDrive: 30, tapeWarmth: 40, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: true, transistorDrive: 80, transistorAsymmetry: 60, mix: 100 },
+      mastering: { compressorEnabled: true, compressorThreshold: -10, compressorRatio: 4, compressorAttack: 3, compressorRelease: 100, compressorKnee: 6, compressorMakeup: 5, exciterEnabled: true, exciterFreq: 6000, exciterAmount: 60, exciterMix: 70, stereoEnabled: false, stereoWidth: 100 },
+      modal: { enabled: true, basePitch: 180, impactNoise: 40, impactDecay: 10, modes: { mode1: { ratio: 1, decay: 100, level: 100 }, mode2: { ratio: 2.3, decay: 80, level: 50 }, mode3: { ratio: 4.7, decay: 60, level: 30 }, mode4: { ratio: 7.2, decay: 40, level: 20 } } },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 50,
+        transientEnabled: true,
+        transientAttack: 90,
+        transientSustain: -30,
+        limiterEnabled: true,
+        limiterThreshold: -4,
+      },
+    },
+  },
+  {
+    name: "Glass Shatter",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 2000, detune: 20, drift: 50, level: 100, fmEnabled: true, fmRatio: 6, fmRatioPreset: "6" as const, fmDepth: 800, fmWaveform: "sine", fmFeedback: 0.5, ...defaultAmOsc, pmEnabled: true, pmRatio: 8, pmRatioPreset: "8" as const, pmDepth: 35, pmWaveform: "triangle", pmFeedback: 0.3, indexEnvEnabled: true, indexEnvDecay: 3, indexEnvDepth: 50 },
+        osc2: { enabled: true, waveform: "sine", pitch: 3200, detune: -15, drift: 40, level: 60, fmEnabled: true, fmRatio: 4, fmRatioPreset: "4" as const, fmDepth: 600, fmWaveform: "sine", fmFeedback: 0.3, ...defaultAmOsc, ...defaultPmOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 5, decay: 250, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 3, decay: 150, curve: "exponential", target: "filter", amount: -80 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      filter: { enabled: true, frequency: 8000, resonance: 12, type: "highpass", combDelay: 5, gain: 0 },
+      clickLayer: { enabled: true, level: 90, decay: 3, filterType: "bandpass", filterFreq: 10000, filterQ: 5, srrEnabled: false, srrAmount: 4, noiseType: "white" },
+      saturationChain: { enabled: true, tapeEnabled: false, tapeDrive: 30, tapeWarmth: 40, tubeEnabled: true, tubeDrive: 40, tubeBias: 40, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 80 },
+      mastering: { compressorEnabled: true, compressorThreshold: -12, compressorRatio: 3, compressorAttack: 5, compressorRelease: 120, compressorKnee: 10, compressorMakeup: 4, exciterEnabled: true, exciterFreq: 8000, exciterAmount: 80, exciterMix: 90, stereoEnabled: false, stereoWidth: 100 },
+      modal: { enabled: true, basePitch: 2000, impactNoise: 60, impactDecay: 5, modes: { mode1: { ratio: 1, decay: 150, level: 100 }, mode2: { ratio: 1.6, decay: 120, level: 80 }, mode3: { ratio: 2.7, decay: 100, level: 60 }, mode4: { ratio: 4.1, decay: 80, level: 40 } } },
+      effects: {
+        ...defaultSynthParameters.effects,
+        saturation: 20,
+        reverbEnabled: true,
+        reverbSize: 30,
+        reverbMix: 20,
+        reverbDecay: 0.5,
+        limiterEnabled: true,
+        limiterThreshold: -6,
+      },
+    },
+  },
+  {
+    name: "Sub Thump",
+    parameters: {
+      ...defaultSynthParameters,
+      oscillators: {
+        osc1: { enabled: true, waveform: "sine", pitch: 50, detune: 0, drift: 0, level: 100, ...defaultModOsc },
+        osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
+        osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
+      },
+      envelopes: {
+        env1: { enabled: true, attack: 0, hold: 20, decay: 300, curve: "exponential", target: "amplitude", amount: 100 },
+        env2: { enabled: true, attack: 0, hold: 5, decay: 50, curve: "exponential", target: "pitch", amount: -100 },
+        env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
+      },
+      clickLayer: { enabled: true, level: 50, decay: 1, filterType: "highpass", filterFreq: 4000, filterQ: 3, srrEnabled: false, srrAmount: 4, noiseType: "brown" },
+      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 100, attack: 0, decay: 400, filterEnabled: true, filterFreq: 50 },
+      saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 60, tapeWarmth: 70, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 100 },
+      mastering: { compressorEnabled: true, compressorThreshold: -4, compressorRatio: 10, compressorAttack: 0.5, compressorRelease: 40, compressorKnee: 0, compressorMakeup: 10, exciterEnabled: false, exciterFreq: 6000, exciterAmount: 30, exciterMix: 50, stereoEnabled: false, stereoWidth: 100 },
+      filter: { enabled: true, frequency: 100, resonance: 3, type: "lowpass", combDelay: 5, gain: 0 },
+      effects: {
+        ...defaultSynthParameters.effects,
+        transientEnabled: true,
+        transientAttack: 100,
+        transientSustain: -80,
+        limiterEnabled: true,
+        limiterThreshold: -1,
+        limiterRelease: 15,
       },
     },
   },

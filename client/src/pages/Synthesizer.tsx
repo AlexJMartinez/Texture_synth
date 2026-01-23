@@ -14,6 +14,9 @@ import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
 import { WaveshaperPanel } from "@/components/synth/WaveshaperPanel";
 import { ConvolverPanel } from "@/components/synth/ConvolverPanel";
 import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
+import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
+import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
+import { MasteringPanel } from "@/components/synth/MasteringPanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -456,6 +459,164 @@ export default function Synthesizer() {
       outputNode = bandMixer;
     }
 
+    if (params.saturationChain.enabled) {
+      const sat = params.saturationChain;
+      let satInput = outputNode;
+      let satNode: AudioNode = outputNode;
+      
+      if (sat.tapeEnabled && sat.tapeDrive > 0) {
+        const tapeShaper = ctx.createWaveShaper();
+        const tapeDrive = sat.tapeDrive / 100;
+        const tapeWarmth = sat.tapeWarmth / 100;
+        const tapeCurve = new Float32Array(4096);
+        for (let i = 0; i < tapeCurve.length; i++) {
+          const x = (i * 2) / tapeCurve.length - 1;
+          const softClip = Math.tanh(x * (1 + tapeDrive * 2));
+          const warmth = x > 0 ? softClip * (1 - tapeWarmth * 0.2) : softClip * (1 + tapeWarmth * 0.1);
+          tapeCurve[i] = warmth;
+        }
+        tapeShaper.curve = tapeCurve;
+        tapeShaper.oversample = "2x";
+        satNode.connect(tapeShaper);
+        satNode = tapeShaper;
+      }
+      
+      if (sat.tubeEnabled && sat.tubeDrive > 0) {
+        const tubeShaper = ctx.createWaveShaper();
+        const tubeDrive = sat.tubeDrive / 100;
+        const tubeBias = (sat.tubeBias / 100 - 0.5) * 0.3;
+        const tubeCurve = new Float32Array(4096);
+        for (let i = 0; i < tubeCurve.length; i++) {
+          const x = (i * 2) / tubeCurve.length - 1 + tubeBias;
+          const k = tubeDrive * 10 + 1;
+          tubeCurve[i] = (1 + k) * x / (1 + k * Math.abs(x));
+        }
+        tubeShaper.curve = tubeCurve;
+        tubeShaper.oversample = "2x";
+        satNode.connect(tubeShaper);
+        satNode = tubeShaper;
+      }
+      
+      if (sat.transistorEnabled && sat.transistorDrive > 0) {
+        const transShaper = ctx.createWaveShaper();
+        const transDrive = sat.transistorDrive / 100;
+        const transAsym = sat.transistorAsymmetry / 100;
+        const transCurve = new Float32Array(4096);
+        for (let i = 0; i < transCurve.length; i++) {
+          const x = (i * 2) / transCurve.length - 1;
+          if (x >= 0) {
+            transCurve[i] = Math.tanh(x * (1 + transDrive * 5));
+          } else {
+            transCurve[i] = Math.tanh(x * (1 + transDrive * 5 * (1 + transAsym)));
+          }
+        }
+        transShaper.curve = transCurve;
+        transShaper.oversample = "2x";
+        satNode.connect(transShaper);
+        satNode = transShaper;
+      }
+      
+      if (sat.mix < 100) {
+        const dryGain = ctx.createGain();
+        const wetGain = ctx.createGain();
+        const satMixer = ctx.createGain();
+        dryGain.gain.value = 1 - sat.mix / 100;
+        wetGain.gain.value = sat.mix / 100;
+        satInput.connect(dryGain);
+        satNode.connect(wetGain);
+        dryGain.connect(satMixer);
+        wetGain.connect(satMixer);
+        outputNode = satMixer;
+      } else {
+        outputNode = satNode;
+      }
+    }
+
+    if (params.mastering.compressorEnabled) {
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = params.mastering.compressorThreshold;
+      comp.knee.value = params.mastering.compressorKnee;
+      comp.ratio.value = params.mastering.compressorRatio;
+      comp.attack.value = params.mastering.compressorAttack / 1000;
+      comp.release.value = params.mastering.compressorRelease / 1000;
+      
+      const makeup = ctx.createGain();
+      makeup.gain.value = Math.pow(10, params.mastering.compressorMakeup / 20);
+      
+      outputNode.connect(comp);
+      comp.connect(makeup);
+      outputNode = makeup;
+    }
+
+    if (params.mastering.exciterEnabled && params.mastering.exciterAmount > 0) {
+      const exciterHPF = ctx.createBiquadFilter();
+      exciterHPF.type = "highpass";
+      exciterHPF.frequency.value = params.mastering.exciterFreq;
+      exciterHPF.Q.value = 0.5;
+      
+      const exciterShaper = ctx.createWaveShaper();
+      const exciterAmount = params.mastering.exciterAmount / 100;
+      const exciterCurve = new Float32Array(256);
+      for (let i = 0; i < exciterCurve.length; i++) {
+        const x = (i * 2) / exciterCurve.length - 1;
+        exciterCurve[i] = Math.tanh(x * (1 + exciterAmount * 5)) + x * exciterAmount * 0.5;
+      }
+      exciterShaper.curve = exciterCurve;
+      
+      const exciterGain = ctx.createGain();
+      exciterGain.gain.value = (params.mastering.exciterMix / 100) * 0.5;
+      
+      const exciterMixer = ctx.createGain();
+      exciterMixer.gain.value = 1;
+      
+      outputNode.connect(exciterHPF);
+      exciterHPF.connect(exciterShaper);
+      exciterShaper.connect(exciterGain);
+      outputNode.connect(exciterMixer);
+      exciterGain.connect(exciterMixer);
+      
+      outputNode = exciterMixer;
+    }
+
+    if (params.mastering.stereoEnabled && params.output.pan === 0) {
+      const widthAmount = (params.mastering.stereoWidth - 100) / 100;
+      
+      const splitter = ctx.createChannelSplitter(2);
+      const merger = ctx.createChannelMerger(2);
+      
+      const leftGain = ctx.createGain();
+      const rightGain = ctx.createGain();
+      const leftCross = ctx.createGain();
+      const rightCross = ctx.createGain();
+      
+      const sideAmount = Math.max(0, widthAmount);
+      const narrowAmount = Math.max(0, -widthAmount);
+      
+      leftGain.gain.value = 1 - narrowAmount * 0.5;
+      rightGain.gain.value = 1 - narrowAmount * 0.5;
+      leftCross.gain.value = narrowAmount * 0.5 + sideAmount * 0.3;
+      rightCross.gain.value = narrowAmount * 0.5 - sideAmount * 0.3;
+      
+      outputNode.connect(splitter);
+      
+      splitter.connect(leftGain, 0);
+      splitter.connect(rightGain, 1);
+      splitter.connect(leftCross, 1);
+      splitter.connect(rightCross, 0);
+      
+      const leftMix = ctx.createGain();
+      const rightMix = ctx.createGain();
+      leftGain.connect(leftMix);
+      leftCross.connect(leftMix);
+      rightGain.connect(rightMix);
+      rightCross.connect(rightMix);
+      
+      leftMix.connect(merger, 0, 0);
+      rightMix.connect(merger, 0, 1);
+      
+      outputNode = merger;
+    }
+
     if (params.effects.limiterEnabled) {
       const limiter = ctx.createDynamicsCompressor();
       limiter.threshold.value = params.effects.limiterThreshold;
@@ -665,8 +826,30 @@ export default function Synthesizer() {
       const clickBuffer = ctx.createBuffer(1, clickBufferLength, ctx.sampleRate);
       const clickData = clickBuffer.getChannelData(0);
       
-      for (let i = 0; i < clickBufferLength; i++) {
-        clickData[i] = Math.random() * 2 - 1;
+      if (click.noiseType === "white") {
+        for (let i = 0; i < clickBufferLength; i++) {
+          clickData[i] = Math.random() * 2 - 1;
+        }
+      } else if (click.noiseType === "pink") {
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+        for (let i = 0; i < clickBufferLength; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          clickData[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+          b6 = white * 0.115926;
+        }
+      } else if (click.noiseType === "brown") {
+        let lastOut = 0;
+        for (let i = 0; i < clickBufferLength; i++) {
+          const white = Math.random() * 2 - 1;
+          lastOut = (lastOut + (0.02 * white)) / 1.02;
+          clickData[i] = lastOut * 3.5;
+        }
       }
       
       const clickSource = ctx.createBufferSource();
@@ -703,6 +886,42 @@ export default function Synthesizer() {
       
       clickSource.start(now);
       clickSource.stop(now + clickDecay + 0.01);
+    }
+
+    if (params.subOsc.enabled && params.subOsc.level > 0) {
+      const sub = params.subOsc;
+      const baseFreq = params.oscillators.osc1.pitch;
+      const subFreq = baseFreq * Math.pow(2, sub.octave);
+      
+      const subOsc = ctx.createOscillator();
+      subOsc.type = sub.waveform;
+      subOsc.frequency.value = Math.max(20, Math.min(200, subFreq));
+      
+      let subNode: AudioNode = subOsc;
+      
+      if (sub.filterEnabled) {
+        const subFilter = ctx.createBiquadFilter();
+        subFilter.type = "lowpass";
+        subFilter.frequency.value = sub.filterFreq;
+        subFilter.Q.value = 0.707;
+        subOsc.connect(subFilter);
+        subNode = subFilter;
+      }
+      
+      const subGain = ctx.createGain();
+      const subLevel = (sub.level / 100) * 0.6;
+      const subAttack = sub.attack / 1000;
+      const subDecay = sub.decay / 1000;
+      
+      subGain.gain.setValueAtTime(0.0001, now);
+      subGain.gain.linearRampToValueAtTime(subLevel, now + subAttack);
+      subGain.gain.exponentialRampToValueAtTime(0.0001, now + subAttack + subDecay);
+      
+      subNode.connect(subGain);
+      subGain.connect(masterGain);
+      
+      subOsc.start(now);
+      subOsc.stop(now + subAttack + subDecay + 0.1);
     }
 
     if (params.modal.enabled) {
@@ -1110,11 +1329,26 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               <ClickLayerPanel
                 clickLayer={params.clickLayer}
                 onChange={(clickLayer) => setParams({ ...params, clickLayer })}
               />
+              <SubOscillatorPanel
+                subOsc={params.subOsc}
+                onChange={(subOsc) => setParams({ ...params, subOsc })}
+              />
+              <SaturationChainPanel
+                saturation={params.saturationChain}
+                onChange={(saturationChain) => setParams({ ...params, saturationChain })}
+              />
+              <MasteringPanel
+                mastering={params.mastering}
+                onChange={(mastering) => setParams({ ...params, mastering })}
+              />
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}

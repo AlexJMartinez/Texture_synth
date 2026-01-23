@@ -41,7 +41,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
             label="Level"
             unit="%"
             onChange={(v) => update("level", v)}
-            accentColor="orange"
+            accentColor="accent"
             size="xs"
           />
           <Knob
@@ -52,12 +52,26 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
             label="Decay"
             unit="ms"
             onChange={(v) => update("decay", v)}
-            accentColor="orange"
+            accentColor="accent"
             size="xs"
           />
         </div>
 
         <div className="flex items-center gap-1">
+          <Select
+            value={clickLayer.noiseType}
+            onValueChange={(v) => update("noiseType", v as "white" | "pink" | "brown")}
+            disabled={!clickLayer.enabled}
+          >
+            <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-click-noise-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="white">White</SelectItem>
+              <SelectItem value="pink">Pink</SelectItem>
+              <SelectItem value="brown">Brown</SelectItem>
+            </SelectContent>
+          </Select>
           <Select
             value={clickLayer.filterType}
             onValueChange={(v) => update("filterType", v as "highpass" | "bandpass")}
@@ -83,7 +97,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
             unit="Hz"
             onChange={(v) => update("filterFreq", v)}
             logarithmic
-            accentColor="orange"
+            accentColor="accent"
             size="xs"
           />
           <Knob
@@ -93,7 +107,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
             step={0.5}
             label="Q"
             onChange={(v) => update("filterQ", v)}
-            accentColor="orange"
+            accentColor="accent"
             size="xs"
           />
         </div>
@@ -116,7 +130,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
               step={1}
               label="Bits"
               onChange={(v) => update("srrAmount", v)}
-              accentColor="orange"
+              accentColor="accent"
               size="xs"
             />
           </div>
