@@ -93,8 +93,16 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - Volume and stereo panning controls
 - WAV export at 44.1kHz or 48kHz, mono or stereo
 - Normalization option
+- **Tail extension**: 0-5000ms additional rendering time to capture reverb/delay decay tails
 - **Mobile-friendly export**: iOS audio preview with long-press save, Web Share API for sharing to other apps
 - Export success state with filename display, Save/Share buttons, and re-export option
+
+### 3D Terrain Waveform Display
+- Canvas-based 3D terrain visualization with perspective depth
+- Animated terrain responds to audio data
+- Purple (#8B5CF6) to cyan (#14B8A6) gradient color scheme
+- Depth shading with subtle glow effects during playback
+- Idle animation when no audio, faster animation during playback
 
 ### Preset Management
 - 41 factory presets showcasing various sounds:
@@ -126,7 +134,7 @@ client/src/
 ├── components/
 │   └── synth/
 │       ├── Knob.tsx              # Rotary knob control (xs/sm/md/lg sizes)
-│       ├── WaveformDisplay.tsx   # Audio visualization
+│       ├── WaveformDisplay3D.tsx # 3D terrain-style audio visualization
 │       ├── CollapsiblePanel.tsx  # Collapsible panel wrapper for sections
 │       ├── EnvelopePanel.tsx     # AHD envelope with routing
 │       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM/PM
@@ -209,3 +217,9 @@ Compact 50% scale design for professional audio feel:
   - `cancelAndHoldAtTime` when available for click-free retriggers
   - EPS (1e-5) to avoid exponential-to-zero pitfall
   - `stopWithFade()` for smooth fadeouts on retrigger
+- **3D Waveform Display**: Uses `client/src/components/synth/WaveformDisplay3D.tsx` with:
+  - Canvas-based 3D terrain rendering with perspective
+  - ResizeObserver with transform reset to prevent scaling accumulation
+  - Robust buffer sampling with guards against short buffers (step >= 1, bounds checking)
+- **Export System**: Re-renders audio with tail extension to properly capture reverb/delay decay
+- **Trigger Button**: Smooth pulsing glow animation (replaced dashed spinning circle)
