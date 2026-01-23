@@ -908,7 +908,27 @@ export default function Synthesizer() {
       
       const subOsc = ctx.createOscillator();
       subOsc.type = sub.waveform;
-      subOsc.frequency.setValueAtTime(Math.max(20, subFreq), now);
+      
+      const stToMult = (st: number) => Math.pow(2, st / 12);
+      const pitchEnv = params.envelopes.env2;
+      
+      if (pitchEnv.enabled && pitchEnv.amount !== 0) {
+        const subPitchScale = 0.65;
+        const dropST = Math.abs(pitchEnv.amount) * 0.48 * subPitchScale;
+        const dropTime = Math.max(0.001, (pitchEnv.attack + pitchEnv.hold + pitchEnv.decay) / 1000 * 1.5);
+        
+        const startHz = Math.max(20, subFreq * stToMult(pitchEnv.amount > 0 ? dropST : -dropST));
+        const endHz = Math.max(20, subFreq);
+        
+        subOsc.frequency.setValueAtTime(startHz, now);
+        if (pitchEnv.curve === "exponential") {
+          subOsc.frequency.exponentialRampToValueAtTime(endHz, now + dropTime);
+        } else {
+          subOsc.frequency.linearRampToValueAtTime(endHz, now + dropTime);
+        }
+      } else {
+        subOsc.frequency.setValueAtTime(Math.max(20, subFreq), now);
+      }
       
       const subEnvGain = ctx.createGain();
       subEnvGain.gain.setValueAtTime(EPS, now);
