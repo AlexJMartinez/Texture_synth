@@ -8,9 +8,18 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 ### Multi-Oscillator Architecture (3 OSC)
 - 4 waveforms: Sine, triangle, sawtooth, and square
 - Per-oscillator: Pitch (20-20000Hz), detune (-100 to +100 cents), drift (0-100%), level (0-100%)
-- FM synthesis per oscillator: ratio, depth, modulator waveform
+- FM synthesis per oscillator: ratio presets (0.5, 1, 2, 3, 4, 6, 8, custom), depth, modulator waveform, feedback (0-100%)
+- PM synthesis per oscillator: DX7-style phase modulation via frequency deviation, ratio presets, modulation index (0-60), feedback (0-100%), modulator waveform (Note: Uses FM-style implementation for Web Audio API compatibility)
 - AM synthesis per oscillator: ratio, depth, modulator waveform
+- Index envelope per oscillator: fast exponential decay (2-100ms), depth (0-60) for FM/PM modulation
 - Individual enable/disable switches
+
+### Click Layer (Transient Generator)
+- Ultra-fast noise transient layer (1-10ms decay) for percussive attack
+- Filter options: Highpass or Bandpass
+- Filter frequency (1000-15000Hz) and Q (1-10)
+- Optional sample rate reduction (SRR) for crushed/bitcrushed clicks
+- Level control (0-100%)
 
 ### Advanced Synthesis Engines (Dropdown Selector)
 - **Modal Synthesis**: 4 resonant modes with ratio/decay/level controls, impact noise, metallic/percussive sounds
@@ -92,7 +101,8 @@ client/src/
 │       ├── WaveformDisplay.tsx   # Audio visualization
 │       ├── CollapsiblePanel.tsx  # Collapsible panel wrapper for sections
 │       ├── EnvelopePanel.tsx     # AHD envelope with routing
-│       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM
+│       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM/PM
+│       ├── ClickLayerPanel.tsx   # Click layer transient generator
 │       ├── FilterPanel.tsx       # 9 filter types
 │       ├── EffectsPanel.tsx      # Distortion, delay, reverb, chorus, impact tools
 │       ├── WaveshaperPanel.tsx   # Dent-style waveshaper with 7 curves

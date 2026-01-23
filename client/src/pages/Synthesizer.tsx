@@ -13,6 +13,7 @@ import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
 import { WaveshaperPanel } from "@/components/synth/WaveshaperPanel";
 import { ConvolverPanel } from "@/components/synth/ConvolverPanel";
+import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -509,13 +510,66 @@ export default function Synthesizer() {
           modOsc.frequency.value = osc.pitch * osc.fmRatio;
           
           const modGain = ctx.createGain();
-          modGain.gain.value = osc.fmDepth;
+          let fmDepthValue = osc.fmDepth;
+          
+          if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
+            const baseDepth = osc.fmDepth;
+            const peakDepth = baseDepth + (osc.indexEnvDepth * 50);
+            modGain.gain.setValueAtTime(peakDepth, now);
+            modGain.gain.exponentialRampToValueAtTime(
+              Math.max(baseDepth, 0.01), 
+              now + osc.indexEnvDecay / 1000
+            );
+          } else {
+            modGain.gain.value = fmDepthValue;
+          }
           
           modOsc.connect(modGain);
           modGain.connect(oscNode.frequency);
           
+          if (osc.fmFeedback > 0) {
+            const feedbackGain = ctx.createGain();
+            feedbackGain.gain.value = osc.fmFeedback * osc.fmDepth * 0.5;
+            modOsc.connect(feedbackGain);
+            feedbackGain.connect(modOsc.frequency);
+          }
+          
           modOsc.start(now);
           modOsc.stop(now + durationSec);
+        }
+
+        if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
+          const pmModOsc = ctx.createOscillator();
+          pmModOsc.type = osc.pmWaveform as OscillatorType;
+          pmModOsc.frequency.value = osc.pitch * osc.pmRatio;
+          
+          const pmModGain = ctx.createGain();
+          const pmIndex = osc.pmDepth * 100;
+          
+          if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
+            const basePmDepth = pmIndex;
+            const peakPmDepth = basePmDepth + (osc.indexEnvDepth * 100);
+            pmModGain.gain.setValueAtTime(peakPmDepth, now);
+            pmModGain.gain.exponentialRampToValueAtTime(
+              Math.max(basePmDepth, 0.01),
+              now + osc.indexEnvDecay / 1000
+            );
+          } else {
+            pmModGain.gain.value = pmIndex;
+          }
+          
+          pmModOsc.connect(pmModGain);
+          pmModGain.connect(oscNode.frequency);
+          
+          if (osc.pmFeedback > 0) {
+            const pmFeedbackGain = ctx.createGain();
+            pmFeedbackGain.gain.value = osc.pmFeedback * pmIndex * 0.3;
+            pmModOsc.connect(pmFeedbackGain);
+            pmFeedbackGain.connect(pmModOsc.frequency);
+          }
+          
+          pmModOsc.start(now);
+          pmModOsc.stop(now + durationSec);
         }
 
         oscNode.connect(oscGain);
@@ -602,6 +656,53 @@ export default function Synthesizer() {
       
       sourceNode.start(now);
       sourceNode.stop(now + durationSec);
+    }
+
+    if (params.clickLayer.enabled && params.clickLayer.level > 0) {
+      const click = params.clickLayer;
+      const clickDecay = click.decay / 1000;
+      const clickBufferLength = Math.ceil(ctx.sampleRate * (clickDecay + 0.005));
+      const clickBuffer = ctx.createBuffer(1, clickBufferLength, ctx.sampleRate);
+      const clickData = clickBuffer.getChannelData(0);
+      
+      for (let i = 0; i < clickBufferLength; i++) {
+        clickData[i] = Math.random() * 2 - 1;
+      }
+      
+      const clickSource = ctx.createBufferSource();
+      clickSource.buffer = clickBuffer;
+      
+      const clickFilter = ctx.createBiquadFilter();
+      clickFilter.type = click.filterType;
+      clickFilter.frequency.value = click.filterFreq;
+      clickFilter.Q.value = click.filterQ;
+      
+      let clickNode: AudioNode = clickFilter;
+      
+      if (click.srrEnabled) {
+        const srrSamples = Math.pow(2, 16 - click.srrAmount);
+        const srrShaper = ctx.createWaveShaper();
+        const srrCurve = new Float32Array(65536);
+        for (let i = 0; i < srrCurve.length; i++) {
+          const x = (i / 32768) - 1;
+          srrCurve[i] = Math.round(x * srrSamples) / srrSamples;
+        }
+        srrShaper.curve = srrCurve;
+        clickFilter.connect(srrShaper);
+        clickNode = srrShaper;
+      }
+      
+      const clickGain = ctx.createGain();
+      const clickLevel = (click.level / 100) * 0.8;
+      clickGain.gain.setValueAtTime(clickLevel, now);
+      clickGain.gain.exponentialRampToValueAtTime(0.0001, now + clickDecay);
+      
+      clickSource.connect(clickFilter);
+      clickNode.connect(clickGain);
+      clickGain.connect(masterGain);
+      
+      clickSource.start(now);
+      clickSource.stop(now + clickDecay + 0.01);
     }
 
     if (params.modal.enabled) {
@@ -1009,7 +1110,11 @@ export default function Synthesizer() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+              <ClickLayerPanel
+                clickLayer={params.clickLayer}
+                onChange={(clickLayer) => setParams({ ...params, clickLayer })}
+              />
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}

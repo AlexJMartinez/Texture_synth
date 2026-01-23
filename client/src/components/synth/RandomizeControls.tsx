@@ -3,8 +3,12 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
-import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve } from "@shared/schema";
+import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
+
+function randomRatioPreset(): ModRatioPreset {
+  return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
+}
 
 interface RandomizeControlsProps {
   currentParams: SynthParameters;
@@ -43,22 +47,37 @@ function randomWaveshaperCurve(): WaveshaperCurve {
 export function RandomizeControls({ currentParams, onRandomize }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
-  const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => ({
-    enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
-    waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
-    pitch: Math.round(randomInRange(55, 2000, true)),
-    detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
-    drift: Math.round(randomInRange(0, 50 * chaos)),
-    level: Math.round(randomInRange(30, 100)),
-    fmEnabled: Math.random() > 0.7,
-    fmRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
-    fmDepth: Math.round(randomInRange(50, 500 * chaos)),
-    fmWaveform: randomWaveform(),
-    amEnabled: Math.random() > 0.75,
-    amRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
-    amDepth: Math.round(randomInRange(20, 80 * chaos)),
-    amWaveform: randomWaveform(),
-  });
+  const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
+    const fmPreset = randomRatioPreset();
+    const pmPreset = randomRatioPreset();
+    return {
+      enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
+      waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
+      pitch: Math.round(randomInRange(55, 2000, true)),
+      detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
+      drift: Math.round(randomInRange(0, 50 * chaos)),
+      level: Math.round(randomInRange(30, 100)),
+      fmEnabled: Math.random() > 0.7,
+      fmRatio: fmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(fmPreset),
+      fmRatioPreset: fmPreset,
+      fmDepth: Math.round(randomInRange(50, 500 * chaos)),
+      fmWaveform: randomWaveform(),
+      fmFeedback: Math.random() > 0.7 ? Math.round(randomInRange(0, 0.5 * chaos) * 100) / 100 : 0,
+      amEnabled: Math.random() > 0.75,
+      amRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
+      amDepth: Math.round(randomInRange(20, 80 * chaos)),
+      amWaveform: randomWaveform(),
+      pmEnabled: Math.random() > 0.6,
+      pmRatio: pmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(pmPreset),
+      pmRatioPreset: pmPreset,
+      pmDepth: Math.round(randomInRange(1, 30 * chaos)),
+      pmWaveform: randomWaveform(),
+      pmFeedback: Math.random() > 0.7 ? Math.round(randomInRange(0, 0.4 * chaos) * 100) / 100 : 0,
+      indexEnvEnabled: Math.random() > 0.5,
+      indexEnvDecay: Math.round(randomInRange(5, 50 * chaos + 10)),
+      indexEnvDepth: Math.round(randomInRange(5, 40 * chaos)),
+    };
+  };
 
   const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => ({
     enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
@@ -174,6 +193,16 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         mix: Math.round(randomInRange(30, 70)),
         useCustomIR: currentParams.convolver.useCustomIR,
       },
+      clickLayer: {
+        enabled: Math.random() > 0.5,
+        level: Math.round(randomInRange(30, 80 * chaos)),
+        decay: Math.round(randomInRange(2, 8) * 10) / 10,
+        filterType: (["highpass", "bandpass"] as const)[Math.floor(Math.random() * 2)],
+        filterFreq: Math.round(randomInRange(3000, 12000, true)),
+        filterQ: Math.round(randomInRange(2, 8) * 10) / 10,
+        srrEnabled: Math.random() > 0.7,
+        srrAmount: Math.round(randomInRange(4, 12)),
+      },
       output: {
         volume: 75,
         pan: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
@@ -209,12 +238,23 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       level: Math.round(mutateValue(osc.level, 0, 100)),
       fmEnabled: osc.fmEnabled,
       fmRatio: Math.round(mutateValue(osc.fmRatio, 0.25, 16) * 4) / 4,
+      fmRatioPreset: osc.fmRatioPreset,
       fmDepth: Math.round(mutateValue(osc.fmDepth, 0, 1000)),
       fmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.fmWaveform,
+      fmFeedback: Math.round(mutateValue(osc.fmFeedback, 0, 1) * 100) / 100,
       amEnabled: osc.amEnabled,
       amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
       amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
       amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
+      pmEnabled: osc.pmEnabled,
+      pmRatio: Math.round(mutateValue(osc.pmRatio, 0.25, 16) * 4) / 4,
+      pmRatioPreset: osc.pmRatioPreset,
+      pmDepth: Math.round(mutateValue(osc.pmDepth, 0, 60)),
+      pmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.pmWaveform,
+      pmFeedback: Math.round(mutateValue(osc.pmFeedback, 0, 1) * 100) / 100,
+      indexEnvEnabled: osc.indexEnvEnabled,
+      indexEnvDecay: Math.round(mutateValue(osc.indexEnvDecay, 2, 100)),
+      indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
     });
 
     const mutateEnv = (env: Envelope): Envelope => ({
@@ -327,6 +367,16 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         irName: currentParams.convolver.irName,
         mix: Math.round(mutateValue(currentParams.convolver.mix, 0, 100)),
         useCustomIR: currentParams.convolver.useCustomIR,
+      },
+      clickLayer: {
+        enabled: currentParams.clickLayer.enabled,
+        level: Math.round(mutateValue(currentParams.clickLayer.level, 0, 100)),
+        decay: Math.round(mutateValue(currentParams.clickLayer.decay, 1, 10) * 10) / 10,
+        filterType: currentParams.clickLayer.filterType,
+        filterFreq: Math.round(mutateValue(currentParams.clickLayer.filterFreq, 1000, 15000, true)),
+        filterQ: Math.round(mutateValue(currentParams.clickLayer.filterQ, 1, 10) * 10) / 10,
+        srrEnabled: currentParams.clickLayer.srrEnabled,
+        srrAmount: Math.round(mutateValue(currentParams.clickLayer.srrAmount, 1, 16)),
       },
       output: {
         volume: currentParams.output.volume,

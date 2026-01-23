@@ -14,6 +14,9 @@ export type FilterType = z.infer<typeof FilterType>;
 export const EnvelopeTarget = z.enum(["amplitude", "filter", "pitch", "osc1", "osc2", "osc3"]);
 export type EnvelopeTarget = z.infer<typeof EnvelopeTarget>;
 
+export const ModRatioPreset = z.enum(["0.5", "1", "2", "3", "4", "6", "8", "custom"]);
+export type ModRatioPreset = z.infer<typeof ModRatioPreset>;
+
 const OscillatorSchema = z.object({
   enabled: z.boolean(),
   waveform: WaveformType,
@@ -23,12 +26,23 @@ const OscillatorSchema = z.object({
   level: z.number().min(0).max(100),
   fmEnabled: z.boolean(),
   fmRatio: z.number().min(0.25).max(16),
+  fmRatioPreset: ModRatioPreset,
   fmDepth: z.number().min(0).max(1000),
   fmWaveform: WaveformType,
+  fmFeedback: z.number().min(0).max(1),
   amEnabled: z.boolean(),
   amRatio: z.number().min(0.25).max(16),
   amDepth: z.number().min(0).max(100),
   amWaveform: WaveformType,
+  pmEnabled: z.boolean(),
+  pmRatio: z.number().min(0.25).max(16),
+  pmRatioPreset: ModRatioPreset,
+  pmDepth: z.number().min(0).max(60),
+  pmWaveform: WaveformType,
+  pmFeedback: z.number().min(0).max(1),
+  indexEnvEnabled: z.boolean(),
+  indexEnvDecay: z.number().min(2).max(100),
+  indexEnvDepth: z.number().min(0).max(60),
 });
 
 const EnvelopeSchema = z.object({
@@ -92,6 +106,17 @@ const GranularSynthSchema = z.object({
   texture: z.enum(["noise", "sine", "saw", "click"]),
 });
 
+const ClickLayerSchema = z.object({
+  enabled: z.boolean(),
+  level: z.number().min(0).max(100),
+  decay: z.number().min(1).max(10),
+  filterType: z.enum(["highpass", "bandpass"]),
+  filterFreq: z.number().min(1000).max(15000),
+  filterQ: z.number().min(1).max(10),
+  srrEnabled: z.boolean(),
+  srrAmount: z.number().min(1).max(16),
+});
+
 export const WaveshaperCurve = z.enum([
   "softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"
 ]);
@@ -144,6 +169,8 @@ export const SynthParametersSchema = z.object({
   
   granular: GranularSynthSchema,
   
+  clickLayer: ClickLayerSchema,
+  
   waveshaper: WaveshaperSchema,
   
   convolver: ConvolverSchema,
@@ -192,6 +219,7 @@ export type AdditivePartial = z.infer<typeof AdditivePartialSchema>;
 export type AdditiveSynth = z.infer<typeof AdditiveSynthSchema>;
 export type GranularSynth = z.infer<typeof GranularSynthSchema>;
 export type GranularTexture = GranularSynth["texture"];
+export type ClickLayer = z.infer<typeof ClickLayerSchema>;
 export type Waveshaper = z.infer<typeof WaveshaperSchema>;
 export type Convolver = z.infer<typeof ConvolverSchema>;
 
@@ -222,12 +250,34 @@ const defaultOscillator: Oscillator = {
   level: 100,
   fmEnabled: false,
   fmRatio: 2,
+  fmRatioPreset: "2",
   fmDepth: 100,
   fmWaveform: "sine",
+  fmFeedback: 0,
   amEnabled: false,
   amRatio: 1,
   amDepth: 50,
   amWaveform: "sine",
+  pmEnabled: false,
+  pmRatio: 2,
+  pmRatioPreset: "2",
+  pmDepth: 10,
+  pmWaveform: "sine",
+  pmFeedback: 0,
+  indexEnvEnabled: false,
+  indexEnvDecay: 15,
+  indexEnvDepth: 20,
+};
+
+const defaultClickLayer: ClickLayer = {
+  enabled: false,
+  level: 70,
+  decay: 3,
+  filterType: "highpass",
+  filterFreq: 5000,
+  filterQ: 3,
+  srrEnabled: false,
+  srrAmount: 4,
 };
 
 const defaultEnvelope: Envelope = {
@@ -315,6 +365,7 @@ export const defaultSynthParameters: SynthParameters = {
     scatter: 30,
     texture: "noise",
   },
+  clickLayer: { ...defaultClickLayer },
   waveshaper: { ...defaultWaveshaper },
   convolver: { ...defaultConvolver },
   effects: {
@@ -358,9 +409,27 @@ export const defaultExportSettings: ExportSettings = {
   normalize: true,
 };
 
-const defaultFmOsc = { fmEnabled: false, fmRatio: 2, fmDepth: 100, fmWaveform: "sine" as const };
+const defaultFmOsc = { 
+  fmEnabled: false, 
+  fmRatio: 2, 
+  fmRatioPreset: "2" as const,
+  fmDepth: 100, 
+  fmWaveform: "sine" as const,
+  fmFeedback: 0,
+};
 const defaultAmOsc = { amEnabled: false, amRatio: 1, amDepth: 50, amWaveform: "sine" as const };
-const defaultModOsc = { ...defaultFmOsc, ...defaultAmOsc };
+const defaultPmOsc = {
+  pmEnabled: false,
+  pmRatio: 2,
+  pmRatioPreset: "2" as const,
+  pmDepth: 10,
+  pmWaveform: "sine" as const,
+  pmFeedback: 0,
+  indexEnvEnabled: false,
+  indexEnvDecay: 15,
+  indexEnvDepth: 20,
+};
+const defaultModOsc = { ...defaultFmOsc, ...defaultAmOsc, ...defaultPmOsc };
 
 export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
   {
@@ -505,7 +574,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 3.5, fmDepth: 400, fmWaveform: "sine", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 100, fmEnabled: true, fmRatio: 3.5, fmRatioPreset: "custom" as const, fmDepth: 400, fmWaveform: "sine", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc2: { enabled: false, waveform: "sine", pitch: 440, detune: 0, drift: 0, level: 50, ...defaultModOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
@@ -521,8 +590,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sine", pitch: 220, detune: 0, drift: 5, level: 100, fmEnabled: true, fmRatio: 1, fmDepth: 200, fmWaveform: "sine", ...defaultAmOsc },
-        osc2: { enabled: true, waveform: "sine", pitch: 220, detune: 3, drift: 3, level: 60, fmEnabled: true, fmRatio: 2, fmDepth: 150, fmWaveform: "sine", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "sine", pitch: 220, detune: 0, drift: 5, level: 100, fmEnabled: true, fmRatio: 1, fmRatioPreset: "1" as const, fmDepth: 200, fmWaveform: "sine", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "sine", pitch: 220, detune: 3, drift: 3, level: 60, fmEnabled: true, fmRatio: 2, fmRatioPreset: "2" as const, fmDepth: 150, fmWaveform: "sine", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
@@ -538,8 +607,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 200, detune: 0, drift: 0, level: 100, ...defaultFmOsc, amEnabled: true, amRatio: 2.5, amDepth: 80, amWaveform: "sine" },
-        osc2: { enabled: true, waveform: "square", pitch: 200, detune: 5, drift: 0, level: 60, ...defaultFmOsc, amEnabled: true, amRatio: 3.5, amDepth: 60, amWaveform: "triangle" },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 200, detune: 0, drift: 0, level: 100, ...defaultFmOsc, amEnabled: true, amRatio: 2.5, amDepth: 80, amWaveform: "sine", ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 200, detune: 5, drift: 0, level: 60, ...defaultFmOsc, amEnabled: true, amRatio: 3.5, amDepth: 60, amWaveform: "triangle", ...defaultPmOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
@@ -790,8 +859,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "square", pitch: 660, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 7, fmDepth: 600, fmWaveform: "square", ...defaultAmOsc },
-        osc2: { enabled: true, waveform: "sawtooth", pitch: 330, detune: 25, drift: 20, level: 70, fmEnabled: true, fmRatio: 5, fmDepth: 400, fmWaveform: "sawtooth", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "square", pitch: 660, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 7, fmRatioPreset: "custom" as const, fmDepth: 600, fmWaveform: "square", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 330, detune: 25, drift: 20, level: 70, fmEnabled: true, fmRatio: 5, fmRatioPreset: "custom" as const, fmDepth: 400, fmWaveform: "sawtooth", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
@@ -841,7 +910,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 880, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 4, fmDepth: 300, fmWaveform: "square", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 880, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 4, fmRatioPreset: "4" as const, fmDepth: 300, fmWaveform: "square", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc2: { enabled: true, waveform: "square", pitch: 440, detune: 15, drift: 15, level: 50, ...defaultModOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
@@ -866,8 +935,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "square", pitch: 330, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 7, fmDepth: 800, fmWaveform: "square", ...defaultAmOsc },
-        osc2: { enabled: true, waveform: "sawtooth", pitch: 660, detune: -20, drift: 25, level: 70, fmEnabled: true, fmRatio: 5, fmDepth: 500, fmWaveform: "sawtooth", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "square", pitch: 330, detune: 0, drift: 30, level: 100, fmEnabled: true, fmRatio: 7, fmRatioPreset: "custom" as const, fmDepth: 800, fmWaveform: "square", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 660, detune: -20, drift: 25, level: 70, fmEnabled: true, fmRatio: 5, fmRatioPreset: "custom" as const, fmDepth: 500, fmWaveform: "sawtooth", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc3: { enabled: true, waveform: "noise", pitch: 500, detune: 0, drift: 0, level: 40, ...defaultModOsc },
       },
       envelopes: {
@@ -896,7 +965,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "square", pitch: 200, detune: 0, drift: 50, level: 100, fmEnabled: true, fmRatio: 9, fmDepth: 1000, fmWaveform: "square", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "square", pitch: 200, detune: 0, drift: 50, level: 100, fmEnabled: true, fmRatio: 9, fmRatioPreset: "custom" as const, fmDepth: 1000, fmWaveform: "square", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc2: { enabled: true, waveform: "noise", pitch: 400, detune: 0, drift: 0, level: 60, ...defaultModOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
@@ -923,8 +992,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 40, level: 100, fmEnabled: true, fmRatio: 3, fmDepth: 600, fmWaveform: "sawtooth", amEnabled: true, amRatio: 8, amDepth: 70, amWaveform: "square" },
-        osc2: { enabled: true, waveform: "sawtooth", pitch: 443, detune: 10, drift: 35, level: 80, fmEnabled: true, fmRatio: 4, fmDepth: 500, fmWaveform: "sine", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "sawtooth", pitch: 440, detune: 0, drift: 40, level: 100, fmEnabled: true, fmRatio: 3, fmRatioPreset: "3" as const, fmDepth: 600, fmWaveform: "sawtooth", fmFeedback: 0, amEnabled: true, amRatio: 8, amDepth: 70, amWaveform: "square", ...defaultPmOsc },
+        osc2: { enabled: true, waveform: "sawtooth", pitch: 443, detune: 10, drift: 35, level: 80, fmEnabled: true, fmRatio: 4, fmRatioPreset: "4" as const, fmDepth: 500, fmWaveform: "sine", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc3: { enabled: true, waveform: "square", pitch: 220, detune: -15, drift: 30, level: 60, ...defaultModOsc },
       },
       envelopes: {
@@ -983,7 +1052,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       ...defaultSynthParameters,
       oscillators: {
         osc1: { enabled: true, waveform: "noise", pitch: 440, detune: 0, drift: 0, level: 100, ...defaultModOsc },
-        osc2: { enabled: true, waveform: "square", pitch: 110, detune: 0, drift: 50, level: 40, fmEnabled: true, fmRatio: 6, fmDepth: 400, fmWaveform: "square", ...defaultAmOsc },
+        osc2: { enabled: true, waveform: "square", pitch: 110, detune: 0, drift: 50, level: 40, fmEnabled: true, fmRatio: 6, fmRatioPreset: "6" as const, fmDepth: 400, fmWaveform: "square", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
       envelopes: {
@@ -1137,7 +1206,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     parameters: {
       ...defaultSynthParameters,
       oscillators: {
-        osc1: { enabled: true, waveform: "square", pitch: 150, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 3, fmDepth: 200, fmWaveform: "sine", ...defaultAmOsc },
+        osc1: { enabled: true, waveform: "square", pitch: 150, detune: 0, drift: 20, level: 100, fmEnabled: true, fmRatio: 3, fmRatioPreset: "3" as const, fmDepth: 200, fmWaveform: "sine", fmFeedback: 0, ...defaultAmOsc, ...defaultPmOsc },
         osc2: { enabled: true, waveform: "noise", pitch: 440, detune: 0, drift: 0, level: 40, ...defaultModOsc },
         osc3: { enabled: false, waveform: "sine", pitch: 220, detune: 0, drift: 0, level: 30, ...defaultModOsc },
       },
