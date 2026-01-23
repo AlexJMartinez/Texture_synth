@@ -14,6 +14,31 @@ export type FilterType = z.infer<typeof FilterType>;
 export const EnvelopeTarget = z.enum(["amplitude", "filter", "pitch", "osc1", "osc2", "osc3"]);
 export type EnvelopeTarget = z.infer<typeof EnvelopeTarget>;
 
+const FilterEnvelopeSchema = z.object({
+  enabled: z.boolean(),
+  attack: z.number().min(0).max(2000),
+  hold: z.number().min(0).max(2000),
+  decay: z.number().min(0).max(5000),
+  curve: EnvelopeCurve,
+  amount: z.number().min(-100).max(100),
+});
+
+const PitchEnvelopeSchema = z.object({
+  enabled: z.boolean(),
+  attack: z.number().min(0).max(2000),
+  hold: z.number().min(0).max(2000),
+  decay: z.number().min(0).max(5000),
+  curve: EnvelopeCurve,
+  amount: z.number().min(-100).max(100),
+});
+
+const AmpEnvelopeSchema = z.object({
+  attack: z.number().min(0).max(2000),
+  hold: z.number().min(0).max(2000),
+  decay: z.number().min(0).max(5000),
+  curve: EnvelopeCurve,
+});
+
 export const ModRatioPreset = z.enum(["0.5", "1", "2", "3", "4", "6", "8", "custom"]);
 export type ModRatioPreset = z.infer<typeof ModRatioPreset>;
 

@@ -11,6 +11,7 @@ interface KnobProps {
   logarithmic?: boolean;
   size?: "xs" | "sm" | "md" | "lg";
   accentColor?: "primary" | "accent";
+  showValueOnHover?: boolean;
   "data-testid"?: string;
 }
 
@@ -25,10 +26,12 @@ export function Knob({
   logarithmic = false,
   size = "md",
   accentColor = "primary",
+  showValueOnHover = true,
   "data-testid": testId,
 }: KnobProps) {
   const knobRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [isHovering, setIsHovering] = useState(false);
   const startY = useRef(0);
   const startValue = useRef(0);
 
@@ -117,8 +120,15 @@ export function Knob({
     ? "bg-accent shadow-[0_0_6px_hsl(var(--accent)/0.5)]"
     : "bg-primary shadow-[0_0_6px_hsl(var(--primary)/0.5)]";
 
+  const showValue = showValueOnHover && (isDragging || isHovering);
+
   return (
-    <div className="flex flex-col items-center gap-1.5" data-testid={testId || `knob-${label.toLowerCase().replace(/\s/g, '-')}`}>
+    <div 
+      className="flex flex-col items-center gap-0.5 flex-1 min-w-0" 
+      data-testid={testId || `knob-${label.toLowerCase().replace(/\s/g, '-')}`}
+      onMouseEnter={() => setIsHovering(true)}
+      onMouseLeave={() => setIsHovering(false)}
+    >
       <div
         ref={knobRef}
         className={`relative ${sizeClasses[size]} rounded-full cursor-pointer select-none transition-transform ${isDragging ? 'scale-105' : ''}`}
@@ -166,10 +176,18 @@ export function Knob({
           />
         </svg>
       </div>
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xs font-mono text-foreground/80">
-        {displayValue}{unit}
-      </span>
+      <span className="text-[10px] font-medium text-muted-foreground truncate max-w-full">{label}</span>
+      <div className="h-3 flex items-center justify-center">
+        {showValue ? (
+          <span className="text-[10px] font-mono text-primary animate-in fade-in duration-150">
+            {displayValue}{unit}
+          </span>
+        ) : (
+          <span className="text-[10px] font-mono text-foreground/40">
+            {displayValue}{unit}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

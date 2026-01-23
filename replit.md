@@ -37,12 +37,11 @@ A professional web-based one-shot synthesizer built with React and Tone.js. Crea
 - **Additive Synthesis**: 8 harmonic partials with individual levels, spread, and decay slope
 - **Granular Synthesis**: Grain clouds with density, size, pitch, spray, scatter, and texture (noise/sine/saw/click)
 
-### 3-Envelope System with Routing
+### 3-Envelope System (Hard-Wired Routing)
 - Attack/Hold/Decay (AHD) envelopes with linear, exponential, and logarithmic curves
-- ENV1: Primary amplitude envelope
-- ENV2/ENV3: Assignable modulation envelopes with routing targets:
-  - Amplitude, Filter, Pitch, OSC1, OSC2, OSC3
-- Modulation amount control (0-100%)
+- **Filter Env (env1)**: Modulates filter cutoff with depth/direction control (-100% to +100%)
+- **Pitch Env (env2)**: Modulates pitch of all 3 oscillators with drop amount control
+- **Amp Env (env3)**: Controls final gain, always active (hard-wired)
 
 ### Advanced Filters (9 types)
 - Standard: Low-pass, high-pass, band-pass

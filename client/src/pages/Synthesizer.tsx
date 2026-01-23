@@ -218,14 +218,12 @@ export default function Synthesizer() {
         masterGain.connect(filter);
         lastNode = filter;
         
-        const filterEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
-          .filter(e => e.enabled && e.target === "filter");
-        
-        for (const env of filterEnvs) {
-          const attackEnd = now + env.attack / 1000;
-          const holdEnd = attackEnd + env.hold / 1000;
-          const decayEnd = holdEnd + env.decay / 1000;
-          const modAmount = (env.amount / 100) * (params.filter.frequency * 2);
+        const filterEnv = params.envelopes.env1;
+        if (filterEnv.enabled) {
+          const attackEnd = now + filterEnv.attack / 1000;
+          const holdEnd = attackEnd + filterEnv.hold / 1000;
+          const decayEnd = holdEnd + filterEnv.decay / 1000;
+          const modAmount = (filterEnv.amount / 100) * (params.filter.frequency * 2);
           
           filter.frequency.setValueAtTime(params.filter.frequency, now);
           filter.frequency.linearRampToValueAtTime(
@@ -778,14 +776,12 @@ export default function Synthesizer() {
       }
 
       if (frequencyParam) {
-        const pitchEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
-          .filter(e => e.enabled && e.target === "pitch");
-        
-        for (const env of pitchEnvs) {
-          const attackEnd = now + env.attack / 1000;
-          const holdEnd = attackEnd + env.hold / 1000;
-          const decayEnd = holdEnd + env.decay / 1000;
-          const modAmount = (env.amount / 100) * oscPitchHz * 0.5;
+        const pitchEnv = params.envelopes.env2;
+        if (pitchEnv.enabled) {
+          const attackEnd = now + pitchEnv.attack / 1000;
+          const holdEnd = attackEnd + pitchEnv.hold / 1000;
+          const decayEnd = holdEnd + pitchEnv.decay / 1000;
+          const modAmount = (pitchEnv.amount / 100) * oscPitchHz * 0.5;
           
           frequencyParam.setValueAtTime(oscPitchHz, now);
           frequencyParam.linearRampToValueAtTime(
@@ -812,20 +808,14 @@ export default function Synthesizer() {
         }
       }
 
-      const oscTargetEnvs = [params.envelopes.env1, params.envelopes.env2, params.envelopes.env3]
-        .filter(e => e.enabled && e.target === key);
+      const ampEnv = params.envelopes.env3;
+      const baseLevel = osc.level / 100;
       
-      for (const env of oscTargetEnvs) {
-        const baseLevel = osc.level / 100;
-        const modAmount = (env.amount / 100) * baseLevel;
-        const peakLevel = Math.max(EPS, baseLevel + modAmount);
-        
-        triggerAHD(oscGain.gain, now, {
-          attack: env.attack / 1000,
-          hold: env.hold / 1000,
-          decay: env.decay / 1000
-        }, peakLevel, { startFromCurrent: false });
-      }
+      triggerAHD(oscGain.gain, now, {
+        attack: ampEnv.attack / 1000,
+        hold: ampEnv.hold / 1000,
+        decay: ampEnv.decay / 1000
+      }, baseLevel, { startFromCurrent: false });
 
       finalGain.connect(masterGain);
       
@@ -1030,7 +1020,7 @@ export default function Synthesizer() {
         const slopeMultiplier = 1 - (additive.decaySlope / 100) * (harmonic - 1) / 7;
         const finalLevel = baseLevel * Math.max(0.1, slopeMultiplier) * 0.2;
         
-        const ampEnvForPartial = params.envelopes.env1;
+        const ampEnvForPartial = params.envelopes.env3;
         triggerAHD(partialGain.gain, now, {
           attack: ampEnvForPartial.attack / 1000,
           hold: ampEnvForPartial.hold / 1000,
@@ -1040,8 +1030,7 @@ export default function Synthesizer() {
         partialOsc.connect(partialGain);
         partialGain.connect(masterGain);
         
-        const ampEnv = params.envelopes.env1;
-        const envDuration = (ampEnv.attack + ampEnv.hold + ampEnv.decay) / 1000 + 0.2;
+        const envDuration = (ampEnvForPartial.attack + ampEnvForPartial.hold + ampEnvForPartial.decay) / 1000 + 0.2;
         partialOsc.start(now);
         partialOsc.stop(now + envDuration);
       });
@@ -1051,7 +1040,7 @@ export default function Synthesizer() {
       const granular = params.granular;
       const grainCount = Math.round(granular.density);
       const grainDuration = granular.grainSize / 1000;
-      const totalDuration = (params.envelopes.env1.attack + params.envelopes.env1.hold + params.envelopes.env1.decay) / 1000;
+      const totalDuration = (params.envelopes.env3.attack + params.envelopes.env3.hold + params.envelopes.env3.decay) / 1000;
       const timeSpread = totalDuration * (granular.scatter / 100);
       
       for (let i = 0; i < grainCount; i++) {
@@ -1112,7 +1101,7 @@ export default function Synthesizer() {
       }
     }
 
-    const ampEnv = params.envelopes.env1;
+    const ampEnv = params.envelopes.env3;
     const volume = Math.max(EPS, params.output.volume / 100);
 
     triggerAHD(masterGain.gain, now, {
@@ -1125,8 +1114,8 @@ export default function Synthesizer() {
   }, [createImpulseResponse]);
 
   const getTotalDuration = useCallback((params: SynthParameters): number => {
-    const env1 = params.envelopes.env1;
-    let baseDuration = env1.attack + env1.hold + env1.decay + 100;
+    const ampEnv = params.envelopes.env3;
+    let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay + 100;
     
     if (params.effects.delayEnabled) {
       baseDuration += params.effects.delayTime * 3;
@@ -1362,34 +1351,31 @@ export default function Synthesizer() {
                 </TabsContent>
               </Tabs>
 
-              <Tabs defaultValue="env1" className="w-full">
+              <Tabs defaultValue="filter" className="w-full">
                 <TabsList className="w-full h-7 grid grid-cols-3" data-testid="env-tabs">
-                  <TabsTrigger value="env1" className="text-xs h-6" data-testid="tab-env1">ENV 1</TabsTrigger>
-                  <TabsTrigger value="env2" className="text-xs h-6" data-testid="tab-env2">ENV 2</TabsTrigger>
-                  <TabsTrigger value="env3" className="text-xs h-6" data-testid="tab-env3">ENV 3</TabsTrigger>
+                  <TabsTrigger value="filter" className="text-xs h-6" data-testid="tab-filter-env">Filter</TabsTrigger>
+                  <TabsTrigger value="pitch" className="text-xs h-6" data-testid="tab-pitch-env">Pitch</TabsTrigger>
+                  <TabsTrigger value="amp" className="text-xs h-6" data-testid="tab-amp-env">Amp</TabsTrigger>
                 </TabsList>
-                <TabsContent value="env1" className="mt-1">
+                <TabsContent value="filter" className="mt-1">
                   <EnvelopePanel
                     envelope={params.envelopes.env1}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
-                    title="ENV 1"
-                    index={1}
+                    type="filter"
                   />
                 </TabsContent>
-                <TabsContent value="env2" className="mt-1">
+                <TabsContent value="pitch" className="mt-1">
                   <EnvelopePanel
                     envelope={params.envelopes.env2}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
-                    title="ENV 2"
-                    index={2}
+                    type="pitch"
                   />
                 </TabsContent>
-                <TabsContent value="env3" className="mt-1">
+                <TabsContent value="amp" className="mt-1">
                   <EnvelopePanel
                     envelope={params.envelopes.env3}
                     onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
-                    title="ENV 3"
-                    index={3}
+                    type="amp"
                   />
                 </TabsContent>
               </Tabs>
