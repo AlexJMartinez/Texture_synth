@@ -31,6 +31,18 @@ import { Zap } from "lucide-react";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
 
+// Fix 1: Tail padding for reverb/delay decay (in seconds)
+const TAIL_PAD = 0.15; // 150ms default, increased for heavy FX
+
+// Fix 6: Seeded random number generator for consistent preview/export
+function createSeededRandom(seed: number) {
+  let state = seed;
+  return function() {
+    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    return state / 0x7fffffff;
+  };
+}
+
 function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Array {
   const samples = 8192;
   const curve = new Float32Array(samples);
@@ -136,7 +148,13 @@ export default function Synthesizer() {
     customIRBufferRef.current = buffer;
   }, []);
 
-  const createImpulseResponse = useCallback((ctx: BaseAudioContext, duration: number, decay: number): AudioBuffer => {
+  // Fix 6: Accept seeded random function for deterministic impulse response generation
+  const createImpulseResponse = useCallback((
+    ctx: BaseAudioContext, 
+    duration: number, 
+    decay: number,
+    randomFn: () => number = Math.random
+  ): AudioBuffer => {
     const sampleRate = ctx.sampleRate;
     const length = Math.floor(sampleRate * duration);
     const impulse = ctx.createBuffer(2, length, sampleRate);
@@ -145,7 +163,7 @@ export default function Synthesizer() {
       const channelData = impulse.getChannelData(channel);
       for (let i = 0; i < length; i++) {
         const t = i / sampleRate;
-        channelData[i] = (Math.random() * 2 - 1) * Math.exp(-t / decay);
+        channelData[i] = (randomFn() * 2 - 1) * Math.exp(-t / decay);
       }
     }
     
@@ -196,23 +214,30 @@ export default function Synthesizer() {
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
     duration: number,
-    fadeGain?: GainNode,
+    seed: number = Date.now(),
     sourcesCollector?: AudioScheduledSourceNode[]
-  ): Promise<{ masterGain: GainNode; fadeGain: GainNode }> => {
+  ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
+    
+    // Fix 6: Use seeded random for consistent preview/export
+    const seededRandom = createSeededRandom(seed);
     
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0.0001;
     
-    const outputFadeGain = fadeGain || ctx.createGain();
-    if (!fadeGain) {
-      triggerAHD(outputFadeGain.gain, now, {
-        attack: 0.002,
-        hold: durationSec,
-        decay: 0.002
-      }, 1.0, { startFromCurrent: false });
-    }
+    // Fix 2: Create safety fade gain at the end of the chain
+    const safetyFadeGain = ctx.createGain();
+    safetyFadeGain.gain.value = 1.0;
+    
+    // Fix 2: Schedule safety fade at the end (10ms fade)
+    const safetyFadeTime = 0.01; // 10ms
+    const envelopeEndTime = durationSec - TAIL_PAD; // When envelope ends
+    safetyFadeGain.gain.setValueAtTime(1.0, now + envelopeEndTime);
+    safetyFadeGain.gain.linearRampToValueAtTime(0, now + envelopeEndTime + safetyFadeTime);
+    
+    // Fix 3: Calculate when to stop nodes (after safety fade completes)
+    const stopAt = now + envelopeEndTime + safetyFadeTime + 0.01;
     
     const panNode = ctx.createStereoPanner();
     panNode.pan.value = params.output.pan / 100;
@@ -321,6 +346,14 @@ export default function Synthesizer() {
       lastNode.connect(waveshaper);
       lastNode = waveshaper;
     }
+    
+    // Fix 4: DC blocking highpass filter after distortion (removes clicks from DC offset)
+    const dcBlock = ctx.createBiquadFilter();
+    dcBlock.type = "highpass";
+    dcBlock.frequency.value = 20;
+    dcBlock.Q.value = 0.707;
+    lastNode.connect(dcBlock);
+    lastNode = dcBlock;
 
     const dryGain = ctx.createGain();
     dryGain.gain.value = 1;
@@ -376,7 +409,8 @@ export default function Synthesizer() {
     } else if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
       const convolver = ctx.createConvolver();
       const reverbDuration = 0.5 + (params.effects.reverbSize / 100) * 3;
-      convolver.buffer = createImpulseResponse(ctx, reverbDuration, params.effects.reverbDecay);
+      // Fix 6: Use seeded random for deterministic reverb impulse response
+      convolver.buffer = createImpulseResponse(ctx, reverbDuration, params.effects.reverbDecay, seededRandom);
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = params.effects.reverbMix / 100;
       
@@ -409,8 +443,9 @@ export default function Synthesizer() {
       
       lfo1.start(now);
       lfo2.start(now);
-      lfo1.stop(now + durationSec);
-      lfo2.stop(now + durationSec);
+      // Fix 3: Stop nodes after safety fade completes
+      lfo1.stop(stopAt);
+      lfo2.stop(stopAt);
       
       const chorusWet = ctx.createGain();
       chorusWet.gain.value = params.effects.chorusMix / 100;
@@ -676,10 +711,11 @@ export default function Synthesizer() {
     safetyLimiter.attack.value = 0.0005; // Ultra-fast attack (0.5ms)
     safetyLimiter.release.value = 0.05; // Quick release (50ms)
     
+    // Fix 2: Route through safety fade gain (scheduled fadeout at end)
     outputNode.connect(safetyLimiter);
     safetyLimiter.connect(panNode);
-    panNode.connect(outputFadeGain);
-    outputFadeGain.connect(ctx.destination);
+    panNode.connect(safetyFadeGain);
+    safetyFadeGain.connect(ctx.destination);
 
     const oscConfigs = [
       { osc: params.oscillators.osc1, key: "osc1" },
@@ -702,7 +738,7 @@ export default function Synthesizer() {
         const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const noiseData = noiseBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
-          noiseData[i] = Math.random() * 2 - 1;
+          noiseData[i] = seededRandom() * 2 - 1; // Fix 6: Use seeded random
         }
         const noiseSource = ctx.createBufferSource();
         noiseSource.buffer = noiseBuffer;
@@ -746,7 +782,7 @@ export default function Synthesizer() {
           }
           
           modOsc.start(now);
-          modOsc.stop(now + durationSec);
+          modOsc.stop(stopAt); // Fix 3: Stop after safety fade
         }
 
         if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
@@ -780,7 +816,7 @@ export default function Synthesizer() {
           }
           
           pmModOsc.start(now);
-          pmModOsc.stop(now + durationSec);
+          pmModOsc.stop(stopAt); // Fix 3: Stop after safety fade
         }
 
         oscNode.connect(oscGain);
@@ -809,7 +845,7 @@ export default function Synthesizer() {
         finalGain = amOutputGain;
         
         amModOsc.start(now);
-        amModOsc.stop(now + durationSec);
+        amModOsc.stop(stopAt); // Fix 3: Stop after safety fade
       }
 
       if (frequencyParam) {
@@ -836,12 +872,12 @@ export default function Synthesizer() {
           const driftAmount = osc.drift / 100;
           const driftLfo = ctx.createOscillator();
           const driftGain = ctx.createGain();
-          driftLfo.frequency.value = 2 + Math.random() * 3;
+          driftLfo.frequency.value = 2 + seededRandom() * 3; // Fix 6: Use seeded random
           driftGain.gain.value = oscPitchHz * 0.02 * driftAmount;
           driftLfo.connect(driftGain);
           driftGain.connect(frequencyParam);
           driftLfo.start(now);
-          driftLfo.stop(now + durationSec);
+          driftLfo.stop(stopAt); // Fix 3: Stop after safety fade
         }
       }
 
@@ -857,7 +893,7 @@ export default function Synthesizer() {
       finalGain.connect(masterGain);
       
       sourceNode.start(now);
-      sourceNode.stop(now + durationSec);
+      sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
       if (sourcesCollector) {
         sourcesCollector.push(sourceNode);
       }
@@ -870,14 +906,15 @@ export default function Synthesizer() {
       const clickBuffer = ctx.createBuffer(1, clickBufferLength, ctx.sampleRate);
       const clickData = clickBuffer.getChannelData(0);
       
+      // Fix 6: Use seeded random for click layer noise
       if (click.noiseType === "white") {
         for (let i = 0; i < clickBufferLength; i++) {
-          clickData[i] = Math.random() * 2 - 1;
+          clickData[i] = seededRandom() * 2 - 1;
         }
       } else if (click.noiseType === "pink") {
         let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
         for (let i = 0; i < clickBufferLength; i++) {
-          const white = Math.random() * 2 - 1;
+          const white = seededRandom() * 2 - 1;
           b0 = 0.99886 * b0 + white * 0.0555179;
           b1 = 0.99332 * b1 + white * 0.0750759;
           b2 = 0.96900 * b2 + white * 0.1538520;
@@ -890,7 +927,7 @@ export default function Synthesizer() {
       } else if (click.noiseType === "brown") {
         let lastOut = 0;
         for (let i = 0; i < clickBufferLength; i++) {
-          const white = Math.random() * 2 - 1;
+          const white = seededRandom() * 2 - 1;
           lastOut = (lastOut + (0.02 * white)) / 1.02;
           clickData[i] = lastOut * 3.5;
         }
@@ -1028,7 +1065,7 @@ export default function Synthesizer() {
         const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
         const noiseData = noiseBuffer.getChannelData(0);
         for (let i = 0; i < noiseData.length; i++) {
-          noiseData[i] = (Math.random() * 2 - 1);
+          noiseData[i] = (seededRandom() * 2 - 1); // Fix 6: Use seeded random
         }
         
         const noiseSource = ctx.createBufferSource();
@@ -1117,10 +1154,11 @@ export default function Synthesizer() {
       const timeSpread = totalDuration * (granular.scatter / 100);
       
       for (let i = 0; i < grainCount; i++) {
-        const grainOffset = (i / grainCount) * totalDuration + (Math.random() - 0.5) * timeSpread;
+        // Fix 6: Use seeded random for granular timing and pitch
+        const grainOffset = (i / grainCount) * totalDuration + (seededRandom() - 0.5) * timeSpread;
         const grainStart = Math.max(0, now + grainOffset);
         
-        const pitchVariation = 1 + (Math.random() - 0.5) * 2 * (granular.pitchSpray / 100);
+        const pitchVariation = 1 + (seededRandom() - 0.5) * 2 * (granular.pitchSpray / 100);
         const grainPitch = granular.pitch * pitchVariation;
         
         const grainGain = ctx.createGain();
@@ -1135,7 +1173,7 @@ export default function Synthesizer() {
           const noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * noiseLength), ctx.sampleRate);
           const noiseData = noiseBuffer.getChannelData(0);
           for (let j = 0; j < noiseData.length; j++) {
-            noiseData[j] = (Math.random() * 2 - 1) * 0.8;
+            noiseData[j] = (seededRandom() * 2 - 1) * 0.8; // Fix 6: Use seeded random
           }
           const noiseSource = ctx.createBufferSource();
           noiseSource.buffer = noiseBuffer;
@@ -1183,12 +1221,13 @@ export default function Synthesizer() {
       decay: ampEnv.decay / 1000
     }, volume, { startFromCurrent: false });
 
-    return { masterGain, fadeGain: outputFadeGain };
+    return { masterGain, safetyFadeGain };
   }, [createImpulseResponse]);
 
   const getTotalDuration = useCallback((params: SynthParameters): number => {
     const ampEnv = params.envelopes.env3;
-    let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay + 100;
+    // Fix 1: Add tail padding for reverb/delay decay
+    let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay + (TAIL_PAD * 1000);
     
     if (params.effects.delayEnabled) {
       baseDuration += params.effects.delayTime * 3;
@@ -1239,51 +1278,50 @@ export default function Synthesizer() {
 
     const totalDuration = getTotalDuration(params);
     
-    // Create new fade gain for this sound
-    const fadeGain = ctx.createGain();
-    fadeGain.gain.value = EPS;
-    triggerAHD(fadeGain.gain, now + 0.003, {
-      attack: 0.005,
-      hold: getTotalDuration(params) / 1000,
-      decay: 0.005
-    }, 1.0, { startFromCurrent: false });
+    // Fix 5 & 6: Use same OfflineAudioContext for preview and export with locked seed
+    const seed = Date.now();
+    const sampleRate = 44100;
+    const durationInSeconds = totalDuration / 1000;
     
-    // Track new sources
-    const newSources: AudioScheduledSourceNode[] = [];
+    // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
+    const buffer = await Tone.Offline(async (offlineCtx) => {
+      const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+      await generateSound(rawCtx, params, totalDuration, seed);
+    }, durationInSeconds);
     
-    // Play through live context with source tracking
-    const result = await generateSound(ctx, params, totalDuration, fadeGain, newSources);
-    
-    // Store references for next retrigger
-    activeFadeGainRef.current = result.fadeGain;
-    activeSourcesRef.current = newSources;
+    // Convert Tone.ToneAudioBuffer to AudioBuffer
+    const renderedBuffer = buffer.get() as AudioBuffer;
+    if (renderedBuffer) {
+      // Apply bitcrusher effect (post-process)
+      if (params.effects.bitcrusher < 16) {
+        applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
+      }
+      // Apply additional safety fadeout to prevent any remaining pops
+      applySafetyFadeout(renderedBuffer, 5);
+      
+      // Store buffer for export and waveform display
+      setAudioBuffer(renderedBuffer);
+      
+      // Fix 5: Play the rendered buffer (preview = export)
+      const playbackGain = ctx.createGain();
+      playbackGain.gain.value = 1.0;
+      
+      const bufferSource = ctx.createBufferSource();
+      bufferSource.buffer = renderedBuffer;
+      bufferSource.connect(playbackGain);
+      playbackGain.connect(ctx.destination);
+      bufferSource.start(now + 0.003); // Small delay for fadeout of previous sound
+      
+      // Track for retrigger handling
+      activeSourcesRef.current.push(bufferSource);
+      activeFadeGainRef.current = playbackGain;
+    }
 
     playTimeoutRef.current = setTimeout(() => {
       setIsPlaying(false);
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-
-    // Use Tone.Offline for rendering the waveform display
-    const sampleRate = 44100;
-    const durationInSeconds = totalDuration / 1000;
-    
-    const buffer = await Tone.Offline(async (offlineCtx) => {
-      // Get the raw context for our generateSound function
-      const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-      await generateSound(rawCtx, params, totalDuration);
-    }, durationInSeconds);
-    
-    // Convert Tone.ToneAudioBuffer to AudioBuffer for waveform display
-    const audioBuffer = buffer.get() as AudioBuffer;
-    if (audioBuffer) {
-      if (params.effects.bitcrusher < 16) {
-        applyBitcrusher(audioBuffer, params.effects.bitcrusher);
-      }
-      // Apply safety fadeout to prevent pops at end of buffer
-      applySafetyFadeout(audioBuffer, 5);
-      setAudioBuffer(audioBuffer);
-    }
   }, [params, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
