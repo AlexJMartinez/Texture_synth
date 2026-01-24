@@ -1277,45 +1277,53 @@ export default function Synthesizer() {
   }, [params, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
+    if (!audioBuffer) {
+      console.error("No audio to export - trigger a sound first");
+      return;
+    }
+    
     setIsExporting(true);
 
     try {
-      await Tone.start();
-      
       const targetSampleRate = parseInt(exportSettings.sampleRate);
       const channels = exportSettings.channels === "stereo" ? 2 : 1;
       const tailExtension = exportSettings.tailExtension;
       
-      // Calculate total duration including tail for reverb/delay decay
-      const baseDuration = getTotalDuration(params);
-      const totalDuration = baseDuration + tailExtension;
-      const durationInSeconds = totalDuration / 1000;
+      // Use the cached preview buffer (what you hear is what you export)
+      // Create a copy with optional tail extension (silence for decay padding)
+      const tailSamples = Math.floor((tailExtension / 1000) * audioBuffer.sampleRate);
+      const totalSamples = audioBuffer.length + tailSamples;
       
-      // Re-render with tail extension to capture reverb/delay decay
-      const toneBuffer = await Tone.Offline(async (offlineCtx) => {
-        const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration);
-      }, durationInSeconds);
+      // Create a new buffer with the audio data plus tail extension
+      const workingCtx = new OfflineAudioContext(
+        audioBuffer.numberOfChannels,
+        totalSamples,
+        audioBuffer.sampleRate
+      );
+      const workingBuffer = workingCtx.createBuffer(
+        audioBuffer.numberOfChannels,
+        totalSamples,
+        audioBuffer.sampleRate
+      );
       
-      let renderedBuffer = toneBuffer.get() as AudioBuffer;
-      if (!renderedBuffer) {
-        throw new Error("Failed to render audio buffer");
-      }
-
-      if (params.effects.bitcrusher < 16) {
-        applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
+      // Copy audio data from cached buffer
+      for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+        const sourceData = audioBuffer.getChannelData(ch);
+        const destData = workingBuffer.getChannelData(ch);
+        destData.set(sourceData, 0);
+        // Tail extension is already zero-filled
       }
 
       // Handle sample rate conversion if needed
-      let finalBuffer = renderedBuffer;
-      if (targetSampleRate !== renderedBuffer.sampleRate) {
+      let finalBuffer: AudioBuffer = workingBuffer;
+      if (targetSampleRate !== workingBuffer.sampleRate) {
         const resampleCtx = new OfflineAudioContext(
-          renderedBuffer.numberOfChannels,
-          Math.ceil(renderedBuffer.length * targetSampleRate / renderedBuffer.sampleRate),
+          workingBuffer.numberOfChannels,
+          Math.ceil(workingBuffer.length * targetSampleRate / workingBuffer.sampleRate),
           targetSampleRate
         );
         const bufferSource = resampleCtx.createBufferSource();
-        bufferSource.buffer = renderedBuffer;
+        bufferSource.buffer = workingBuffer;
         bufferSource.connect(resampleCtx.destination);
         bufferSource.start();
         finalBuffer = await resampleCtx.startRendering();
@@ -1379,7 +1387,7 @@ export default function Synthesizer() {
     } finally {
       setIsExporting(false);
     }
-  }, [params, exportSettings, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
+  }, [audioBuffer, exportSettings, applySafetyFadeout]);
 
   const clearExportResult = useCallback(() => {
     if (exportResult?.url) {
