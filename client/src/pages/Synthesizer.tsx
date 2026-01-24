@@ -666,8 +666,18 @@ export default function Synthesizer() {
       outputNode.connect(limiter);
       outputNode = limiter;
     }
-
-    outputNode.connect(panNode);
+    
+    // Always-on safety limiter to prevent clipping in exports
+    // This ensures exported audio matches browser playback (which has built-in protection)
+    const safetyLimiter = ctx.createDynamicsCompressor();
+    safetyLimiter.threshold.value = -0.5; // Just below 0dB to catch peaks
+    safetyLimiter.knee.value = 0.5; // Soft knee for transparent limiting
+    safetyLimiter.ratio.value = 20; // Hard limiting
+    safetyLimiter.attack.value = 0.0005; // Ultra-fast attack (0.5ms)
+    safetyLimiter.release.value = 0.05; // Quick release (50ms)
+    
+    outputNode.connect(safetyLimiter);
+    safetyLimiter.connect(panNode);
     panNode.connect(outputFadeGain);
     outputFadeGain.connect(ctx.destination);
 
@@ -1344,19 +1354,24 @@ export default function Synthesizer() {
         finalBuffer = monoBuffer;
       }
       
-      // Normalize if requested
-      if (exportSettings.normalize) {
+      // Check for peaks exceeding 0dB (clipping territory)
+      let peakValue = 0;
+      for (let channel = 0; channel < finalBuffer.numberOfChannels; channel++) {
+        const data = finalBuffer.getChannelData(channel);
+        for (let i = 0; i < data.length; i++) {
+          peakValue = Math.max(peakValue, Math.abs(data[i]));
+        }
+      }
+      
+      // Always normalize if peaks exceed 1.0 (would clip in WAV) or if requested
+      const needsNormalization = peakValue > 1.0 || exportSettings.normalize;
+      if (needsNormalization && peakValue > 0) {
+        const targetPeak = 0.95;
+        const normalizeRatio = targetPeak / peakValue;
         for (let channel = 0; channel < finalBuffer.numberOfChannels; channel++) {
           const data = finalBuffer.getChannelData(channel);
-          let max = 0;
           for (let i = 0; i < data.length; i++) {
-            max = Math.max(max, Math.abs(data[i]));
-          }
-          if (max > 0) {
-            const normalizeRatio = 0.95 / max;
-            for (let i = 0; i < data.length; i++) {
-              data[i] *= normalizeRatio;
-            }
+            data[i] *= normalizeRatio;
           }
         }
       }
