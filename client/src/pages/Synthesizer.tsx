@@ -1472,17 +1472,27 @@ export default function Synthesizer() {
   return (
     <div className="h-screen bg-background p-2 overflow-hidden flex flex-col">
       <div className="max-w-5xl mx-auto w-full flex flex-col flex-1 min-h-0">
-        {/* Header with trigger, waveform, and controls */}
-        <div className="flex items-center gap-3 mb-3 shrink-0">
-          <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
+        {/* Header with trigger and controls */}
+        <div className="flex flex-col gap-2 mb-3 shrink-0">
+          {/* Controls row */}
+          <div className="flex items-center gap-3">
+            <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
+            {/* Waveform inline on desktop */}
+            <WaveformDisplay3D 
+              audioBuffer={audioBuffer} 
+              isPlaying={isPlaying}
+              className="h-14 flex-1 min-w-0 hidden md:block"
+            />
+            <RandomizeControls
+              currentParams={params}
+              onRandomize={setParams}
+            />
+          </div>
+          {/* Waveform full-width on mobile only */}
           <WaveformDisplay3D 
             audioBuffer={audioBuffer} 
             isPlaying={isPlaying}
-            className="h-14 flex-1 min-w-0"
-          />
-          <RandomizeControls
-            currentParams={params}
-            onRandomize={setParams}
+            className="h-16 w-full md:hidden"
           />
         </div>
 
