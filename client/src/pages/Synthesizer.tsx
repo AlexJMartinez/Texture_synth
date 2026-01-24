@@ -166,6 +166,32 @@ export default function Synthesizer() {
     }
   }, []);
 
+  // Apply a safety fadeout at the end of the buffer to prevent pops/clicks
+  const applySafetyFadeout = useCallback((buffer: AudioBuffer, fadeMs: number = 5): void => {
+    const fadeOutSamples = Math.max(2, Math.min(
+      Math.floor((fadeMs / 1000) * buffer.sampleRate),
+      Math.floor(buffer.length * 0.1) // Max 10% of buffer length
+    ));
+    
+    if (buffer.length < 2) return;
+    
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const data = buffer.getChannelData(channel);
+      const startIndex = Math.max(0, buffer.length - fadeOutSamples);
+      const actualFadeSamples = buffer.length - startIndex;
+      
+      for (let i = 0; i < actualFadeSamples; i++) {
+        // Use (i+1)/actualFadeSamples to reach exactly 0 at the last sample
+        const t = (i + 1) / actualFadeSamples;
+        const gain = Math.cos(t * Math.PI * 0.5); // Cosine curve from ~1 to 0
+        data[startIndex + i] *= gain;
+      }
+      
+      // Force last sample to exactly zero to prevent any residual click
+      data[buffer.length - 1] = 0;
+    }
+  }, []);
+
   const generateSound = useCallback(async (
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
@@ -1240,13 +1266,15 @@ export default function Synthesizer() {
     
     // Convert Tone.ToneAudioBuffer to AudioBuffer for waveform display
     const audioBuffer = buffer.get() as AudioBuffer;
-    if (audioBuffer && params.effects.bitcrusher < 16) {
-      applyBitcrusher(audioBuffer, params.effects.bitcrusher);
-    }
     if (audioBuffer) {
+      if (params.effects.bitcrusher < 16) {
+        applyBitcrusher(audioBuffer, params.effects.bitcrusher);
+      }
+      // Apply safety fadeout to prevent pops at end of buffer
+      applySafetyFadeout(audioBuffer, 5);
       setAudioBuffer(audioBuffer);
     }
-  }, [params, generateSound, applyBitcrusher, getTotalDuration]);
+  }, [params, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     setIsExporting(true);
@@ -1324,6 +1352,9 @@ export default function Synthesizer() {
           }
         }
       }
+      
+      // Apply safety fadeout AFTER all processing to guarantee zero endpoint
+      applySafetyFadeout(finalBuffer, 5);
 
       const wavBlob = audioBufferToWav(finalBuffer);
       const filename = `oneshot-${Date.now()}.wav`;
@@ -1348,7 +1379,7 @@ export default function Synthesizer() {
     } finally {
       setIsExporting(false);
     }
-  }, [params, exportSettings, generateSound, applyBitcrusher, getTotalDuration]);
+  }, [params, exportSettings, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
 
   const clearExportResult = useCallback(() => {
     if (exportResult?.url) {
