@@ -9,88 +9,96 @@ interface WaveformDisplay3DProps {
 export function WaveformDisplay3D({ audioBuffer, isPlaying, className = "" }: WaveformDisplay3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
-  const offsetRef = useRef(0);
+  const progressRef = useRef(0);
 
-  const drawTerrain = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number, data: Float32Array | null, offset: number) => {
+  const drawWaveform = useCallback((
+    ctx: CanvasRenderingContext2D, 
+    width: number, 
+    height: number, 
+    data: Float32Array | null,
+    progress: number
+  ) => {
     ctx.clearRect(0, 0, width, height);
     
-    const rows = 24;
-    const cols = 80;
-    const perspective = 0.6;
-    const baseY = height * 0.85;
-    const terrainHeight = height * 0.7;
-    const rowSpacing = terrainHeight / rows;
+    const barWidth = 2;
+    const gap = 1;
+    const totalBarWidth = barWidth + gap;
+    const numBars = Math.floor(width / totalBarWidth);
+    const centerY = height / 2;
     
-    const primaryColor = isPlaying ? [139, 92, 246] : [124, 82, 220];
-    const accentColor = [20, 184, 166];
+    // Pastel green colors
+    const waveColor = "hsl(145, 45%, 55%)";
+    const progressColor = "hsl(145, 50%, 65%)";
+    const dimColor = "hsl(145, 25%, 25%)";
     
-    for (let row = rows - 1; row >= 0; row--) {
-      const rowProgress = row / rows;
-      const yOffset = baseY - row * rowSpacing * perspective;
-      const xScale = 1 - rowProgress * 0.3;
-      const xOffset = (width * (1 - xScale)) / 2;
-      const segmentWidth = (width * xScale) / cols;
-      
-      const alpha = 0.3 + rowProgress * 0.7;
-      const depthFade = 1 - rowProgress * 0.5;
-      
-      ctx.beginPath();
-      
-      for (let col = 0; col <= cols; col++) {
-        const x = xOffset + col * segmentWidth;
-        let amplitude = 0;
+    if (data && data.length > 0) {
+      // Draw waveform bars
+      for (let i = 0; i < numBars; i++) {
+        const dataIndex = Math.floor((i / numBars) * data.length);
+        const amplitude = Math.abs(data[dataIndex] || 0);
         
-        if (data) {
-          const dataIndex = Math.floor(((col + offset) % cols) / cols * data.length);
-          const nextIndex = Math.min(dataIndex + 1, data.length - 1);
-          const t = (col / cols * data.length) % 1;
-          amplitude = data[dataIndex] * (1 - t) + data[nextIndex] * t;
-          amplitude = Math.abs(amplitude) * terrainHeight * 0.4 * depthFade;
-          
-          const waveOffset = Math.sin((col / cols + row / rows * 2 + offset * 0.02) * Math.PI * 4) * 3;
-          amplitude += waveOffset * depthFade;
+        // Scale amplitude for visibility (min 2px, max 90% of half height)
+        const maxBarHeight = (height / 2) * 0.9;
+        const barHeight = Math.max(2, amplitude * maxBarHeight * 3);
+        
+        const x = i * totalBarWidth;
+        const barProgress = i / numBars;
+        
+        // Color based on playback progress
+        if (isPlaying && barProgress <= progress) {
+          ctx.fillStyle = progressColor;
         } else {
-          amplitude = Math.sin((col / cols + row / rows + offset * 0.01) * Math.PI * 4) * 8 * depthFade;
+          ctx.fillStyle = waveColor;
         }
         
-        const y = yOffset - amplitude;
-        
-        if (col === 0) {
-          ctx.moveTo(x, y);
-        } else {
-          ctx.lineTo(x, y);
-        }
+        // Draw mirrored bar (top and bottom)
+        ctx.beginPath();
+        ctx.roundRect(x, centerY - barHeight, barWidth, barHeight, 1);
+        ctx.roundRect(x, centerY, barWidth, barHeight, 1);
+        ctx.fill();
       }
       
-      ctx.lineTo(xOffset + cols * segmentWidth, baseY);
-      ctx.lineTo(xOffset, baseY);
-      ctx.closePath();
-      
-      const r = Math.round(primaryColor[0] * (1 - rowProgress * 0.3) + accentColor[0] * rowProgress * 0.3);
-      const g = Math.round(primaryColor[1] * (1 - rowProgress * 0.3) + accentColor[1] * rowProgress * 0.3);
-      const b = Math.round(primaryColor[2] * (1 - rowProgress * 0.3) + accentColor[2] * rowProgress * 0.3);
-      
-      const gradient = ctx.createLinearGradient(0, yOffset - terrainHeight * 0.4, 0, baseY);
-      gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha * 0.9})`);
-      gradient.addColorStop(1, `rgba(${r * 0.3}, ${g * 0.3}, ${b * 0.3}, ${alpha * 0.5})`);
-      
-      ctx.fillStyle = gradient;
-      ctx.fill();
-      
-      ctx.strokeStyle = `rgba(${r + 40}, ${g + 40}, ${b + 40}, ${alpha * 0.6})`;
-      ctx.lineWidth = 0.5;
+      // Draw center line
+      ctx.strokeStyle = dimColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
       ctx.stroke();
-    }
-    
-    if (isPlaying) {
-      const glowGradient = ctx.createRadialGradient(
-        width / 2, height * 0.5, 0,
-        width / 2, height * 0.5, width * 0.5
-      );
-      glowGradient.addColorStop(0, 'rgba(139, 92, 246, 0.15)');
-      glowGradient.addColorStop(1, 'transparent');
-      ctx.fillStyle = glowGradient;
-      ctx.fillRect(0, 0, width, height);
+      
+      // Draw playhead if playing
+      if (isPlaying && progress > 0 && progress < 1) {
+        const playheadX = progress * width;
+        ctx.strokeStyle = "hsl(145, 60%, 70%)";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(playheadX, 0);
+        ctx.lineTo(playheadX, height);
+        ctx.stroke();
+      }
+    } else {
+      // Draw idle state - subtle animated bars
+      const time = Date.now() / 1000;
+      for (let i = 0; i < numBars; i++) {
+        const x = i * totalBarWidth;
+        const phase = (i / numBars) * Math.PI * 4 + time * 0.5;
+        const amplitude = Math.sin(phase) * 0.3 + 0.3;
+        const barHeight = 4 + amplitude * 12;
+        
+        ctx.fillStyle = dimColor;
+        ctx.beginPath();
+        ctx.roundRect(x, centerY - barHeight, barWidth, barHeight, 1);
+        ctx.roundRect(x, centerY, barWidth, barHeight, 1);
+        ctx.fill();
+      }
+      
+      // Center line
+      ctx.strokeStyle = "hsl(145, 15%, 18%)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.stroke();
     }
   }, [isPlaying]);
 
@@ -130,24 +138,35 @@ export function WaveformDisplay3D({ audioBuffer, isPlaying, className = "" }: Wa
     let data: Float32Array | null = null;
     if (audioBuffer) {
       const channelData = audioBuffer.getChannelData(0);
-      const samples = Math.min(256, channelData.length);
+      const samples = Math.min(512, channelData.length);
       data = new Float32Array(samples);
       const step = Math.max(1, Math.floor(channelData.length / samples));
       for (let i = 0; i < samples; i++) {
-        let sum = 0;
+        let max = 0;
         const start = Math.min(i * step, channelData.length - 1);
         const count = Math.min(step, channelData.length - start);
         for (let j = 0; j < count; j++) {
-          sum += Math.abs(channelData[start + j] || 0);
+          const val = Math.abs(channelData[start + j] || 0);
+          if (val > max) max = val;
         }
-        data[i] = count > 0 ? sum / count : 0;
+        data[i] = max;
       }
     }
     
+    const startTime = Date.now();
+    const duration = audioBuffer ? audioBuffer.duration * 1000 : 2000;
+    
     const animate = () => {
       const rect = canvas.getBoundingClientRect();
-      offsetRef.current += isPlaying ? 0.5 : 0.1;
-      drawTerrain(ctx, rect.width, rect.height, data, offsetRef.current);
+      
+      if (isPlaying && audioBuffer) {
+        const elapsed = Date.now() - startTime;
+        progressRef.current = Math.min(elapsed / duration, 1);
+      } else if (!isPlaying) {
+        progressRef.current = 0;
+      }
+      
+      drawWaveform(ctx, rect.width, rect.height, data, progressRef.current);
       animationRef.current = requestAnimationFrame(animate);
     };
     
@@ -158,14 +177,14 @@ export function WaveformDisplay3D({ audioBuffer, isPlaying, className = "" }: Wa
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [audioBuffer, isPlaying, drawTerrain]);
+  }, [audioBuffer, isPlaying, drawWaveform]);
 
   return (
     <div 
-      className={`relative w-full rounded-md overflow-hidden ${className}`}
+      className={`relative w-full rounded-lg overflow-hidden ${className}`}
       style={{
-        background: 'linear-gradient(to bottom, hsl(var(--card)), hsl(var(--background)))',
-        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.4)',
+        background: 'hsl(150, 8%, 6%)',
+        border: '1px solid hsl(150, 6%, 12%)',
       }}
       data-testid="waveform-display"
     >
@@ -175,7 +194,7 @@ export function WaveformDisplay3D({ audioBuffer, isPlaying, className = "" }: Wa
       />
       {!audioBuffer && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-muted-foreground text-xs opacity-50">Trigger to preview</span>
+          <span className="text-muted-foreground text-xs opacity-40">Trigger to preview</span>
         </div>
       )}
     </div>

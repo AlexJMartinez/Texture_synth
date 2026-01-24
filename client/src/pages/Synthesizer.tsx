@@ -1471,99 +1471,117 @@ export default function Synthesizer() {
   }, [handleTrigger]);
 
   return (
-    <div className="h-screen bg-background p-1 overflow-hidden flex flex-col">
-      <div className="max-w-7xl mx-auto w-full flex flex-col flex-1 min-h-0">
-        <div className="flex flex-col md:flex-row md:items-center gap-1 mb-1 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <div className="flex items-center gap-1">
-              <div className="w-4 h-4 rounded bg-primary/20 flex items-center justify-center">
-                <Zap className="w-2.5 h-2.5 text-primary" />
-              </div>
-              <h1 className="text-xs font-bold tracking-tight text-foreground">OneShot</h1>
+    <div className="h-screen bg-background p-2 overflow-hidden flex flex-col">
+      <div className="max-w-5xl mx-auto w-full flex flex-col flex-1 min-h-0">
+        {/* Header with branding, trigger, and waveform */}
+        <div className="flex items-center gap-3 mb-3 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-primary/15 flex items-center justify-center border border-primary/20">
+              <Zap className="w-3.5 h-3.5 text-primary" />
             </div>
-            <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="sm" />
-            <RandomizeControls
-              currentParams={params}
-              onRandomize={setParams}
-            />
+            <h1 className="text-sm font-semibold tracking-tight text-foreground">OneShot</h1>
           </div>
+          <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
           <WaveformDisplay3D 
             audioBuffer={audioBuffer} 
             isPlaying={isPlaying}
-            className="h-12 md:h-10 flex-1 min-w-0 md:min-w-[200px]"
+            className="h-14 flex-1 min-w-0"
+          />
+          <RandomizeControls
+            currentParams={params}
+            onRandomize={setParams}
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-1 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
-          <div className="lg:col-span-10 space-y-1">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-              <Tabs defaultValue="osc1" className="w-full">
-                <TabsList className="w-full h-6 grid grid-cols-3" data-testid="osc-tabs">
-                  <TabsTrigger value="osc1" className="text-[10px] h-5" data-testid="tab-osc1">OSC 1</TabsTrigger>
-                  <TabsTrigger value="osc2" className="text-[10px] h-5" data-testid="tab-osc2">OSC 2</TabsTrigger>
-                  <TabsTrigger value="osc3" className="text-[10px] h-5" data-testid="tab-osc3">OSC 3</TabsTrigger>
-                </TabsList>
-                <TabsContent value="osc1" className="mt-0.5">
-                  <OscillatorPanel
-                    oscillator={params.oscillators.osc1}
-                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
-                    title="OSC 1"
-                    index={1}
-                  />
-                </TabsContent>
-                <TabsContent value="osc2" className="mt-0.5">
-                  <OscillatorPanel
-                    oscillator={params.oscillators.osc2}
-                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
-                    title="OSC 2"
-                    index={2}
-                  />
-                </TabsContent>
-                <TabsContent value="osc3" className="mt-0.5">
-                  <OscillatorPanel
-                    oscillator={params.oscillators.osc3}
-                    onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
-                    title="OSC 3"
-                    index={3}
-                  />
-                </TabsContent>
-              </Tabs>
+        {/* Main tabbed interface */}
+        <Tabs defaultValue="sound" className="flex-1 min-h-0 flex flex-col">
+          <TabsList className="w-full h-8 grid grid-cols-5 mb-2 bg-card border border-border" data-testid="main-tabs">
+            <TabsTrigger value="sound" className="text-xs" data-testid="tab-sound">Sound</TabsTrigger>
+            <TabsTrigger value="layers" className="text-xs" data-testid="tab-layers">Layers</TabsTrigger>
+            <TabsTrigger value="fx" className="text-xs" data-testid="tab-fx">FX</TabsTrigger>
+            <TabsTrigger value="master" className="text-xs" data-testid="tab-master">Master</TabsTrigger>
+            <TabsTrigger value="export" className="text-xs" data-testid="tab-export">Export</TabsTrigger>
+          </TabsList>
 
-              <Tabs defaultValue="filter" className="w-full">
-                <TabsList className="w-full h-6 grid grid-cols-3" data-testid="env-tabs">
-                  <TabsTrigger value="filter" className="text-[10px] h-5" data-testid="tab-filter-env">Filter</TabsTrigger>
-                  <TabsTrigger value="pitch" className="text-[10px] h-5" data-testid="tab-pitch-env">Pitch</TabsTrigger>
-                  <TabsTrigger value="amp" className="text-[10px] h-5" data-testid="tab-amp-env">Amp</TabsTrigger>
-                </TabsList>
-                <TabsContent value="filter" className="mt-0.5">
-                  <EnvelopePanel
-                    envelope={params.envelopes.env1}
-                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
-                    type="filter"
-                  />
-                </TabsContent>
-                <TabsContent value="pitch" className="mt-0.5">
-                  <EnvelopePanel
-                    envelope={params.envelopes.env2}
-                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
-                    type="pitch"
-                  />
-                </TabsContent>
-                <TabsContent value="amp" className="mt-0.5">
-                  <EnvelopePanel
-                    envelope={params.envelopes.env3}
-                    onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
-                    type="amp"
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
+          {/* Sound Tab: Oscillators, Envelopes, Filter */}
+          <TabsContent value="sound" className="flex-1 overflow-y-auto mt-0">
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {/* Oscillators sub-tabs */}
+                <Tabs defaultValue="osc1" className="w-full">
+                  <TabsList className="w-full h-7 grid grid-cols-3 bg-muted/50" data-testid="osc-tabs">
+                    <TabsTrigger value="osc1" className="text-[10px]" data-testid="tab-osc1">OSC 1</TabsTrigger>
+                    <TabsTrigger value="osc2" className="text-[10px]" data-testid="tab-osc2">OSC 2</TabsTrigger>
+                    <TabsTrigger value="osc3" className="text-[10px]" data-testid="tab-osc3">OSC 3</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="osc1" className="mt-1">
+                    <OscillatorPanel
+                      oscillator={params.oscillators.osc1}
+                      onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
+                      title="OSC 1"
+                      index={1}
+                    />
+                  </TabsContent>
+                  <TabsContent value="osc2" className="mt-1">
+                    <OscillatorPanel
+                      oscillator={params.oscillators.osc2}
+                      onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
+                      title="OSC 2"
+                      index={2}
+                    />
+                  </TabsContent>
+                  <TabsContent value="osc3" className="mt-1">
+                    <OscillatorPanel
+                      oscillator={params.oscillators.osc3}
+                      onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
+                      title="OSC 3"
+                      index={3}
+                    />
+                  </TabsContent>
+                </Tabs>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
+                {/* Envelopes sub-tabs */}
+                <Tabs defaultValue="amp" className="w-full">
+                  <TabsList className="w-full h-7 grid grid-cols-3 bg-muted/50" data-testid="env-tabs">
+                    <TabsTrigger value="amp" className="text-[10px]" data-testid="tab-amp-env">Amp</TabsTrigger>
+                    <TabsTrigger value="filter" className="text-[10px]" data-testid="tab-filter-env">Filter</TabsTrigger>
+                    <TabsTrigger value="pitch" className="text-[10px]" data-testid="tab-pitch-env">Pitch</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="amp" className="mt-1">
+                    <EnvelopePanel
+                      envelope={params.envelopes.env3}
+                      onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env3: env } })}
+                      type="amp"
+                    />
+                  </TabsContent>
+                  <TabsContent value="filter" className="mt-1">
+                    <EnvelopePanel
+                      envelope={params.envelopes.env1}
+                      onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env1: env } })}
+                      type="filter"
+                    />
+                  </TabsContent>
+                  <TabsContent value="pitch" className="mt-1">
+                    <EnvelopePanel
+                      envelope={params.envelopes.env2}
+                      onChange={(env) => setParams({ ...params, envelopes: { ...params.envelopes, env2: env } })}
+                      type="pitch"
+                    />
+                  </TabsContent>
+                </Tabs>
+              </div>
+
+              {/* Filter */}
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
               />
+            </div>
+          </TabsContent>
+
+          {/* Layers Tab: Click, Sub, Synth Engines */}
+          <TabsContent value="layers" className="flex-1 overflow-y-auto mt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <ClickLayerPanel
                 clickLayer={params.clickLayer}
                 onChange={(clickLayer) => setParams({ ...params, clickLayer })}
@@ -1572,21 +1590,22 @@ export default function Synthesizer() {
                 subOsc={params.subOsc}
                 onChange={(subOsc) => setParams({ ...params, subOsc })}
               />
-              <OutputPanel
-                output={params.output}
-                onChange={(output) => setParams({ ...params, output })}
-              />
+              <div className="md:col-span-2">
+                <SynthEngineSelector
+                  modal={params.modal}
+                  additive={params.additive}
+                  granular={params.granular}
+                  onModalChange={(modal) => setParams({ ...params, modal })}
+                  onAdditiveChange={(additive) => setParams({ ...params, additive })}
+                  onGranularChange={(granular) => setParams({ ...params, granular })}
+                />
+              </div>
             </div>
+          </TabsContent>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
-              <SynthEngineSelector
-                modal={params.modal}
-                additive={params.additive}
-                granular={params.granular}
-                onModalChange={(modal) => setParams({ ...params, modal })}
-                onAdditiveChange={(additive) => setParams({ ...params, additive })}
-                onGranularChange={(granular) => setParams({ ...params, granular })}
-              />
+          {/* FX Tab: Effects, Saturation, Waveshaper, Convolver */}
+          <TabsContent value="fx" className="flex-1 overflow-y-auto mt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <EffectsPanel
                 effects={params.effects}
                 onChange={(effects) => setParams({ ...params, effects })}
@@ -1595,13 +1614,6 @@ export default function Synthesizer() {
                 saturation={params.saturationChain}
                 onChange={(saturationChain) => setParams({ ...params, saturationChain })}
               />
-              <MasteringPanel
-                mastering={params.mastering}
-                onChange={(mastering) => setParams({ ...params, mastering })}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-1">
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}
@@ -1612,23 +1624,40 @@ export default function Synthesizer() {
                 onIRLoaded={handleIRLoaded}
               />
             </div>
-          </div>
+          </TabsContent>
 
-          <div className="lg:col-span-2 space-y-1">
-            <PresetPanel
-              currentParams={params}
-              onLoadPreset={setParams}
-            />
-            <ExportPanel
-              settings={exportSettings}
-              onChange={setExportSettings}
-              onExport={handleExport}
-              isExporting={isExporting}
-              exportResult={exportResult}
-              onClearResult={clearExportResult}
-            />
-          </div>
-        </div>
+          {/* Master Tab: Mastering, Output */}
+          <TabsContent value="master" className="flex-1 overflow-y-auto mt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <MasteringPanel
+                mastering={params.mastering}
+                onChange={(mastering) => setParams({ ...params, mastering })}
+              />
+              <OutputPanel
+                output={params.output}
+                onChange={(output) => setParams({ ...params, output })}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Export Tab: Presets, Export */}
+          <TabsContent value="export" className="flex-1 overflow-y-auto mt-0">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <PresetPanel
+                currentParams={params}
+                onLoadPreset={setParams}
+              />
+              <ExportPanel
+                settings={exportSettings}
+                onChange={setExportSettings}
+                onExport={handleExport}
+                isExporting={isExporting}
+                exportResult={exportResult}
+                onClearResult={clearExportResult}
+              />
+            </div>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
