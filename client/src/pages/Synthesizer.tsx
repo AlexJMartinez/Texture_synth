@@ -27,7 +27,6 @@ import {
 } from "@shared/schema";
 import { pitchToHz } from "@/lib/pitchUtils";
 import { triggerAHD, stopWithFade, EPS } from "@/lib/envelopeAHD";
-import { Zap } from "lucide-react";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
 
@@ -1473,14 +1472,8 @@ export default function Synthesizer() {
   return (
     <div className="h-screen bg-background p-2 overflow-hidden flex flex-col">
       <div className="max-w-5xl mx-auto w-full flex flex-col flex-1 min-h-0">
-        {/* Header with branding, trigger, and waveform */}
+        {/* Header with trigger, waveform, and controls */}
         <div className="flex items-center gap-3 mb-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-primary/15 flex items-center justify-center border border-primary/20">
-              <Zap className="w-3.5 h-3.5 text-primary" />
-            </div>
-            <h1 className="text-sm font-semibold tracking-tight text-foreground">OneShot</h1>
-          </div>
           <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
           <WaveformDisplay3D 
             audioBuffer={audioBuffer} 

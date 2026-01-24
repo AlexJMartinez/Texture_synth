@@ -34,15 +34,15 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
   }, [handleTrigger]);
 
   const sizeClasses = {
-    sm: "w-14 h-14",
-    md: "w-20 h-20",
-    lg: "w-28 h-28",
+    sm: "w-10 h-10",
+    md: "w-12 h-12",
+    lg: "w-16 h-16",
   };
 
   const iconSizes = {
-    sm: "w-6 h-6",
-    md: "w-8 h-8",
-    lg: "w-12 h-12",
+    sm: "w-4 h-4",
+    md: "w-5 h-5",
+    lg: "w-7 h-7",
   };
 
   return (
@@ -50,7 +50,7 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
       onClick={handleClick}
       onTouchEnd={handleTouchEnd}
       className={`
-        relative ${sizeClasses[size]} rounded-full cursor-pointer select-none
+        relative ${sizeClasses[size]} rounded-lg cursor-pointer select-none
         transition-all duration-150 ease-out
         flex items-center justify-center
         ${isPressed ? 'scale-95' : 'hover:scale-105'}
@@ -58,28 +58,28 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
       `}
       style={{
         background: isPlaying 
-          ? 'linear-gradient(145deg, hsl(280, 70%, 60%), hsl(280, 70%, 45%))'
-          : 'linear-gradient(145deg, hsl(280, 70%, 55%), hsl(280, 70%, 40%))',
+          ? 'linear-gradient(145deg, hsl(155, 45%, 55%), hsl(155, 45%, 40%))'
+          : 'linear-gradient(145deg, hsl(155, 45%, 50%), hsl(155, 45%, 35%))',
         boxShadow: isPlaying
           ? `inset 2px 2px 4px rgba(255,255,255,0.2),
              inset -2px -2px 4px rgba(0,0,0,0.3),
-             0 0 40px hsl(280, 70%, 55%, 0.6),
-             0 10px 30px rgba(0,0,0,0.5)`
+             0 0 30px hsl(155, 45%, 50%, 0.5),
+             0 6px 20px rgba(0,0,0,0.4)`
           : `inset 2px 2px 4px rgba(255,255,255,0.15),
              inset -2px -2px 4px rgba(0,0,0,0.3),
-             0 0 20px hsl(280, 70%, 55%, 0.3),
-             0 10px 30px rgba(0,0,0,0.5)`,
+             0 0 15px hsl(155, 45%, 50%, 0.25),
+             0 6px 20px rgba(0,0,0,0.4)`,
       }}
       data-testid="button-trigger"
     >
       <div 
         className={`
-          absolute inset-2 rounded-full
+          absolute inset-1.5 rounded-md
           transition-opacity duration-150
           ${isPlaying ? 'opacity-100' : 'opacity-0'}
         `}
         style={{
-          background: 'radial-gradient(circle, hsl(280, 70%, 70%, 0.4) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, hsl(155, 45%, 65%, 0.4) 0%, transparent 70%)',
         }}
       />
       
@@ -90,7 +90,7 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
       )}
 
       <div 
-        className="absolute inset-0 rounded-full pointer-events-none"
+        className="absolute inset-0 rounded-lg pointer-events-none"
         style={{
           background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%)',
         }}
@@ -98,14 +98,14 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
 
       <div 
         className={`
-          absolute inset-0 rounded-full pointer-events-none
+          absolute inset-0 rounded-lg pointer-events-none
           transition-all duration-300
-          ${isPlaying ? 'opacity-100 scale-110' : 'opacity-0 scale-100'}
+          ${isPlaying ? 'opacity-100 scale-105' : 'opacity-0 scale-100'}
         `}
         style={{
           background: 'transparent',
           boxShadow: isPlaying 
-            ? '0 0 20px hsl(280, 70%, 60%, 0.6), 0 0 40px hsl(280, 70%, 55%, 0.4), inset 0 0 20px hsl(280, 70%, 70%, 0.2)'
+            ? '0 0 15px hsl(155, 45%, 55%, 0.5), 0 0 30px hsl(155, 45%, 50%, 0.3), inset 0 0 15px hsl(155, 45%, 65%, 0.2)'
             : 'none',
         }}
       />
