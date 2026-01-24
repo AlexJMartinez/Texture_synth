@@ -223,3 +223,10 @@ Compact 50% scale design for professional audio feel:
   - Robust buffer sampling with guards against short buffers (step >= 1, bounds checking)
 - **Export System**: Re-renders audio with tail extension to properly capture reverb/delay decay
 - **Trigger Button**: Smooth pulsing glow animation (replaced dashed spinning circle)
+- **Audio Click/Pop Prevention** (6 fixes implemented):
+  - Fix 1: TAIL_PAD (150ms) added to render duration for reverb/delay decay
+  - Fix 2: Post-FX safety fade gain node (10ms fadeout at end of chain)
+  - Fix 3: All oscillator/LFO stops scheduled after safety fade completes (stopAt timing)
+  - Fix 4: DC blocking highpass filter (20Hz, Q=0.707) after distortion stages
+  - Fix 5: Single render path - preview plays same offline-rendered buffer as export
+  - Fix 6: Seeded random number generator for consistent preview/export (createSeededRandom, passed to all noise sources including createImpulseResponse)
