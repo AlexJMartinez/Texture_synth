@@ -235,6 +235,15 @@ const ConvolverSchema = z.object({
   useCustomIR: z.boolean(),
 });
 
+const SpectralScramblerSchema = z.object({
+  enabled: z.boolean(),
+  fftSize: z.enum(["256", "512", "1024", "2048"]),
+  scrambleAmount: z.number().min(0).max(100),
+  binShift: z.number().min(-50).max(50),
+  freeze: z.boolean(),
+  mix: z.number().min(0).max(100),
+});
+
 export const SynthParametersSchema = z.object({
   oscillators: z.object({
     osc1: OscillatorSchema,
@@ -274,6 +283,8 @@ export const SynthParametersSchema = z.object({
   waveshaper: WaveshaperSchema,
   
   convolver: ConvolverSchema,
+  
+  spectralScrambler: SpectralScramblerSchema,
   
   effects: z.object({
     saturation: z.number().min(0).max(100),
@@ -326,6 +337,7 @@ export type SaturationChain = z.infer<typeof SaturationChainSchema>;
 export type Mastering = z.infer<typeof MasteringSchema>;
 export type Waveshaper = z.infer<typeof WaveshaperSchema>;
 export type Convolver = z.infer<typeof ConvolverSchema>;
+export type SpectralScrambler = z.infer<typeof SpectralScramblerSchema>;
 
 export const PresetSchema = z.object({
   id: z.string(),
@@ -457,6 +469,15 @@ const defaultConvolver: Convolver = {
   useCustomIR: false,
 };
 
+const defaultSpectralScrambler: SpectralScrambler = {
+  enabled: false,
+  fftSize: "1024",
+  scrambleAmount: 0,
+  binShift: 0,
+  freeze: false,
+  mix: 100,
+};
+
 export const defaultSynthParameters: SynthParameters = {
   oscillators: {
     osc1: { ...defaultOscillator, enabled: false },
@@ -519,6 +540,7 @@ export const defaultSynthParameters: SynthParameters = {
   mastering: { ...defaultMastering },
   waveshaper: { ...defaultWaveshaper },
   convolver: { ...defaultConvolver },
+  spectralScrambler: { ...defaultSpectralScrambler },
   effects: {
     saturation: 20,
     bitcrusher: 16,

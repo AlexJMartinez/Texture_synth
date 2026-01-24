@@ -17,6 +17,7 @@ import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
 import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
 import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
 import { MasteringPanel } from "@/components/synth/MasteringPanel";
+import { SpectralScramblerPanel } from "@/components/synth/SpectralScramblerPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   type SynthParameters, 
@@ -183,6 +184,227 @@ export default function Synthesizer() {
       }
     }
   }, []);
+
+  // Reference to frozen spectral data for freeze mode
+  const frozenSpectrumRef = useRef<{ real: Float32Array, imag: Float32Array, fftSize: number } | null>(null);
+  
+  // Reusable FFT buffers to reduce GC pressure
+  const fftBuffersRef = useRef<{
+    window: Float32Array | null,
+    real: Float32Array | null,
+    imag: Float32Array | null,
+    scrambledReal: Float32Array | null,
+    scrambledImag: Float32Array | null,
+    fftSize: number
+  }>({ window: null, real: null, imag: null, scrambledReal: null, scrambledImag: null, fftSize: 0 });
+
+  // Radix-2 Cooley-Tukey FFT - O(N log N) complexity
+  const fft = useCallback((real: Float32Array, imag: Float32Array, inverse: boolean = false): void => {
+    const n = real.length;
+    if (n <= 1) return;
+    
+    // Bit-reversal permutation
+    let j = 0;
+    for (let i = 0; i < n - 1; i++) {
+      if (i < j) {
+        let tmp = real[i]; real[i] = real[j]; real[j] = tmp;
+        tmp = imag[i]; imag[i] = imag[j]; imag[j] = tmp;
+      }
+      let k = n >> 1;
+      while (k <= j) { j -= k; k >>= 1; }
+      j += k;
+    }
+    
+    // Cooley-Tukey iterative radix-2 FFT
+    const sign = inverse ? 1 : -1;
+    for (let len = 2; len <= n; len <<= 1) {
+      const halfLen = len >> 1;
+      const angle = (2 * Math.PI) / len * sign;
+      const wReal = Math.cos(angle);
+      const wImag = Math.sin(angle);
+      
+      for (let i = 0; i < n; i += len) {
+        let curReal = 1, curImag = 0;
+        for (let k = 0; k < halfLen; k++) {
+          const evenIdx = i + k;
+          const oddIdx = i + k + halfLen;
+          
+          const tReal = curReal * real[oddIdx] - curImag * imag[oddIdx];
+          const tImag = curReal * imag[oddIdx] + curImag * real[oddIdx];
+          
+          real[oddIdx] = real[evenIdx] - tReal;
+          imag[oddIdx] = imag[evenIdx] - tImag;
+          real[evenIdx] = real[evenIdx] + tReal;
+          imag[evenIdx] = imag[evenIdx] + tImag;
+          
+          const nextReal = curReal * wReal - curImag * wImag;
+          curImag = curReal * wImag + curImag * wReal;
+          curReal = nextReal;
+        }
+      }
+    }
+    
+    // Scale for inverse FFT
+    if (inverse) {
+      for (let i = 0; i < n; i++) {
+        real[i] /= n;
+        imag[i] /= n;
+      }
+    }
+  }, []);
+
+  // Spectral bin scrambling using FFT
+  const applySpectralScrambling = useCallback((
+    buffer: AudioBuffer, 
+    fftSize: number, 
+    scrambleAmount: number, 
+    binShift: number,
+    freeze: boolean,
+    mix: number
+  ): void => {
+    if (scrambleAmount === 0 && binShift === 0 && !freeze) return;
+    
+    // Validate and clamp to power-of-two (256, 512, 1024, 2048)
+    const validSizes = [256, 512, 1024, 2048];
+    if (!validSizes.includes(fftSize)) {
+      fftSize = 1024; // Default to safe value
+    }
+    
+    const hopSize = fftSize / 4;
+    const wetMix = mix / 100;
+    const dryMix = 1 - wetMix;
+    const numBins = fftSize / 2;
+    
+    // Reset frozen spectrum if FFT size changed
+    if (frozenSpectrumRef.current && frozenSpectrumRef.current.fftSize !== fftSize) {
+      frozenSpectrumRef.current = null;
+    }
+    
+    // Allocate or reuse FFT buffers
+    const buffers = fftBuffersRef.current;
+    if (buffers.fftSize !== fftSize) {
+      buffers.window = new Float32Array(fftSize);
+      for (let i = 0; i < fftSize; i++) {
+        buffers.window[i] = 0.5 * (1 - Math.cos(2 * Math.PI * i / fftSize));
+      }
+      buffers.real = new Float32Array(fftSize);
+      buffers.imag = new Float32Array(fftSize);
+      buffers.scrambledReal = new Float32Array(fftSize);
+      buffers.scrambledImag = new Float32Array(fftSize);
+      buffers.fftSize = fftSize;
+    }
+    const window = buffers.window!;
+    const real = buffers.real!;
+    const imag = buffers.imag!;
+    const scrambledReal = buffers.scrambledReal!;
+    const scrambledImag = buffers.scrambledImag!;
+    
+    // Create seeded random for deterministic scrambling
+    const seed = Math.floor(scrambleAmount * 1000 + binShift * 100);
+    let rngState = seed;
+    const seededRandom = () => {
+      rngState = (rngState * 1103515245 + 12345) & 0x7fffffff;
+      return rngState / 0x7fffffff;
+    };
+    
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+      const data = buffer.getChannelData(channel);
+      const originalData = new Float32Array(data);
+      const numFrames = Math.ceil(data.length / hopSize);
+      
+      const processedData = new Float32Array(data.length);
+      const windowSum = new Float32Array(data.length);
+      
+      for (let frame = 0; frame < numFrames; frame++) {
+        const startIdx = frame * hopSize;
+        rngState = seed + frame; // Reset RNG per frame for consistency
+        
+        // Extract frame and apply window (reuse buffers)
+        for (let i = 0; i < fftSize; i++) {
+          const idx = startIdx + i;
+          real[i] = idx < data.length ? data[idx] * window[i] : 0;
+          imag[i] = 0;
+        }
+        
+        // Forward FFT
+        fft(real, imag, false);
+        
+        // Use frozen spectrum if freeze is enabled
+        if (freeze && frozenSpectrumRef.current) {
+          real.set(frozenSpectrumRef.current.real);
+          imag.set(frozenSpectrumRef.current.imag);
+        } else if (freeze && !frozenSpectrumRef.current) {
+          // Store first frame as frozen spectrum
+          frozenSpectrumRef.current = {
+            real: new Float32Array(real),
+            imag: new Float32Array(imag),
+            fftSize: fftSize
+          };
+        }
+        
+        // Scramble and shift frequency bins (clear reused buffers)
+        scrambledReal.fill(0);
+        scrambledImag.fill(0);
+        const scrambleRange = Math.floor((scrambleAmount / 100) * numBins * 0.5);
+        const shiftAmount = Math.floor((binShift / 50) * numBins * 0.25);
+        
+        for (let k = 0; k < numBins; k++) {
+          // Calculate source bin with shift
+          let srcBin = k - shiftAmount;
+          
+          // Apply scrambling based on scramble amount
+          if (scrambleRange > 0) {
+            const scrambleProb = scrambleAmount / 100;
+            if (seededRandom() < scrambleProb) {
+              srcBin += Math.floor((seededRandom() - 0.5) * scrambleRange * 2);
+            }
+          }
+          
+          // Clamp to valid range
+          srcBin = Math.max(0, Math.min(numBins - 1, srcBin));
+          
+          // Copy bin magnitudes (positive and negative frequencies)
+          scrambledReal[k] = real[srcBin];
+          scrambledImag[k] = imag[srcBin];
+          if (k > 0 && k < numBins) {
+            scrambledReal[fftSize - k] = real[fftSize - srcBin];
+            scrambledImag[fftSize - k] = imag[fftSize - srcBin];
+          }
+        }
+        
+        // DC and Nyquist bins
+        scrambledReal[0] = real[0];
+        scrambledImag[0] = 0;
+        if (fftSize % 2 === 0) {
+          scrambledReal[numBins] = real[numBins];
+          scrambledImag[numBins] = 0;
+        }
+        
+        // Inverse FFT
+        fft(scrambledReal, scrambledImag, true);
+        
+        // Overlap-add
+        for (let i = 0; i < fftSize; i++) {
+          const idx = startIdx + i;
+          if (idx < data.length) {
+            processedData[idx] += scrambledReal[i] * window[i];
+            windowSum[idx] += window[i] * window[i];
+          }
+        }
+      }
+      
+      // Normalize and mix with original
+      for (let i = 0; i < data.length; i++) {
+        const wet = windowSum[i] > 0.001 ? processedData[i] / windowSum[i] : 0;
+        data[i] = originalData[i] * dryMix + wet * wetMix;
+      }
+    }
+    
+    // Clear frozen spectrum when freeze is disabled
+    if (!freeze) {
+      frozenSpectrumRef.current = null;
+    }
+  }, [fft]);
 
   // Apply a safety fadeout at the end of the buffer to prevent pops/clicks
   // Increased fadeMs for heavily processed sounds
@@ -1297,6 +1519,17 @@ export default function Synthesizer() {
       if (params.effects.bitcrusher < 16) {
         applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
       }
+      // Apply spectral scrambling (post-process FFT manipulation)
+      if (params.spectralScrambler.enabled && (params.spectralScrambler.scrambleAmount > 0 || params.spectralScrambler.binShift !== 0 || params.spectralScrambler.freeze)) {
+        applySpectralScrambling(
+          renderedBuffer,
+          parseInt(params.spectralScrambler.fftSize),
+          params.spectralScrambler.scrambleAmount,
+          params.spectralScrambler.binShift,
+          params.spectralScrambler.freeze,
+          params.spectralScrambler.mix
+        );
+      }
       // Apply additional safety fadeout to prevent any remaining pops
       applySafetyFadeout(renderedBuffer, 5);
       
@@ -1323,7 +1556,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, generateSound, applyBitcrusher, applySafetyFadeout, getTotalDuration]);
+  }, [params, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
@@ -1625,6 +1858,10 @@ export default function Synthesizer() {
                 convolver={params.convolver}
                 onChange={(convolver) => setParams({ ...params, convolver })}
                 onIRLoaded={handleIRLoaded}
+              />
+              <SpectralScramblerPanel
+                spectralScrambler={params.spectralScrambler}
+                onChange={(update) => setParams({ ...params, spectralScrambler: { ...params.spectralScrambler, ...update } })}
               />
             </div>
           </TabsContent>
