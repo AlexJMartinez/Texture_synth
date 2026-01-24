@@ -32,7 +32,8 @@ import { Zap } from "lucide-react";
 const IR_STORAGE_KEY = "synth-custom-irs";
 
 // Fix 1: Tail padding for reverb/delay decay (in seconds)
-const TAIL_PAD = 0.15; // 150ms default, increased for heavy FX
+// Increased for heavily processed sounds with reverb/delay
+const TAIL_PAD = 0.35; // 350ms for better FX tail capture
 
 // Fix 6: Seeded random number generator for consistent preview/export
 function createSeededRandom(seed: number) {
@@ -185,7 +186,8 @@ export default function Synthesizer() {
   }, []);
 
   // Apply a safety fadeout at the end of the buffer to prevent pops/clicks
-  const applySafetyFadeout = useCallback((buffer: AudioBuffer, fadeMs: number = 5): void => {
+  // Increased fadeMs for heavily processed sounds
+  const applySafetyFadeout = useCallback((buffer: AudioBuffer, fadeMs: number = 20): void => {
     const fadeOutSamples = Math.max(2, Math.min(
       Math.floor((fadeMs / 1000) * buffer.sampleRate),
       Math.floor(buffer.length * 0.1) // Max 10% of buffer length
@@ -230,14 +232,14 @@ export default function Synthesizer() {
     const safetyFadeGain = ctx.createGain();
     safetyFadeGain.gain.value = 1.0;
     
-    // Fix 2: Schedule safety fade at the end (10ms fade)
-    const safetyFadeTime = 0.01; // 10ms
+    // Fix 2: Schedule safety fade at the end (25ms fade for smoother fadeout)
+    const safetyFadeTime = 0.025; // 25ms for smooth fade on heavy FX
     const envelopeEndTime = durationSec - TAIL_PAD; // When envelope ends
     safetyFadeGain.gain.setValueAtTime(1.0, now + envelopeEndTime);
     safetyFadeGain.gain.linearRampToValueAtTime(0, now + envelopeEndTime + safetyFadeTime);
     
-    // Fix 3: Calculate when to stop nodes (after safety fade completes)
-    const stopAt = now + envelopeEndTime + safetyFadeTime + 0.01;
+    // Fix 3: Calculate when to stop nodes (after safety fade completes plus buffer)
+    const stopAt = now + envelopeEndTime + safetyFadeTime + 0.02;
     
     const panNode = ctx.createStereoPanner();
     panNode.pan.value = params.output.pan / 100;

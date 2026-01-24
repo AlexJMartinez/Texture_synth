@@ -30,21 +30,21 @@ export function CollapsiblePanel({
   return (
     <Card className={`synth-panel ${className}`} data-testid={testId}>
       <CardHeader className="pb-0.5 pt-1 px-1.5">
-        <CardTitle className="flex items-center justify-between text-[10px] font-medium">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] font-medium">
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="flex items-center gap-0.5 hover:text-primary transition-colors"
+            className="flex items-center gap-0.5 hover:text-primary transition-colors min-w-0"
           >
             {isOpen ? (
-              <ChevronDown className="w-2.5 h-2.5 text-muted-foreground" />
+              <ChevronDown className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
             ) : (
-              <ChevronRight className="w-2.5 h-2.5 text-muted-foreground" />
+              <ChevronRight className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
             )}
-            {icon}
-            <span>{title}</span>
+            {icon && <span className="shrink-0">{icon}</span>}
+            <span className="truncate max-w-[80px] sm:max-w-none">{title}</span>
           </button>
-          {headerExtra}
+          <div className="flex items-center shrink-0">{headerExtra}</div>
         </CardTitle>
       </CardHeader>
       {isOpen && (

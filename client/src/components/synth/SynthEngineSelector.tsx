@@ -66,17 +66,17 @@ export function SynthEngineSelector({
   return (
     <Card className="synth-panel" data-testid="panel-synth-engine">
       <CardHeader className="pb-1 pt-1.5 px-2">
-        <CardTitle className="flex items-center justify-between text-xs font-medium">
-          <div className="flex items-center gap-1">
+        <CardTitle className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs font-medium">
+          <div className="flex items-center gap-1 shrink-0">
             <Sparkles className="w-3 h-3 text-accent" />
             <span>Synth</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <Select
               value={selectedEngine}
               onValueChange={(v) => setSelectedEngine(v as SynthEngineType)}
             >
-              <SelectTrigger className="h-5 w-20 text-[10px] px-1" data-testid="select-synth-engine">
+              <SelectTrigger className="h-5 w-[70px] text-[10px] px-1" data-testid="select-synth-engine">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -145,7 +145,7 @@ function AdditivePanelContent({ additive, onChange }: { additive: SynthParameter
         <Knob value={additive.decaySlope} min={0} max={100} step={1} label="Slp" unit="%" onChange={(v) => onChange({ ...additive, decaySlope: v })} size="xs" data-testid="knob-additive-slope" />
       </div>
       <div className="text-[9px] text-muted-foreground text-center">Partials</div>
-      <div className="grid grid-cols-8 gap-0.5">
+      <div className="grid grid-cols-4 sm:grid-cols-8 gap-0.5">
         {(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'] as const).map((pKey, i) => {
           const partial = additive.partials[pKey];
           return (
