@@ -134,7 +134,7 @@ client/src/
 ├── components/
 │   └── synth/
 │       ├── Knob.tsx              # Rotary knob control (xs/sm/md/lg sizes)
-│       ├── WaveformDisplay3D.tsx # 3D terrain-style audio visualization
+│       ├── WaveformDisplay3D.tsx # Wavesurfer-style horizontal bar waveform
 │       ├── CollapsiblePanel.tsx  # Collapsible panel wrapper for sections
 │       ├── EnvelopePanel.tsx     # AHD envelope with routing
 │       ├── OscillatorPanel.tsx   # Waveform & pitch controls + FM/AM/PM
@@ -189,16 +189,22 @@ Integrated in Synthesizer.tsx using Tone.js and Web Audio API:
 - `npm run build` - Build for production
 
 ## Color Scheme
-Dark audio-themed UI with purple primary (#8B5CF6) and cyan accent (#14B8A6) colors.
+Soft green color palette inspired by Felt Instruments aesthetic:
+- Background: Dark with subtle green undertones (hue 150)
+- Primary: Soft sage green (#5A8A5A, hsl 145, 35%, 45%)
+- Accent: Brighter mint green (#3DAD73, hsl 155, 45%, 50%)
+- All shadows and chart colors use matching green hues
 
 ## UI Design
-Compact 50% scale design for professional audio feel:
-- xs/sm knobs and controls
-- 10px-xs font sizes
-- Reduced padding throughout
-- Collapsible panels for organized layout
-- Dropdown selector for synthesis engine switching
-- Randomize controls in header bar (horizontal layout)
+Clean, professional audio UI with tabbed organization:
+- **5 Main Tabs**: Sound, Layers, FX, Master, Export
+- **Sound Tab**: OSC 1/2/3 sub-tabs, Envelope sub-tabs (Amp/Filter/Pitch), Filter panel
+- **Layers Tab**: Click Layer, Sub Oscillator, Synth Engine selector
+- **FX Tab**: Effects, Saturation Chain, Waveshaper, Convolver
+- **Master Tab**: Mastering section, Output controls
+- **Export Tab**: Preset management, WAV export settings
+- Compact knobs and controls (xs/sm sizes)
+- Wavesurfer-style horizontal bar waveform in pastel green
 - Double-click/double-tap any knob to reset to default value
 - All modules OFF by default until user enables or hits Randomize
 
@@ -217,10 +223,12 @@ Compact 50% scale design for professional audio feel:
   - `cancelAndHoldAtTime` when available for click-free retriggers
   - EPS (1e-5) to avoid exponential-to-zero pitfall
   - `stopWithFade()` for smooth fadeouts on retrigger
-- **3D Waveform Display**: Uses `client/src/components/synth/WaveformDisplay3D.tsx` with:
-  - Canvas-based 3D terrain rendering with perspective
-  - ResizeObserver with transform reset to prevent scaling accumulation
-  - Robust buffer sampling with guards against short buffers (step >= 1, bounds checking)
+- **Waveform Display**: Uses `client/src/components/synth/WaveformDisplay3D.tsx` with:
+  - Wavesurfer-style horizontal bar visualization with mirrored top/bottom bars
+  - Pastel green color scheme (hsl 145, 45%, 55%)
+  - Playhead indicator during audio playback
+  - Idle animation when no audio loaded
+  - Max amplitude sampling for clearer bar representation
 - **Export System**: Re-renders audio with tail extension to properly capture reverb/delay decay
 - **Trigger Button**: Smooth pulsing glow animation (replaced dashed spinning circle)
 - **Audio Click/Pop Prevention** (6 fixes implemented):
