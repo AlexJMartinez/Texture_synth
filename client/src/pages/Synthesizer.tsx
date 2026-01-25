@@ -404,20 +404,31 @@ export default function Synthesizer() {
       originalRMS = Math.sqrt(originalRMS / data.length);
       processedRMS = Math.sqrt(processedRMS / data.length);
       
-      // If processed signal is too quiet (less than 30% of original energy), 
-      // automatically reduce wet mix to preserve audibility
-      let effectiveWetMix = wetMix;
-      let effectiveDryMix = dryMix;
-      if (originalRMS > 0.001 && processedRMS < originalRMS * 0.3) {
-        // Scrambler produced very quiet output - blend more dry signal
-        effectiveWetMix = Math.min(wetMix, 0.3); // Cap at 30% wet
-        effectiveDryMix = 1 - effectiveWetMix;
+      // ALWAYS cap wet mix at 70% to guarantee audible dry signal
+      const maxWetMix = 0.7;
+      let effectiveWetMix = Math.min(wetMix, maxWetMix);
+      
+      // Calculate energy normalization gain for the processed signal
+      // This ensures scrambled output matches original loudness
+      let energyGain = 1.0;
+      if (processedRMS > 0.0001 && originalRMS > 0.001) {
+        energyGain = Math.min(originalRMS / processedRMS, 4.0); // Cap at 4x to avoid extreme boost
       }
       
-      // Normalize and mix with original
+      // If processed signal is still too quiet even after normalization potential,
+      // reduce wet mix further (stronger safeguard)
+      if (originalRMS > 0.001 && processedRMS * energyGain < originalRMS * 0.5) {
+        // Scrambler produced very quiet output - blend more dry signal
+        effectiveWetMix = Math.min(effectiveWetMix, 0.4); // Further reduce to 40% wet max
+      }
+      
+      let effectiveDryMix = 1 - effectiveWetMix;
+      
+      // Normalize and mix with original - apply energy gain to wet signal
       for (let i = 0; i < data.length; i++) {
-        const wet = windowSum[i] > 0.001 ? processedData[i] / windowSum[i] : 0;
-        data[i] = originalData[i] * effectiveDryMix + wet * effectiveWetMix;
+        const rawWet = windowSum[i] > 0.001 ? processedData[i] / windowSum[i] : 0;
+        const normalizedWet = rawWet * energyGain;
+        data[i] = originalData[i] * effectiveDryMix + normalizedWet * effectiveWetMix;
       }
     }
     

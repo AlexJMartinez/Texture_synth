@@ -494,10 +494,10 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       spectralScrambler: {
         enabled: currentParams.spectralScrambler.enabled,
         fftSize: currentParams.spectralScrambler.fftSize,
-        scrambleAmount: Math.round(mutateValue(currentParams.spectralScrambler.scrambleAmount, 0, 100)),
-        binShift: Math.round(mutateValue(currentParams.spectralScrambler.binShift, -50, 50)),
-        freeze: currentParams.spectralScrambler.freeze,
-        mix: Math.round(mutateValue(currentParams.spectralScrambler.mix, 0, 100)),
+        scrambleAmount: Math.round(mutateValue(currentParams.spectralScrambler.scrambleAmount, 0, 60)), // Reduced max
+        binShift: Math.round(mutateValue(currentParams.spectralScrambler.binShift, -30, 30)), // Reduced range
+        freeze: false, // Keep freeze disabled
+        mix: Math.round(mutateValue(currentParams.spectralScrambler.mix, 10, 60)), // Max 60% wet
       },
       clickLayer: {
         enabled: currentParams.clickLayer.enabled,
