@@ -44,6 +44,9 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
       title: "Filter Env",
       icon: <Filter className="w-3 h-3 text-primary" />,
       amountLabel: "Depth",
+      amountUnit: "%",
+      amountMin: -100,
+      amountMax: 100,
       showAmount: true,
       showEnable: true,
     },
@@ -51,6 +54,9 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
       title: "Pitch Env",
       icon: <Music className="w-3 h-3 text-accent" />,
       amountLabel: "Drop",
+      amountUnit: "st",
+      amountMin: -48,
+      amountMax: 48,
       showAmount: true,
       showEnable: true,
     },
@@ -58,6 +64,9 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
       title: "Amp Env",
       icon: <Volume2 className="w-3 h-3 text-primary" />,
       amountLabel: "",
+      amountUnit: "%",
+      amountMin: -100,
+      amountMax: 100,
       showAmount: false,
       showEnable: false,
     },
@@ -163,7 +172,7 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
           <Knob
             value={envelope.decay}
             min={0}
-            max={5000}
+            max={10000}
             step={1}
             label="Decay"
             unit="ms"
@@ -174,11 +183,11 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
           {config.showAmount && (
             <Knob
               value={envelope.amount}
-              min={-100}
-              max={100}
+              min={config.amountMin}
+              max={config.amountMax}
               step={1}
               label={config.amountLabel}
-              unit="%"
+              unit={config.amountUnit}
               onChange={(v) => updateEnvelope("amount", v)}
               size="xs"
             />

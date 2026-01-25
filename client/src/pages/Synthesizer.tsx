@@ -1395,22 +1395,34 @@ export default function Synthesizer() {
 
       if (frequencyParam) {
         const pitchEnv = params.envelopes.env2;
-        if (pitchEnv.enabled) {
+        if (pitchEnv.enabled && pitchEnv.amount !== 0) {
           const attackEnd = now + pitchEnv.attack / 1000;
           const holdEnd = attackEnd + pitchEnv.hold / 1000;
           const decayEnd = holdEnd + pitchEnv.decay / 1000;
-          const modAmount = (pitchEnv.amount / 100) * oscPitchHz * 0.5;
           
-          frequencyParam.setValueAtTime(oscPitchHz, now);
-          frequencyParam.linearRampToValueAtTime(
-            Math.max(20, oscPitchHz + modAmount), 
-            attackEnd
-          );
-          frequencyParam.setValueAtTime(
-            Math.max(20, oscPitchHz + modAmount), 
-            holdEnd
-          );
-          frequencyParam.linearRampToValueAtTime(oscPitchHz, decayEnd);
+          // Use semitone-based pitch modulation for proper 808-style pitch drops
+          // amount is in semitones (-48 to +48)
+          const semitones = pitchEnv.amount;
+          const pitchMultiplier = Math.pow(2, semitones / 12);
+          const startFreq = oscPitchHz * pitchMultiplier;
+          const useExponential = pitchEnv.curve === 'exponential';
+          
+          frequencyParam.setValueAtTime(Math.max(20, startFreq), now);
+          if (useExponential) {
+            frequencyParam.exponentialRampToValueAtTime(
+              Math.max(20, startFreq),
+              attackEnd
+            );
+            frequencyParam.setValueAtTime(Math.max(20, startFreq), holdEnd);
+            frequencyParam.exponentialRampToValueAtTime(Math.max(20, oscPitchHz), decayEnd);
+          } else {
+            frequencyParam.linearRampToValueAtTime(
+              Math.max(20, startFreq), 
+              attackEnd
+            );
+            frequencyParam.setValueAtTime(Math.max(20, startFreq), holdEnd);
+            frequencyParam.linearRampToValueAtTime(oscPitchHz, decayEnd);
+          }
         }
 
         if (osc.drift > 0) {
@@ -1533,18 +1545,26 @@ export default function Synthesizer() {
       
       // Only apply pitch envelope to sub if bypass is disabled
       if (!sub.pitchEnvBypass && pitchEnv.enabled && pitchEnv.amount !== 0) {
-        const subPitchScale = 0.65;
-        const dropST = Math.abs(pitchEnv.amount) * 0.48 * subPitchScale;
-        const dropTime = Math.max(0.001, (pitchEnv.attack + pitchEnv.hold + pitchEnv.decay) / 1000 * 1.5);
+        // Use semitone-based pitch drop (amount is now in semitones, -48 to +48)
+        // Apply a gentler scale for sub bass (0.5x the main osc drop)
+        const subPitchScale = 0.5;
+        const semitones = pitchEnv.amount * subPitchScale;
+        const attackEnd = now + pitchEnv.attack / 1000;
+        const holdEnd = attackEnd + pitchEnv.hold / 1000;
+        const decayEnd = holdEnd + pitchEnv.decay / 1000;
         
-        const startHz = Math.max(20, subFreq * stToMult(pitchEnv.amount > 0 ? dropST : -dropST));
+        const startHz = Math.max(20, subFreq * stToMult(semitones));
         const endHz = Math.max(20, subFreq);
         
         subOsc.frequency.setValueAtTime(startHz, now);
         if (pitchEnv.curve === "exponential") {
-          subOsc.frequency.exponentialRampToValueAtTime(endHz, now + dropTime);
+          subOsc.frequency.exponentialRampToValueAtTime(startHz, attackEnd);
+          subOsc.frequency.setValueAtTime(startHz, holdEnd);
+          subOsc.frequency.exponentialRampToValueAtTime(endHz, decayEnd);
         } else {
-          subOsc.frequency.linearRampToValueAtTime(endHz, now + dropTime);
+          subOsc.frequency.linearRampToValueAtTime(startHz, attackEnd);
+          subOsc.frequency.setValueAtTime(startHz, holdEnd);
+          subOsc.frequency.linearRampToValueAtTime(endHz, decayEnd);
         }
       } else {
         // Bypass enabled or no pitch envelope - keep sub at steady frequency
@@ -1556,12 +1576,14 @@ export default function Synthesizer() {
       
       const hp = ctx.createBiquadFilter();
       hp.type = "highpass";
-      hp.frequency.setValueAtTime(Math.max(10, sub.hpFreq ?? 25), now);
+      // Only apply HP filter if filtering is enabled, otherwise set very low (5Hz just to remove DC)
+      hp.frequency.setValueAtTime(sub.filterEnabled ? Math.max(10, sub.hpFreq ?? 25) : 5, now);
       hp.Q.setValueAtTime(0.707, now);
       
       const lp = ctx.createBiquadFilter();
       lp.type = "lowpass";
-      lp.frequency.setValueAtTime(sub.filterEnabled ? Math.max(40, sub.filterFreq) : 200, now);
+      // Only apply LP filter if filtering is enabled, otherwise set to 20kHz (passthrough)
+      lp.frequency.setValueAtTime(sub.filterEnabled ? Math.max(40, sub.filterFreq) : 20000, now);
       lp.Q.setValueAtTime(0.707, now);
       
       const makeSoftClipCurve = (amount01: number, n = 1024) => {
