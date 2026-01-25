@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { Switch } from "@/components/ui/switch";
 import { CollapsiblePanel } from "./CollapsiblePanel";
@@ -56,6 +56,55 @@ const MODULATOR_ICONS: Record<ModulatorType, typeof Waves> = {
   random: Shuffle,
   macro: Sliders,
 };
+
+interface ModulationTarget {
+  path: string;
+  label: string;
+  category: string;
+}
+
+const MODULATION_TARGETS: ModulationTarget[] = [
+  { path: "filter.frequency", label: "Filter Freq", category: "Filter" },
+  { path: "filter.resonance", label: "Filter Res", category: "Filter" },
+  { path: "filter.gain", label: "Filter Gain", category: "Filter" },
+  
+  { path: "oscillators.osc1.level", label: "OSC1 Level", category: "Oscillators" },
+  { path: "oscillators.osc1.detune", label: "OSC1 Detune", category: "Oscillators" },
+  { path: "oscillators.osc1.fmDepth", label: "OSC1 FM Depth", category: "Oscillators" },
+  { path: "oscillators.osc1.pmDepth", label: "OSC1 PM Depth", category: "Oscillators" },
+  { path: "oscillators.osc2.level", label: "OSC2 Level", category: "Oscillators" },
+  { path: "oscillators.osc2.detune", label: "OSC2 Detune", category: "Oscillators" },
+  { path: "oscillators.osc2.fmDepth", label: "OSC2 FM Depth", category: "Oscillators" },
+  { path: "oscillators.osc2.pmDepth", label: "OSC2 PM Depth", category: "Oscillators" },
+  { path: "oscillators.osc3.level", label: "OSC3 Level", category: "Oscillators" },
+  { path: "oscillators.osc3.detune", label: "OSC3 Detune", category: "Oscillators" },
+  { path: "oscillators.osc3.fmDepth", label: "OSC3 FM Depth", category: "Oscillators" },
+  { path: "oscillators.osc3.pmDepth", label: "OSC3 PM Depth", category: "Oscillators" },
+  
+  { path: "effects.delay.feedback", label: "Delay Feedback", category: "Effects" },
+  { path: "effects.delay.mix", label: "Delay Mix", category: "Effects" },
+  { path: "effects.distortion.drive", label: "Distortion Drive", category: "Effects" },
+  { path: "effects.distortion.mix", label: "Distortion Mix", category: "Effects" },
+  { path: "effects.bitcrusher.bitDepth", label: "Bitcrush Bits", category: "Effects" },
+  { path: "effects.bitcrusher.mix", label: "Bitcrush Mix", category: "Effects" },
+  { path: "effects.reverb.decay", label: "Reverb Decay", category: "Effects" },
+  { path: "effects.reverb.mix", label: "Reverb Mix", category: "Effects" },
+  { path: "effects.chorus.depth", label: "Chorus Depth", category: "Effects" },
+  { path: "effects.chorus.rate", label: "Chorus Rate", category: "Effects" },
+  
+  { path: "clickLayer.level", label: "Click Level", category: "Layers" },
+  { path: "subOsc.level", label: "Sub Level", category: "Layers" },
+  
+  { path: "waveshaper.amount", label: "Waveshaper Amt", category: "Shaping" },
+  { path: "waveshaper.mix", label: "Waveshaper Mix", category: "Shaping" },
+  { path: "spectralScrambler.scrambleAmount", label: "Spectral Scramble", category: "Shaping" },
+  { path: "spectralScrambler.mix", label: "Spectral Mix", category: "Shaping" },
+  
+  { path: "saturationChain.tapeDrive", label: "Tape Drive", category: "Saturation" },
+  { path: "saturationChain.tubeDrive", label: "Tube Drive", category: "Saturation" },
+  { path: "saturationChain.transistorDrive", label: "Transistor Drive", category: "Saturation" },
+  { path: "saturationChain.mix", label: "Saturation Mix", category: "Saturation" },
+];
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
@@ -270,14 +319,26 @@ function ModulatorCard({
         <div className="space-y-1 max-h-20 overflow-y-auto">
           {modRoutes.map((route) => (
             <div key={route.id} className="flex items-center gap-1 text-[8px]">
-              <input
-                type="text"
-                value={route.targetPath}
-                onChange={(e) => onUpdateRoute({ ...route, targetPath: e.target.value })}
-                placeholder="param.path"
-                className="flex-1 bg-muted/50 rounded px-1 py-0.5 text-[8px] border-none focus:outline-none focus:ring-1 focus:ring-primary/50"
-                data-testid={`input-route-target-${route.id}`}
-              />
+              <Select 
+                value={route.targetPath} 
+                onValueChange={(v) => onUpdateRoute({ ...route, targetPath: v })}
+              >
+                <SelectTrigger className="flex-1 h-5 text-[8px]" data-testid={`select-route-target-${route.id}`}>
+                  <SelectValue placeholder="Select target..." />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation"].map((category) => (
+                    <SelectGroup key={category}>
+                      <SelectLabel className="text-[9px] font-semibold">{category}</SelectLabel>
+                      {MODULATION_TARGETS.filter(t => t.category === category).map((target) => (
+                        <SelectItem key={target.path} value={target.path} className="text-[9px]">
+                          {target.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  ))}
+                </SelectContent>
+              </Select>
               <input
                 type="number"
                 value={route.depth}
