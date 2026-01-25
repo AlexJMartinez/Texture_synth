@@ -141,10 +141,14 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       
       const aiP = data.params;
       
+      const validWaveforms = ["sine", "triangle", "sawtooth", "square"] as const;
+      const sanitizeWaveform = (w: any): WaveformType => 
+        validWaveforms.includes(w) ? w : "sine";
+      
       const convertOsc = (osc: any): Oscillator => ({
         enabled: osc.enabled ?? false,
-        waveform: osc.waveform ?? "sine",
-        pitch: hzToPitchState(osc.pitchHz ?? 440),
+        waveform: sanitizeWaveform(osc.waveform),
+        pitch: hzToPitchState(Math.max(20, Math.min(20000, osc.pitchHz ?? 440))),
         detune: osc.detune ?? 0,
         drift: osc.drift ?? 0,
         level: osc.level ?? 100,
@@ -213,13 +217,15 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
     const fmPreset = randomRatioPreset();
     const pmPreset = randomRatioPreset();
+    // Force enabled oscillators should have higher minimum level
+    const minLevel = forceEnabled ? 60 : 30;
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
       waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
       pitch: randomPitchState(55, 2000),
       detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
       drift: Math.round(randomInRange(0, 50 * chaos)),
-      level: Math.round(randomInRange(30, 100)),
+      level: Math.round(randomInRange(minLevel, 100)),
       fmEnabled: Math.random() > 0.7,
       fmRatio: fmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(fmPreset),
       fmRatioPreset: fmPreset,
@@ -242,15 +248,23 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     };
   };
 
-  const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => ({
-    enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
-    attack: Math.round(randomInRange(0, 500 * chaos)),
-    hold: Math.round(randomInRange(0, 300 * chaos)),
-    decay: Math.round(randomInRange(50, 2000)),
-    curve: Math.random() > 0.5 ? current.curve : randomCurve(),
-    target: target,
-    amount: Math.round(randomInRange(20, 100)),
-  });
+  const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => {
+    // Amplitude envelope needs fast attack for percussive sounds
+    const isAmpEnv = target === "amplitude";
+    const maxAttack = isAmpEnv ? 30 : 500 * chaos; // Max 30ms for amp, otherwise chaos-scaled
+    const minDecay = isAmpEnv ? 100 : 50; // Minimum decay for amp envelope
+    const envAmount = isAmpEnv ? 100 : Math.round(randomInRange(20, 100)); // Always 100% for amp
+    
+    return {
+      enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
+      attack: Math.round(randomInRange(0, maxAttack)),
+      hold: Math.round(randomInRange(0, isAmpEnv ? 50 : 300 * chaos)),
+      decay: Math.round(randomInRange(minDecay, 2000)),
+      curve: Math.random() > 0.5 ? current.curve : randomCurve(),
+      target: target,
+      amount: envAmount,
+    };
+  };
 
   const randomizeAll = () => {
     const chaos = chaosAmount / 100;
