@@ -22,7 +22,7 @@ Core architectural decisions include:
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay, Convolution Reverb, and Chorus.
 - **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling.
-- **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, and wet/dry mix for metallic, glitchy hyperpop textures.
+- **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
 - **Mastering Section**: Includes a Soft-Knee Compressor, HF Exciter, and Stereo Widener.
 - **Impact/Transient Tools**: Features a Transient Shaper, Hard Limiter, and Multiband Distortion.
