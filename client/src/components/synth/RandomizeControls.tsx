@@ -61,6 +61,7 @@ function randomizeSubSafe(mutateFrom?: {
   enabled?: boolean;
   filterEnabled?: boolean;
   hpFreq?: number;
+  pitchEnvBypass?: boolean;
 }): {
   enabled: boolean;
   octave: -2 | -1 | 0;
@@ -72,6 +73,7 @@ function randomizeSubSafe(mutateFrom?: {
   attack: number;
   decay: number;
   filterEnabled: boolean;
+  pitchEnvBypass: boolean;
 } {
   const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
   const mix = (cur: number, next: number, amt: number) => cur + (next - cur) * amt;
@@ -96,6 +98,7 @@ function randomizeSubSafe(mutateFrom?: {
     attack: mutateFrom?.attack != null ? Math.round(clamp(mix(mutateFrom.attack, attack, amt), 1, 20)) : Math.round(attack),
     decay: mutateFrom?.decay != null ? Math.round(clamp(mix(mutateFrom.decay, decay, amt), 50, 800)) : Math.round(decay),
     filterEnabled: mutateFrom?.filterEnabled ?? true,
+    pitchEnvBypass: mutateFrom?.pitchEnvBypass ?? true,
   };
 }
 
@@ -527,6 +530,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         filterFreq: currentParams.subOsc.filterFreq,
         hpFreq: currentParams.subOsc.hpFreq ?? 25,
         drive: currentParams.subOsc.drive ?? 0,
+        pitchEnvBypass: currentParams.subOsc.pitchEnvBypass,
       }),
       saturationChain: {
         enabled: currentParams.saturationChain.enabled,

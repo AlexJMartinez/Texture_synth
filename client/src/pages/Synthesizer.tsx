@@ -1531,7 +1531,8 @@ export default function Synthesizer() {
       const stToMult = (st: number) => Math.pow(2, st / 12);
       const pitchEnv = params.envelopes.env2;
       
-      if (pitchEnv.enabled && pitchEnv.amount !== 0) {
+      // Only apply pitch envelope to sub if bypass is disabled
+      if (!sub.pitchEnvBypass && pitchEnv.enabled && pitchEnv.amount !== 0) {
         const subPitchScale = 0.65;
         const dropST = Math.abs(pitchEnv.amount) * 0.48 * subPitchScale;
         const dropTime = Math.max(0.001, (pitchEnv.attack + pitchEnv.hold + pitchEnv.decay) / 1000 * 1.5);
@@ -1546,6 +1547,7 @@ export default function Synthesizer() {
           subOsc.frequency.linearRampToValueAtTime(endHz, now + dropTime);
         }
       } else {
+        // Bypass enabled or no pitch envelope - keep sub at steady frequency
         subOsc.frequency.setValueAtTime(Math.max(20, subFreq), now);
       }
       

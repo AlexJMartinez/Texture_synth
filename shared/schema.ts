@@ -272,6 +272,7 @@ const SubOscillatorSchema = z.object({
   filterFreq: z.number().min(20).max(200),
   hpFreq: z.number().min(10).max(60),
   drive: z.number().min(0).max(100),
+  pitchEnvBypass: z.boolean(),
 });
 
 const SaturationChainSchema = z.object({
@@ -512,6 +513,7 @@ const defaultSubOsc: SubOscillator = {
   filterFreq: 80,
   hpFreq: 25,
   drive: 0,
+  pitchEnvBypass: true,
 };
 
 const defaultSaturationChain: SaturationChain = {
@@ -1554,7 +1556,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
       },
       clickLayer: { enabled: true, level: 70, decay: 2, filterType: "highpass", filterFreq: 8000, filterQ: 6, srrEnabled: false, srrAmount: 4, noiseType: "white" },
-      subOsc: { enabled: true, waveform: "sine", octave: -1, level: 80, attack: 0, decay: 200, filterEnabled: true, filterFreq: 60, hpFreq: 25, drive: 20 },
+      subOsc: { enabled: true, waveform: "sine", octave: -1, level: 80, attack: 0, decay: 200, filterEnabled: true, filterFreq: 60, hpFreq: 25, drive: 20, pitchEnvBypass: true },
       saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 40, tapeWarmth: 30, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: true, transistorDrive: 60, transistorAsymmetry: 40, mix: 100 },
       mastering: { compressorEnabled: true, compressorThreshold: -8, compressorRatio: 6, compressorAttack: 2, compressorRelease: 80, compressorKnee: 3, compressorMakeup: 6, exciterEnabled: true, exciterFreq: 5000, exciterAmount: 50, exciterMix: 60, stereoEnabled: false, stereoWidth: 100 },
       effects: {
@@ -1584,7 +1586,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
       },
       clickLayer: { enabled: true, level: 60, decay: 1.5, filterType: "bandpass", filterFreq: 6000, filterQ: 8, srrEnabled: true, srrAmount: 6, noiseType: "pink" },
-      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 90, attack: 0, decay: 250, filterEnabled: true, filterFreq: 40, hpFreq: 20, drive: 30 },
+      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 90, attack: 0, decay: 250, filterEnabled: true, filterFreq: 40, hpFreq: 20, drive: 30, pitchEnvBypass: true },
       saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 50, tapeWarmth: 50, tubeEnabled: true, tubeDrive: 30, tubeBias: 60, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 100 },
       mastering: { compressorEnabled: true, compressorThreshold: -6, compressorRatio: 8, compressorAttack: 1, compressorRelease: 60, compressorKnee: 0, compressorMakeup: 8, exciterEnabled: true, exciterFreq: 4000, exciterAmount: 40, exciterMix: 50, stereoEnabled: false, stereoWidth: 100 },
       effects: {
@@ -1674,7 +1676,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
         env3: { enabled: false, attack: 10, hold: 50, decay: 500, curve: "exponential", target: "pitch", amount: 25 },
       },
       clickLayer: { enabled: true, level: 50, decay: 1, filterType: "highpass", filterFreq: 4000, filterQ: 3, srrEnabled: false, srrAmount: 4, noiseType: "brown" },
-      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 100, attack: 0, decay: 400, filterEnabled: true, filterFreq: 50, hpFreq: 20, drive: 40 },
+      subOsc: { enabled: true, waveform: "sine", octave: -2, level: 100, attack: 0, decay: 400, filterEnabled: true, filterFreq: 50, hpFreq: 20, drive: 40, pitchEnvBypass: true },
       saturationChain: { enabled: true, tapeEnabled: true, tapeDrive: 60, tapeWarmth: 70, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 100 },
       mastering: { compressorEnabled: true, compressorThreshold: -4, compressorRatio: 10, compressorAttack: 0.5, compressorRelease: 40, compressorKnee: 0, compressorMakeup: 10, exciterEnabled: false, exciterFreq: 6000, exciterAmount: 30, exciterMix: 50, stereoEnabled: false, stereoWidth: 100 },
       filter: { enabled: true, frequency: 100, resonance: 3, type: "lowpass", combDelay: 5, gain: 0 },

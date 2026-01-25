@@ -109,6 +109,16 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           />
         </div>
 
+        <div className="flex items-center justify-between rounded border border-border/50 p-1 mb-1.5">
+          <span className="text-[10px] text-muted-foreground">Pitch Env Bypass</span>
+          <Switch
+            checked={subOsc.pitchEnvBypass}
+            onCheckedChange={(v) => update("pitchEnvBypass", v)}
+            className="scale-50"
+            data-testid="switch-sub-pitch-env-bypass"
+          />
+        </div>
+
         <div className={`rounded border border-border/50 p-1.5 ${!subOsc.filterEnabled ? 'opacity-50' : ''}`}>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-muted-foreground">Filters</span>
