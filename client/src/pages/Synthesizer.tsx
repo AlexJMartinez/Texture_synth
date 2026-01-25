@@ -1389,42 +1389,92 @@ export default function Synthesizer() {
     if (params.modal.enabled) {
       const modal = params.modal;
       const modeConfigs = [
-        { mode: modal.modes.mode1, key: "mode1" },
-        { mode: modal.modes.mode2, key: "mode2" },
-        { mode: modal.modes.mode3, key: "mode3" },
-        { mode: modal.modes.mode4, key: "mode4" },
+        { mode: modal.modes.mode1, key: "mode1", index: 0 },
+        { mode: modal.modes.mode2, key: "mode2", index: 1 },
+        { mode: modal.modes.mode3, key: "mode3", index: 2 },
+        { mode: modal.modes.mode4, key: "mode4", index: 3 },
       ];
 
-      if (modal.impactNoise > 0) {
-        const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
-        const noiseData = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < noiseData.length; i++) {
-          noiseData[i] = (seededRandom() * 2 - 1); // Fix 6: Use seeded random
+      // Generate exciter based on exciterType
+      const exciterLevel = modal.impactNoise / 100;
+      if (exciterLevel > 0) {
+        const exciterDuration = modal.impactDecay / 1000;
+        
+        if (modal.exciterType === "noise") {
+          // White noise burst
+          const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.1, ctx.sampleRate);
+          const noiseData = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < noiseData.length; i++) {
+            noiseData[i] = (seededRandom() * 2 - 1);
+          }
+          const noiseSource = ctx.createBufferSource();
+          noiseSource.buffer = noiseBuffer;
+          const noiseGain = ctx.createGain();
+          triggerAHD(noiseGain.gain, now, { attack: 0.0005, hold: 0, decay: exciterDuration }, exciterLevel * 0.5, { startFromCurrent: false });
+          noiseSource.connect(noiseGain);
+          noiseGain.connect(masterGain);
+          noiseSource.start(now);
+          noiseSource.stop(now + 0.1);
+        } else if (modal.exciterType === "impulse") {
+          // Sharp impulse click
+          const impBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.01, ctx.sampleRate);
+          const impData = impBuffer.getChannelData(0);
+          for (let i = 0; i < impData.length; i++) {
+            impData[i] = Math.exp(-i / (ctx.sampleRate * 0.001)) * (seededRandom() * 2 - 1);
+          }
+          const impSource = ctx.createBufferSource();
+          impSource.buffer = impBuffer;
+          const impGain = ctx.createGain();
+          impGain.gain.value = exciterLevel;
+          impSource.connect(impGain);
+          impGain.connect(masterGain);
+          impSource.start(now);
+          impSource.stop(now + 0.01);
+        } else if (modal.exciterType === "mallet") {
+          // Soft mallet - filtered noise with slower attack
+          const malletBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.05, ctx.sampleRate);
+          const malletData = malletBuffer.getChannelData(0);
+          for (let i = 0; i < malletData.length; i++) {
+            const env = Math.sin(Math.PI * i / malletData.length);
+            malletData[i] = env * (seededRandom() * 2 - 1);
+          }
+          const malletSource = ctx.createBufferSource();
+          malletSource.buffer = malletBuffer;
+          const malletFilter = ctx.createBiquadFilter();
+          malletFilter.type = "lowpass";
+          malletFilter.frequency.value = 2000;
+          const malletGain = ctx.createGain();
+          malletGain.gain.value = exciterLevel * 0.7;
+          malletSource.connect(malletFilter);
+          malletFilter.connect(malletGain);
+          malletGain.connect(masterGain);
+          malletSource.start(now);
+          malletSource.stop(now + 0.05);
+        } else if (modal.exciterType === "pluck") {
+          // Pluck - short pitched burst
+          const pluckOsc = ctx.createOscillator();
+          pluckOsc.type = "sawtooth";
+          pluckOsc.frequency.value = modal.basePitch * 2;
+          const pluckGain = ctx.createGain();
+          triggerAHD(pluckGain.gain, now, { attack: 0.0001, hold: 0, decay: 0.015 }, exciterLevel * 0.4, { startFromCurrent: false });
+          pluckOsc.connect(pluckGain);
+          pluckGain.connect(masterGain);
+          pluckOsc.start(now);
+          pluckOsc.stop(now + 0.02);
         }
-        
-        const noiseSource = ctx.createBufferSource();
-        noiseSource.buffer = noiseBuffer;
-        
-        const noiseGain = ctx.createGain();
-        const noiseLevel = modal.impactNoise / 100;
-        triggerAHD(noiseGain.gain, now, {
-          attack: 0.0005,
-          hold: 0,
-          decay: modal.impactDecay / 1000
-        }, noiseLevel * 0.5, { startFromCurrent: false });
-        
-        noiseSource.connect(noiseGain);
-        noiseGain.connect(masterGain);
-        noiseSource.start(now);
-        noiseSource.stop(now + 0.1);
       }
 
-      for (const { mode } of modeConfigs) {
+      // Generate modes (limited by modeCount)
+      for (const { mode, index } of modeConfigs) {
+        if (index >= modal.modeCount) continue;
         if (mode.level === 0) continue;
         
         const modeOsc = ctx.createOscillator();
         modeOsc.type = "sine";
-        modeOsc.frequency.value = modal.basePitch * mode.ratio;
+        
+        // Apply inharmonicity - slight detuning that increases with mode number
+        const inharmonicityFactor = 1 + (modal.inharmonicity / 100) * 0.02 * (index * index);
+        modeOsc.frequency.value = modal.basePitch * mode.ratio * inharmonicityFactor;
         
         const modeGain = ctx.createGain();
         const modeLevel = mode.level / 100;
@@ -1447,6 +1497,9 @@ export default function Synthesizer() {
       const partialKeys = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"] as const;
       
       partialKeys.forEach((key, i) => {
+        // Skip partials beyond partialCount
+        if (i >= additive.partialCount) return;
+        
         const partial = additive.partials[key];
         if (partial.level === 0) return;
         
@@ -1454,15 +1507,19 @@ export default function Synthesizer() {
         const partialOsc = ctx.createOscillator();
         partialOsc.type = "sine";
         
+        // Apply randomness - random pitch deviation per partial
+        const randomCents = (seededRandom() - 0.5) * 2 * (additive.randomness / 100) * 50;
         const spreadCents = (additive.spread / 100) * (harmonic - 1) * 10;
         const baseFreq = additive.basePitch * harmonic;
-        const detunedFreq = baseFreq * Math.pow(2, (partial.detune + spreadCents) / 1200);
+        const detunedFreq = baseFreq * Math.pow(2, (partial.detune + spreadCents + randomCents) / 1200);
         partialOsc.frequency.value = detunedFreq;
         
         const partialGain = ctx.createGain();
         const baseLevel = partial.level / 100;
         const slopeMultiplier = 1 - (additive.decaySlope / 100) * (harmonic - 1) / 7;
-        const finalLevel = baseLevel * Math.max(0.1, slopeMultiplier) * 0.2;
+        // Apply level randomness too
+        const levelRandom = 1 - (seededRandom() * (additive.randomness / 100) * 0.3);
+        const finalLevel = baseLevel * Math.max(0.1, slopeMultiplier) * levelRandom * 0.2;
         
         const ampEnvForPartial = params.envelopes.env3;
         triggerAHD(partialGain.gain, now, {

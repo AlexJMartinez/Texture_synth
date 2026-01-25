@@ -108,9 +108,15 @@ const ModalModeSchema = z.object({
   level: z.number().min(0).max(100),
 });
 
+export const ModalExciterType = z.enum(["noise", "impulse", "mallet", "pluck"]);
+export type ModalExciterType = z.infer<typeof ModalExciterType>;
+
 const ModalSynthSchema = z.object({
   enabled: z.boolean(),
   basePitch: z.number().min(20).max(2000),
+  modeCount: z.number().min(1).max(8),
+  inharmonicity: z.number().min(0).max(100),
+  exciterType: ModalExciterType,
   impactNoise: z.number().min(0).max(100),
   impactDecay: z.number().min(1).max(100),
   modes: z.object({
@@ -129,6 +135,8 @@ const AdditivePartialSchema = z.object({
 const AdditiveSynthSchema = z.object({
   enabled: z.boolean(),
   basePitch: z.number().min(20).max(2000),
+  partialCount: z.number().min(1).max(16),
+  randomness: z.number().min(0).max(100),
   partials: z.object({
     p1: AdditivePartialSchema,
     p2: AdditivePartialSchema,
@@ -506,6 +514,9 @@ export const defaultSynthParameters: SynthParameters = {
   modal: {
     enabled: false,
     basePitch: 440,
+    modeCount: 4,
+    inharmonicity: 0,
+    exciterType: "noise" as const,
     impactNoise: 50,
     impactDecay: 20,
     modes: {
@@ -518,6 +529,8 @@ export const defaultSynthParameters: SynthParameters = {
   additive: {
     enabled: false,
     basePitch: 220,
+    partialCount: 8,
+    randomness: 0,
     partials: {
       p1: { level: 100, detune: 0 },
       p2: { level: 50, detune: 0 },
@@ -815,6 +828,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       modal: {
         enabled: true,
         basePitch: 440,
+        modeCount: 4,
+        inharmonicity: 0,
+        exciterType: "mallet" as const,
         impactNoise: 30,
         impactDecay: 15,
         modes: {
@@ -844,6 +860,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       modal: {
         enabled: true,
         basePitch: 180,
+        modeCount: 4,
+        inharmonicity: 20,
+        exciterType: "impulse" as const,
         impactNoise: 80,
         impactDecay: 8,
         modes: {
@@ -873,6 +892,8 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       additive: {
         enabled: true,
         basePitch: 220,
+        partialCount: 8,
+        randomness: 0,
         partials: {
           p1: { level: 100, detune: 0 },
           p2: { level: 80, detune: 0 },
@@ -1009,6 +1030,9 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       modal: {
         enabled: true,
         basePitch: 95,
+        modeCount: 4,
+        inharmonicity: 15,
+        exciterType: "noise" as const,
         impactNoise: 90,
         impactDecay: 5,
         modes: {
@@ -1494,7 +1518,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       clickLayer: { enabled: true, level: 80, decay: 2.5, filterType: "highpass", filterFreq: 5000, filterQ: 4, srrEnabled: true, srrAmount: 8, noiseType: "white" },
       saturationChain: { enabled: true, tapeEnabled: false, tapeDrive: 30, tapeWarmth: 40, tubeEnabled: false, tubeDrive: 20, tubeBias: 50, transistorEnabled: true, transistorDrive: 80, transistorAsymmetry: 60, mix: 100 },
       mastering: { compressorEnabled: true, compressorThreshold: -10, compressorRatio: 4, compressorAttack: 3, compressorRelease: 100, compressorKnee: 6, compressorMakeup: 5, exciterEnabled: true, exciterFreq: 6000, exciterAmount: 60, exciterMix: 70, stereoEnabled: false, stereoWidth: 100 },
-      modal: { enabled: true, basePitch: 180, impactNoise: 40, impactDecay: 10, modes: { mode1: { ratio: 1, decay: 100, level: 100 }, mode2: { ratio: 2.3, decay: 80, level: 50 }, mode3: { ratio: 4.7, decay: 60, level: 30 }, mode4: { ratio: 7.2, decay: 40, level: 20 } } },
+      modal: { enabled: true, basePitch: 180, modeCount: 4, inharmonicity: 30, exciterType: "impulse" as const, impactNoise: 40, impactDecay: 10, modes: { mode1: { ratio: 1, decay: 100, level: 100 }, mode2: { ratio: 2.3, decay: 80, level: 50 }, mode3: { ratio: 4.7, decay: 60, level: 30 }, mode4: { ratio: 7.2, decay: 40, level: 20 } } },
       effects: {
         ...defaultSynthParameters.effects,
         saturation: 50,
@@ -1524,7 +1548,7 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
       clickLayer: { enabled: true, level: 90, decay: 3, filterType: "bandpass", filterFreq: 10000, filterQ: 5, srrEnabled: false, srrAmount: 4, noiseType: "white" },
       saturationChain: { enabled: true, tapeEnabled: false, tapeDrive: 30, tapeWarmth: 40, tubeEnabled: true, tubeDrive: 40, tubeBias: 40, transistorEnabled: false, transistorDrive: 40, transistorAsymmetry: 30, mix: 80 },
       mastering: { compressorEnabled: true, compressorThreshold: -12, compressorRatio: 3, compressorAttack: 5, compressorRelease: 120, compressorKnee: 10, compressorMakeup: 4, exciterEnabled: true, exciterFreq: 8000, exciterAmount: 80, exciterMix: 90, stereoEnabled: false, stereoWidth: 100 },
-      modal: { enabled: true, basePitch: 2000, impactNoise: 60, impactDecay: 5, modes: { mode1: { ratio: 1, decay: 150, level: 100 }, mode2: { ratio: 1.6, decay: 120, level: 80 }, mode3: { ratio: 2.7, decay: 100, level: 60 }, mode4: { ratio: 4.1, decay: 80, level: 40 } } },
+      modal: { enabled: true, basePitch: 2000, modeCount: 4, inharmonicity: 10, exciterType: "pluck" as const, impactNoise: 60, impactDecay: 5, modes: { mode1: { ratio: 1, decay: 150, level: 100 }, mode2: { ratio: 1.6, decay: 120, level: 80 }, mode3: { ratio: 2.7, decay: 100, level: 60 }, mode4: { ratio: 4.1, decay: 80, level: 40 } } },
       effects: {
         ...defaultSynthParameters.effects,
         saturation: 20,

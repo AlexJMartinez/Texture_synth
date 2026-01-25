@@ -18,6 +18,9 @@ Core architectural decisions include:
 - **Click Layer**: A dedicated transient generator with ultra-fast noise, various noise types, filter options, and sample rate reduction.
 - **Sub Oscillator**: A separate layer for low-end, offering sine and triangle waveforms with dedicated envelopes and filtering.
 - **Advanced Synthesis Engines**: Selectable Modal, Additive, and Granular synthesis engines for diverse sound generation.
+  - **Modal Synthesis**: Physical modeling with modeCount (1-4 resonant modes), inharmonicity (0-100% quadratic detuning), exciterType (noise burst/sharp impulse/soft mallet/pitched pluck), plus per-mode ratio, decay, and level controls.
+  - **Additive Synthesis**: Harmonic stacking with partialCount (1-8 active harmonics), randomness (0-100% pitch and level variation), spread, decay slope, and per-partial level/detune controls.
+  - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click).
 - **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay, Convolution Reverb, and Chorus.

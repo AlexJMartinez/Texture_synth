@@ -199,6 +199,9 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       modal: {
         enabled: Math.random() > 0.7,
         basePitch: Math.round(randomInRange(100, 800, true)),
+        modeCount: Math.round(randomInRange(2, 4)),
+        inharmonicity: Math.round(randomInRange(0, 50 * chaos)),
+        exciterType: (["noise", "impulse", "mallet", "pluck"] as const)[Math.floor(Math.random() * 4)],
         impactNoise: Math.round(randomInRange(20, 80 * chaos)),
         impactDecay: Math.round(randomInRange(5, 50)),
         modes: {
@@ -239,6 +242,8 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       additive: {
         enabled: Math.random() > 0.8,
         basePitch: Math.round(randomInRange(55, 440, true)),
+        partialCount: Math.round(randomInRange(4, 8)),
+        randomness: Math.round(randomInRange(0, 40 * chaos)),
         partials: {
           p1: { level: 100, detune: 0 },
           p2: { level: Math.round(randomInRange(20, 80)), detune: Math.round(randomInRange(-20, 20)) },
@@ -398,6 +403,9 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       modal: {
         enabled: currentParams.modal.enabled,
         basePitch: Math.round(mutateValue(currentParams.modal.basePitch, 20, 2000, true)),
+        modeCount: currentParams.modal.modeCount,
+        inharmonicity: Math.round(mutateValue(currentParams.modal.inharmonicity, 0, 100)),
+        exciterType: currentParams.modal.exciterType,
         impactNoise: Math.round(mutateValue(currentParams.modal.impactNoise, 0, 100)),
         impactDecay: Math.round(mutateValue(currentParams.modal.impactDecay, 1, 100)),
         modes: {
@@ -410,6 +418,8 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       additive: {
         enabled: currentParams.additive.enabled,
         basePitch: Math.round(mutateValue(currentParams.additive.basePitch, 20, 2000, true)),
+        partialCount: currentParams.additive.partialCount,
+        randomness: Math.round(mutateValue(currentParams.additive.randomness, 0, 100)),
         partials: {
           p1: { level: currentParams.additive.partials.p1.level, detune: 0 },
           p2: { level: Math.round(mutateValue(currentParams.additive.partials.p2.level, 0, 100)), detune: Math.round(mutateValue(currentParams.additive.partials.p2.detune, -100, 100)) },
