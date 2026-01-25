@@ -58,57 +58,16 @@ export function TriggerButton({ onTrigger, isPlaying, size = "md" }: TriggerButt
       `}
       style={{
         background: isPlaying 
-          ? 'linear-gradient(145deg, hsl(155, 45%, 55%), hsl(155, 45%, 40%))'
-          : 'linear-gradient(145deg, hsl(155, 45%, 50%), hsl(155, 45%, 35%))',
-        boxShadow: isPlaying
-          ? `inset 2px 2px 4px rgba(255,255,255,0.2),
-             inset -2px -2px 4px rgba(0,0,0,0.3),
-             0 0 30px hsl(155, 45%, 50%, 0.5),
-             0 6px 20px rgba(0,0,0,0.4)`
-          : `inset 2px 2px 4px rgba(255,255,255,0.15),
-             inset -2px -2px 4px rgba(0,0,0,0.3),
-             0 0 15px hsl(155, 45%, 50%, 0.25),
-             0 6px 20px rgba(0,0,0,0.4)`,
+          ? 'hsl(155, 45%, 50%)'
+          : 'hsl(155, 45%, 42%)',
       }}
       data-testid="button-trigger"
     >
-      <div 
-        className={`
-          absolute inset-1.5 rounded-md
-          transition-opacity duration-150
-          ${isPlaying ? 'opacity-100' : 'opacity-0'}
-        `}
-        style={{
-          background: 'radial-gradient(circle, hsl(155, 45%, 65%, 0.4) 0%, transparent 70%)',
-        }}
-      />
-      
       {isPlaying ? (
-        <Zap className={`${iconSizes[size]} text-white drop-shadow-lg`} fill="currentColor" />
+        <Zap className={`${iconSizes[size]} text-white`} fill="currentColor" />
       ) : (
-        <Play className={`${iconSizes[size]} text-white drop-shadow-lg ml-0.5`} fill="currentColor" />
+        <Play className={`${iconSizes[size]} text-white ml-0.5`} fill="currentColor" />
       )}
-
-      <div 
-        className="absolute inset-0 rounded-lg pointer-events-none"
-        style={{
-          background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%)',
-        }}
-      />
-
-      <div 
-        className={`
-          absolute inset-0 rounded-lg pointer-events-none
-          transition-all duration-300
-          ${isPlaying ? 'opacity-100 scale-105' : 'opacity-0 scale-100'}
-        `}
-        style={{
-          background: 'transparent',
-          boxShadow: isPlaying 
-            ? '0 0 15px hsl(155, 45%, 55%, 0.5), 0 0 30px hsl(155, 45%, 50%, 0.3), inset 0 0 15px hsl(155, 45%, 65%, 0.2)'
-            : 'none',
-        }}
-      />
     </button>
   );
 }
