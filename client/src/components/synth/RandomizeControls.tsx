@@ -367,12 +367,12 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         useCustomIR: currentParams.convolver.useCustomIR,
       },
       spectralScrambler: {
-        enabled: Math.random() > 0.6,
+        enabled: Math.random() > 0.7, // Less likely to enable (was 0.6)
         fftSize: (["256", "512", "1024", "2048"] as const)[Math.floor(Math.random() * 4)],
-        scrambleAmount: Math.round(randomInRange(20, 80 * chaos)),
-        binShift: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
-        freeze: Math.random() > 0.85,
-        mix: Math.round(randomInRange(50, 100)),
+        scrambleAmount: Math.round(randomInRange(10, 50 * chaos)), // Reduced max (was 80)
+        binShift: Math.round(randomInRange(-20 * chaos, 20 * chaos)), // Reduced range (was 30)
+        freeze: false, // Disable freeze to prevent silence
+        mix: Math.round(randomInRange(20, 50)), // Max 50% wet to preserve dry signal (was 100)
       },
       clickLayer: {
         enabled: Math.random() > 0.5,
