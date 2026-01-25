@@ -260,9 +260,19 @@ export default function Synthesizer() {
     scrambleAmount: number, 
     binShift: number,
     freeze: boolean,
-    mix: number
+    mix: number,
+    gateThreshold: number,
+    stretch: number,
+    binDensity: number
   ): void => {
-    if (scrambleAmount === 0 && binShift === 0 && !freeze) return;
+    // Check if any processing is needed
+    const hasScramble = scrambleAmount > 0;
+    const hasShift = binShift !== 0;
+    const hasGate = gateThreshold < 0;
+    const hasStretch = Math.abs(stretch - 1.0) > 0.01;
+    const hasDensity = binDensity < 100;
+    
+    if (!hasScramble && !hasShift && !freeze && !hasGate && !hasStretch && !hasDensity) return;
     
     // Validate and clamp to power-of-two (256, 512, 1024, 2048)
     const validSizes = [256, 512, 1024, 2048];
@@ -272,8 +282,11 @@ export default function Synthesizer() {
     
     const hopSize = fftSize / 4;
     const wetMix = mix / 100;
-    const dryMix = 1 - wetMix;
     const numBins = fftSize / 2;
+    
+    // Convert gate threshold from dB to linear amplitude
+    // gateThreshold is 0 (off) to -60 (aggressive)
+    const gateLinear = gateThreshold < 0 ? Math.pow(10, gateThreshold / 20) : 0;
     
     // Reset frozen spectrum if FFT size changed
     if (frozenSpectrumRef.current && frozenSpectrumRef.current.fftSize !== fftSize) {
@@ -299,13 +312,48 @@ export default function Synthesizer() {
     const scrambledReal = buffers.scrambledReal!;
     const scrambledImag = buffers.scrambledImag!;
     
-    // Create seeded random for deterministic scrambling
-    const seed = Math.floor(scrambleAmount * 1000 + binShift * 100);
+    // Create seeded random for deterministic scrambling (per-trigger, not per-frame for impact)
+    const seed = Math.floor(scrambleAmount * 1000 + binShift * 100 + stretch * 50 + binDensity);
     let rngState = seed;
     const seededRandom = () => {
       rngState = (rngState * 1103515245 + 12345) & 0x7fffffff;
       return rngState / 0x7fffffff;
     };
+    
+    // Pre-calculate which bins are active based on density (per-trigger for discrete states)
+    const activeBins = new Array(numBins).fill(false);
+    const densityFraction = binDensity / 100;
+    for (let k = 0; k < numBins; k++) {
+      activeBins[k] = seededRandom() < densityFraction;
+    }
+    // Always keep some low-frequency content for audibility
+    for (let k = 0; k < Math.min(10, numBins); k++) {
+      activeBins[k] = true;
+    }
+    
+    // Pre-calculate scramble mapping (per-trigger for impact, not per-frame)
+    const scrambleMap = new Int32Array(numBins);
+    const scrambleRange = Math.floor((scrambleAmount / 100) * numBins * 0.5);
+    const shiftAmount = Math.floor((binShift / 50) * numBins * 0.25);
+    rngState = seed; // Reset for consistent mapping
+    for (let k = 0; k < numBins; k++) {
+      let srcBin = k - shiftAmount;
+      
+      // Apply spectral stretch/squeeze
+      if (hasStretch) {
+        srcBin = Math.round(srcBin / stretch);
+      }
+      
+      // Apply scrambling
+      if (scrambleRange > 0) {
+        const scrambleProb = scrambleAmount / 100;
+        if (seededRandom() < scrambleProb) {
+          srcBin += Math.floor((seededRandom() - 0.5) * scrambleRange * 2);
+        }
+      }
+      
+      scrambleMap[k] = Math.max(0, Math.min(numBins - 1, srcBin));
+    }
     
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
       const data = buffer.getChannelData(channel);
@@ -317,9 +365,8 @@ export default function Synthesizer() {
       
       for (let frame = 0; frame < numFrames; frame++) {
         const startIdx = frame * hopSize;
-        rngState = seed + frame; // Reset RNG per frame for consistency
         
-        // Extract frame and apply window (reuse buffers)
+        // Extract frame and apply window
         for (let i = 0; i < fftSize; i++) {
           const idx = startIdx + i;
           real[i] = idx < data.length ? data[idx] * window[i] : 0;
@@ -334,7 +381,6 @@ export default function Synthesizer() {
           real.set(frozenSpectrumRef.current.real);
           imag.set(frozenSpectrumRef.current.imag);
         } else if (freeze && !frozenSpectrumRef.current) {
-          // Store first frame as frozen spectrum
           frozenSpectrumRef.current = {
             real: new Float32Array(real),
             imag: new Float32Array(imag),
@@ -342,41 +388,74 @@ export default function Synthesizer() {
           };
         }
         
-        // Scramble and shift frequency bins (clear reused buffers)
-        scrambledReal.fill(0);
-        scrambledImag.fill(0);
-        const scrambleRange = Math.floor((scrambleAmount / 100) * numBins * 0.5);
-        const shiftAmount = Math.floor((binShift / 50) * numBins * 0.25);
-        
-        for (let k = 0; k < numBins; k++) {
-          // Calculate source bin with shift
-          let srcBin = k - shiftAmount;
-          
-          // Apply scrambling based on scramble amount
-          if (scrambleRange > 0) {
-            const scrambleProb = scrambleAmount / 100;
-            if (seededRandom() < scrambleProb) {
-              srcBin += Math.floor((seededRandom() - 0.5) * scrambleRange * 2);
-            }
-          }
-          
-          // Clamp to valid range
-          srcBin = Math.max(0, Math.min(numBins - 1, srcBin));
-          
-          // Copy bin magnitudes (positive and negative frequencies)
-          scrambledReal[k] = real[srcBin];
-          scrambledImag[k] = imag[srcBin];
-          if (k > 0 && k < numBins) {
-            scrambledReal[fftSize - k] = real[fftSize - srcBin];
-            scrambledImag[fftSize - k] = imag[fftSize - srcBin];
+        // Find max magnitude for this frame (for relative gating) - computed per frame
+        let frameMagnitude = 0;
+        if (hasGate) {
+          for (let k = 0; k < numBins; k++) {
+            const mag = Math.sqrt(real[k] * real[k] + imag[k] * imag[k]);
+            if (mag > frameMagnitude) frameMagnitude = mag;
           }
         }
         
-        // DC and Nyquist bins
-        scrambledReal[0] = real[0];
+        // Process frequency bins
+        scrambledReal.fill(0);
+        scrambledImag.fill(0);
+        
+        for (let k = 0; k < numBins; k++) {
+          const srcBin = scrambleMap[k];
+          let srcReal = real[srcBin];
+          let srcImag = imag[srcBin];
+          
+          // Apply spectral gating (per-frame threshold)
+          if (hasGate && frameMagnitude > 0) {
+            const mag = Math.sqrt(srcReal * srcReal + srcImag * srcImag);
+            const normalizedMag = mag / frameMagnitude;
+            if (normalizedMag < gateLinear) {
+              srcReal = 0;
+              srcImag = 0;
+            }
+          }
+          
+          // Apply bin density (zero out inactive bins)
+          if (hasDensity && !activeBins[k]) {
+            srcReal = 0;
+            srcImag = 0;
+          }
+          
+          // Copy to output (positive frequency)
+          scrambledReal[k] = srcReal;
+          scrambledImag[k] = srcImag;
+          
+          // Mirror for negative frequency - use conjugate symmetry (same real, negated imag)
+          // This maintains Hermitian symmetry for real-valued output
+          if (k > 0 && k < numBins) {
+            scrambledReal[fftSize - k] = srcReal;
+            scrambledImag[fftSize - k] = -srcImag;
+          }
+        }
+        
+        // DC bin (k=0) - preserved unshifted but apply gating/density
+        // DC represents the signal's average level and should stay at bin 0
+        let dcReal = real[0];
+        if (hasGate && frameMagnitude > 0) {
+          const dcMag = Math.abs(dcReal);
+          if (dcMag / frameMagnitude < gateLinear) dcReal = 0;
+        }
+        if (hasDensity && !activeBins[0]) dcReal = 0;
+        scrambledReal[0] = dcReal;
         scrambledImag[0] = 0;
+        
+        // Nyquist bin - preserved unshifted but apply gating/density
+        // Nyquist represents the highest frequency and should stay at numBins
         if (fftSize % 2 === 0) {
-          scrambledReal[numBins] = real[numBins];
+          let nyqReal = real[numBins];
+          if (hasGate && frameMagnitude > 0) {
+            const nyqMag = Math.abs(nyqReal);
+            if (nyqMag / frameMagnitude < gateLinear) nyqReal = 0;
+          }
+          // Nyquist density: use last active bin status (numBins-1) since activeBins.length = numBins
+          if (hasDensity && !activeBins[numBins - 1]) nyqReal = 0;
+          scrambledReal[numBins] = nyqReal;
           scrambledImag[numBins] = 0;
         }
         
@@ -1552,14 +1631,17 @@ export default function Synthesizer() {
         applyBitcrusher(renderedBuffer, params.effects.bitcrusher);
       }
       // Apply spectral scrambling (post-process FFT manipulation)
-      if (params.spectralScrambler.enabled && (params.spectralScrambler.scrambleAmount > 0 || params.spectralScrambler.binShift !== 0 || params.spectralScrambler.freeze)) {
+      if (params.spectralScrambler.enabled) {
         applySpectralScrambling(
           renderedBuffer,
           parseInt(params.spectralScrambler.fftSize),
           params.spectralScrambler.scrambleAmount,
           params.spectralScrambler.binShift,
           params.spectralScrambler.freeze,
-          params.spectralScrambler.mix
+          params.spectralScrambler.mix,
+          params.spectralScrambler.gateThreshold,
+          params.spectralScrambler.stretch,
+          params.spectralScrambler.binDensity
         );
       }
       // Apply additional safety fadeout to prevent any remaining pops

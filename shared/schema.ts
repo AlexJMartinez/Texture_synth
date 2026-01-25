@@ -242,6 +242,9 @@ const SpectralScramblerSchema = z.object({
   binShift: z.number().min(-50).max(50),
   freeze: z.boolean(),
   mix: z.number().min(0).max(100),
+  gateThreshold: z.number().min(-60).max(0),
+  stretch: z.number().min(0.5).max(2.0),
+  binDensity: z.number().min(5).max(100),
 });
 
 export const SynthParametersSchema = z.object({
@@ -476,6 +479,9 @@ const defaultSpectralScrambler: SpectralScrambler = {
   binShift: 0,
   freeze: false,
   mix: 100,
+  gateThreshold: 0,
+  stretch: 1.0,
+  binDensity: 100,
 };
 
 export const defaultSynthParameters: SynthParameters = {

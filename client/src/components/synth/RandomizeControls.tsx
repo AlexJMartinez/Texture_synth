@@ -279,12 +279,15 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         useCustomIR: currentParams.convolver.useCustomIR,
       },
       spectralScrambler: {
-        enabled: Math.random() > 0.7, // Less likely to enable (was 0.6)
-        fftSize: (["256", "512", "1024", "2048"] as const)[Math.floor(Math.random() * 4)],
-        scrambleAmount: Math.round(randomInRange(10, 50 * chaos)), // Reduced max (was 80)
-        binShift: Math.round(randomInRange(-20 * chaos, 20 * chaos)), // Reduced range (was 30)
-        freeze: false, // Disable freeze to prevent silence
-        mix: Math.round(randomInRange(20, 50)), // Max 50% wet to preserve dry signal (was 100)
+        enabled: Math.random() > 0.7,
+        fftSize: (["512", "1024", "2048"] as const)[Math.floor(Math.random() * 3)],
+        scrambleAmount: Math.round(randomInRange(10, 50 * chaos)),
+        binShift: Math.round(randomInRange(-20 * chaos, 20 * chaos)),
+        freeze: false,
+        mix: Math.round(randomInRange(20, 50)),
+        gateThreshold: Math.random() > 0.5 ? Math.round(randomInRange(-40, -20)) : 0,
+        stretch: Math.round(randomInRange(0.7, 1.5) * 100) / 100,
+        binDensity: Math.round(randomInRange(30, 100)),
       },
       clickLayer: {
         enabled: Math.random() > 0.5,
@@ -494,10 +497,13 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       spectralScrambler: {
         enabled: currentParams.spectralScrambler.enabled,
         fftSize: currentParams.spectralScrambler.fftSize,
-        scrambleAmount: Math.round(mutateValue(currentParams.spectralScrambler.scrambleAmount, 0, 60)), // Reduced max
-        binShift: Math.round(mutateValue(currentParams.spectralScrambler.binShift, -30, 30)), // Reduced range
-        freeze: false, // Keep freeze disabled
-        mix: Math.round(mutateValue(currentParams.spectralScrambler.mix, 10, 60)), // Max 60% wet
+        scrambleAmount: Math.round(mutateValue(currentParams.spectralScrambler.scrambleAmount, 0, 60)),
+        binShift: Math.round(mutateValue(currentParams.spectralScrambler.binShift, -30, 30)),
+        freeze: false,
+        mix: Math.round(mutateValue(currentParams.spectralScrambler.mix, 10, 60)),
+        gateThreshold: Math.round(mutateValue(currentParams.spectralScrambler.gateThreshold, -60, 0)),
+        stretch: Math.round(mutateValue(currentParams.spectralScrambler.stretch, 0.5, 2.0) * 100) / 100,
+        binDensity: Math.round(mutateValue(currentParams.spectralScrambler.binDensity, 5, 100)),
       },
       clickLayer: {
         enabled: currentParams.clickLayer.enabled,

@@ -67,6 +67,40 @@ export function SpectralScramblerPanel({ spectralScrambler, onChange }: Spectral
           />
           
           <Knob
+            label="Stretch"
+            value={spectralScrambler.stretch}
+            min={0.5}
+            max={2.0}
+            step={0.05}
+            onChange={(v) => onChange({ stretch: v })}
+            size="sm"
+            unit="x"
+            data-testid="knob-stretch"
+          />
+          
+          <Knob
+            label="Density"
+            value={spectralScrambler.binDensity}
+            min={5}
+            max={100}
+            onChange={(v) => onChange({ binDensity: v })}
+            size="sm"
+            unit="%"
+            data-testid="knob-bin-density"
+          />
+          
+          <Knob
+            label="Gate"
+            value={spectralScrambler.gateThreshold}
+            min={-60}
+            max={0}
+            onChange={(v) => onChange({ gateThreshold: v })}
+            size="sm"
+            unit="dB"
+            data-testid="knob-gate-threshold"
+          />
+          
+          <Knob
             label="Mix"
             value={spectralScrambler.mix}
             min={0}
@@ -88,8 +122,9 @@ export function SpectralScramblerPanel({ spectralScrambler, onChange }: Spectral
         </div>
         
         <p className="text-xs text-muted-foreground">
-          FFT-based frequency bin manipulation for metallic, glitchy textures. 
-          Scramble randomizes bin positions, Bin Shift moves frequencies up/down.
+          FFT-based spectral manipulation for metallic, glitchy textures. 
+          Stretch moves frequencies up/down. Gate removes quiet bins for tearing effects. 
+          Density controls active bin percentage for sparse, broken sounds.
         </p>
       </div>
     </CollapsiblePanel>
