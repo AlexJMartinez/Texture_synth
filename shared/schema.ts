@@ -454,7 +454,8 @@ export const PresetSchema = z.object({
 export type Preset = z.infer<typeof PresetSchema>;
 
 export const ExportSettingsSchema = z.object({
-  sampleRate: z.enum(["44100", "48000"]),
+  sampleRate: z.enum(["44100", "48000", "96000"]),
+  format: z.enum(["wav", "mp3"]),
   channels: z.enum(["mono", "stereo"]),
   normalize: z.boolean(),
   tailExtension: z.number().min(0).max(5000),
@@ -696,6 +697,7 @@ export const defaultSynthParameters: SynthParameters = {
 
 export const defaultExportSettings: ExportSettings = {
   sampleRate: "44100",
+  format: "wav",
   channels: "mono",
   normalize: true,
   tailExtension: 500,

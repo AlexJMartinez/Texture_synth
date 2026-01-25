@@ -2035,13 +2035,22 @@ export default function Synthesizer() {
       // Apply safety fadeout AFTER all processing to guarantee zero endpoint
       applySafetyFadeout(finalBuffer, 5);
 
-      const wavBlob = audioBufferToWav(finalBuffer);
-      const filename = `oneshot-${Date.now()}.wav`;
-      const url = URL.createObjectURL(wavBlob);
+      let blob: Blob;
+      let filename: string;
+      
+      if (exportSettings.format === "mp3") {
+        blob = await audioBufferToMp3(finalBuffer);
+        filename = `oneshot-${Date.now()}.mp3`;
+      } else {
+        blob = audioBufferToWav(finalBuffer);
+        filename = `oneshot-${Date.now()}.wav`;
+      }
+      
+      const url = URL.createObjectURL(blob);
       
       setExportResult(prev => {
         if (prev?.url) URL.revokeObjectURL(prev.url);
-        return { blob: wavBlob, url, filename };
+        return { blob, url, filename };
       });
       
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
@@ -2365,4 +2374,79 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
   }
 
   return new Blob([arrayBuffer], { type: "audio/wav" });
+}
+
+async function audioBufferToMp3(buffer: AudioBuffer): Promise<Blob> {
+  // Dynamically load lamejs from lame.all.js bundled version
+  // @ts-ignore
+  if (!window.lamejs) {
+    await new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.all.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load lamejs'));
+      document.head.appendChild(script);
+    });
+  }
+  
+  // @ts-ignore
+  const lamejs = window.lamejs;
+  
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const kbps = 192; // High quality MP3
+  
+  // Convert Float32Array samples to Int16Array for lamejs
+  const floatToInt16 = (data: Float32Array): Int16Array => {
+    const int16 = new Int16Array(data.length);
+    for (let i = 0; i < data.length; i++) {
+      const sample = Math.max(-1, Math.min(1, data[i]));
+      int16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+    }
+    return int16;
+  };
+  
+  const mp3Data: Int8Array[] = [];
+  
+  if (numChannels === 1) {
+    // Mono encoding
+    const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
+    const samples = floatToInt16(buffer.getChannelData(0));
+    const blockSize = 1152;
+    
+    for (let i = 0; i < samples.length; i += blockSize) {
+      const sampleChunk = samples.subarray(i, Math.min(i + blockSize, samples.length));
+      const mp3buf = mp3encoder.encodeBuffer(sampleChunk);
+      if (mp3buf.length > 0) {
+        mp3Data.push(mp3buf);
+      }
+    }
+    
+    const mp3buf = mp3encoder.flush();
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+  } else {
+    // Stereo encoding
+    const mp3encoder = new lamejs.Mp3Encoder(2, sampleRate, kbps);
+    const leftSamples = floatToInt16(buffer.getChannelData(0));
+    const rightSamples = floatToInt16(buffer.getChannelData(1));
+    const blockSize = 1152;
+    
+    for (let i = 0; i < leftSamples.length; i += blockSize) {
+      const leftChunk = leftSamples.subarray(i, Math.min(i + blockSize, leftSamples.length));
+      const rightChunk = rightSamples.subarray(i, Math.min(i + blockSize, rightSamples.length));
+      const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+      if (mp3buf.length > 0) {
+        mp3Data.push(mp3buf);
+      }
+    }
+    
+    const mp3buf = mp3encoder.flush();
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+  }
+  
+  return new Blob(mp3Data, { type: "audio/mp3" });
 }

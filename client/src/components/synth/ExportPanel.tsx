@@ -48,7 +48,8 @@ export function ExportPanel({ settings, onChange, onExport, isExporting, exportR
     if (!exportResult || !canShare) return;
     
     try {
-      const file = new File([exportResult.blob], exportResult.filename, { type: "audio/wav" });
+      const mimeType = exportResult.filename.endsWith(".mp3") ? "audio/mp3" : "audio/wav";
+      const file = new File([exportResult.blob], exportResult.filename, { type: mimeType });
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
@@ -168,6 +169,22 @@ export function ExportPanel({ settings, onChange, onExport, isExporting, exportR
       <CardContent className="space-y-2 px-2 pb-2 pt-0">
         <div className="grid grid-cols-2 gap-1.5">
           <div className="space-y-0.5">
+            <Label className="text-[10px] text-muted-foreground">Format</Label>
+            <Select
+              value={settings.format}
+              onValueChange={(v) => updateSettings("format", v as ExportSettings["format"])}
+            >
+              <SelectTrigger className="h-6 text-[10px]" data-testid="select-format">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="wav">WAV</SelectItem>
+                <SelectItem value="mp3">MP3</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-0.5">
             <Label className="text-[10px] text-muted-foreground">Rate</Label>
             <Select
               value={settings.sampleRate}
@@ -179,12 +196,15 @@ export function ExportPanel({ settings, onChange, onExport, isExporting, exportR
               <SelectContent>
                 <SelectItem value="44100">44.1k</SelectItem>
                 <SelectItem value="48000">48k</SelectItem>
+                <SelectItem value="96000">96k</SelectItem>
               </SelectContent>
             </Select>
           </div>
+        </div>
 
+        <div className="grid grid-cols-1 gap-1.5">
           <div className="space-y-0.5">
-            <Label className="text-[10px] text-muted-foreground">Ch</Label>
+            <Label className="text-[10px] text-muted-foreground">Channels</Label>
             <Select
               value={settings.channels}
               onValueChange={(v) => updateSettings("channels", v as ExportSettings["channels"])}
@@ -193,8 +213,8 @@ export function ExportPanel({ settings, onChange, onExport, isExporting, exportR
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mono">M</SelectItem>
-                <SelectItem value="stereo">St</SelectItem>
+                <SelectItem value="mono">Mono</SelectItem>
+                <SelectItem value="stereo">Stereo</SelectItem>
               </SelectContent>
             </Select>
           </div>
