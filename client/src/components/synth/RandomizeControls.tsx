@@ -101,7 +101,7 @@ function randomizeSubSafe(mutateFrom?: {
 }
 
 function randomWaveform(): WaveformType {
-  return (["sine", "triangle", "sawtooth", "square"] as const)[Math.floor(Math.random() * 4)];
+  return (["sine", "triangle", "sawtooth", "square", "noise"] as const)[Math.floor(Math.random() * 5)];
 }
 
 function randomCurve(): EnvelopeCurve {
@@ -141,13 +141,9 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
       
       const aiP = data.params;
       
-      const validWaveforms = ["sine", "triangle", "sawtooth", "square"] as const;
-      const sanitizeWaveform = (w: any): WaveformType => 
-        validWaveforms.includes(w) ? w : "sine";
-      
       const convertOsc = (osc: any): Oscillator => ({
         enabled: osc.enabled ?? false,
-        waveform: sanitizeWaveform(osc.waveform),
+        waveform: osc.waveform ?? "sine",
         pitch: hzToPitchState(Math.max(20, Math.min(20000, osc.pitchHz ?? 440))),
         detune: osc.detune ?? 0,
         drift: osc.drift ?? 0,

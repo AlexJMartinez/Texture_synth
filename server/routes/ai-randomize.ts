@@ -24,7 +24,7 @@ Respond with a JSON object matching this exact structure. All numeric values mus
 
 {
   "oscillators": {
-    "osc1": { "enabled": true/false, "waveform": "sine"|"triangle"|"sawtooth"|"square", "pitchHz": 50-8000, "detune": -100 to 100, "drift": 0-100, "level": 50-100, "fmEnabled": true/false, "fmRatio": 0.25-16, "fmDepth": 0-1000, "fmWaveform": same waveform options, "fmFeedback": 0-1, "pmEnabled": true/false, "pmRatio": 0.25-16, "pmDepth": 0-60, "pmWaveform": same waveform options, "pmFeedback": 0-1, "indexEnvEnabled": true/false, "indexEnvDecay": 2-100, "indexEnvDepth": 0-60 },
+    "osc1": { "enabled": true/false, "waveform": "sine"|"triangle"|"sawtooth"|"square"|"noise", "pitchHz": 50-8000, "detune": -100 to 100, "drift": 0-100, "level": 50-100, "fmEnabled": true/false, "fmRatio": 0.25-16, "fmDepth": 0-1000, "fmWaveform": "sine"|"triangle"|"sawtooth"|"square", "fmFeedback": 0-1, "pmEnabled": true/false, "pmRatio": 0.25-16, "pmDepth": 0-60, "pmWaveform": "sine"|"triangle"|"sawtooth"|"square", "pmFeedback": 0-1, "indexEnvEnabled": true/false, "indexEnvDecay": 2-100, "indexEnvDepth": 0-60 },
     "osc2": { same structure },
     "osc3": { same structure }
   },
