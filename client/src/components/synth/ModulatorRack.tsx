@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { Switch } from "@/components/ui/switch";
+import { CollapsiblePanel } from "./CollapsiblePanel";
 import { Plus, X, Waves, TrendingUp, Shuffle, Sliders } from "lucide-react";
 import type { 
   Modulator, 
@@ -337,14 +338,16 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
   };
 
   return (
-    <div className="bg-card/50 border-t border-border p-2" data-testid="modulator-rack">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Modulators</span>
+    <CollapsiblePanel
+      title="Modulators"
+      icon={<Waves className="w-3 h-3 text-accent" />}
+      defaultOpen={true}
+      headerExtra={
         <div className="relative">
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            onClick={(e) => { e.stopPropagation(); setAddMenuOpen(!addMenuOpen); }}
             className="h-6 text-[9px] gap-1"
             data-testid="button-add-modulator"
           >
@@ -358,7 +361,7 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
                   <button
                     key={type}
                     type="button"
-                    onClick={() => addModulator(type)}
+                    onClick={(e) => { e.stopPropagation(); addModulator(type); }}
                     className="w-full px-3 py-1.5 text-[10px] text-left hover:bg-accent flex items-center gap-2"
                     data-testid={`button-add-${type}`}
                   >
@@ -370,8 +373,8 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
             </div>
           )}
         </div>
-      </div>
-
+      }
+    >
       {modulators.length === 0 ? (
         <div className="text-center py-4 text-[10px] text-muted-foreground">
           No modulators added. Click "Add" to create LFOs, envelopes, or macros.
@@ -392,6 +395,6 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
           ))}
         </div>
       )}
-    </div>
+    </CollapsiblePanel>
   );
 }
