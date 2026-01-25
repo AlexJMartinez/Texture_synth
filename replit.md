@@ -1,7 +1,7 @@
 # OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-OneShot Synth is a professional web-based one-shot synthesizer built with React and Tone.js. Its primary purpose is to enable music producers to create unique, percussive sounds with an aggressive envelope style, similar to the hyperpop genre and the Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive/Granular), extensive effects processing, and WAV export capabilities. The project aims to provide a powerful tool for generating everything from clean tones to abrasive and impactful sounds.
+OneShot Synth is a professional web-based one-shot synthesizer built with React and Tone.js. Its primary purpose is to enable music producers to create unique, percussive sounds with an aggressive envelope style, similar to the hyperpop genre and the Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive/Granular), extensive effects processing, and flexible export capabilities (WAV/MP3 formats, 44.1k/48k/96k sample rates). The project aims to provide a powerful tool for generating everything from clean tones to abrasive and impactful sounds.
 
 ## User Preferences
 I want iterative development.
