@@ -315,10 +315,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         mix: Math.round(randomInRange(60, 100)),
       },
       mastering: currentParams.mastering,
-      output: {
-        volume: 75,
-        pan: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
-      },
+      output: currentParams.output,
     };
 
     onRandomize(params);
@@ -528,10 +525,7 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
         mix: Math.round(mutateValue(currentParams.saturationChain.mix, 0, 100)),
       },
       mastering: currentParams.mastering,
-      output: {
-        volume: currentParams.output.volume,
-        pan: Math.round(mutateValue(currentParams.output.pan, -100, 100)),
-      },
+      output: currentParams.output,
     };
 
     onRandomize(params);
