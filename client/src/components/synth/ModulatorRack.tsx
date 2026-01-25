@@ -285,8 +285,14 @@ function ModulatorCard({
             className="scale-50"
             data-testid={`switch-mod-enabled-${mod.id}`}
           />
-          <Button size="icon" variant="ghost" onClick={onDelete} className="h-4 w-4" data-testid={`button-delete-mod-${mod.id}`}>
-            <X className="w-2.5 h-2.5" />
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            onClick={(e) => { e.stopPropagation(); onDelete(); }} 
+            className="h-5 w-5 hover:bg-destructive/20 hover:text-destructive" 
+            data-testid={`button-delete-mod-${mod.id}`}
+          >
+            <X className="w-3 h-3" />
           </Button>
         </div>
       </div>

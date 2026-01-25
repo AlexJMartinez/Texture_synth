@@ -2200,8 +2200,8 @@ export default function Synthesizer() {
                 modulators={params.modulators}
                 routes={params.modulationRoutes}
                 tempo={params.tempo}
-                onUpdateModulators={(modulators) => setParams({ ...params, modulators })}
-                onUpdateRoutes={(modulationRoutes) => setParams({ ...params, modulationRoutes })}
+                onUpdateModulators={(modulators) => setParams(prev => ({ ...prev, modulators }))}
+                onUpdateRoutes={(modulationRoutes) => setParams(prev => ({ ...prev, modulationRoutes }))}
               />
             </div>
           </TabsContent>
