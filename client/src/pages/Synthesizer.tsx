@@ -393,10 +393,31 @@ export default function Synthesizer() {
         }
       }
       
+      // Calculate RMS energy of original and processed signals
+      let originalRMS = 0;
+      let processedRMS = 0;
+      for (let i = 0; i < data.length; i++) {
+        originalRMS += originalData[i] * originalData[i];
+        const wet = windowSum[i] > 0.001 ? processedData[i] / windowSum[i] : 0;
+        processedRMS += wet * wet;
+      }
+      originalRMS = Math.sqrt(originalRMS / data.length);
+      processedRMS = Math.sqrt(processedRMS / data.length);
+      
+      // If processed signal is too quiet (less than 30% of original energy), 
+      // automatically reduce wet mix to preserve audibility
+      let effectiveWetMix = wetMix;
+      let effectiveDryMix = dryMix;
+      if (originalRMS > 0.001 && processedRMS < originalRMS * 0.3) {
+        // Scrambler produced very quiet output - blend more dry signal
+        effectiveWetMix = Math.min(wetMix, 0.3); // Cap at 30% wet
+        effectiveDryMix = 1 - effectiveWetMix;
+      }
+      
       // Normalize and mix with original
       for (let i = 0; i < data.length; i++) {
         const wet = windowSum[i] > 0.001 ? processedData[i] / windowSum[i] : 0;
-        data[i] = originalData[i] * dryMix + wet * wetMix;
+        data[i] = originalData[i] * effectiveDryMix + wet * effectiveWetMix;
       }
     }
     
