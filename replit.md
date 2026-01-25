@@ -30,7 +30,7 @@ Core architectural decisions include:
 - **Canonical Pitch Model**: Internal pitch representation uses `PitchState {mode, baseHz, st, cents}` for flexible display and consistent audio generation.
 - **Audio Retriggering**: Gain ramps and scheduled stops prevent audio pops/clicks.
 - **Preset Management**: Factory presets and user presets with save/load/delete functionality, stored in localStorage.
-- **Randomization & AI Smart Generation**: Features full randomization with chaos control, gentle mutation, and an AI button using OpenAI gpt-4o-mini to generate extreme hyperpop percussion parameters inspired by SOPHIE, Umru, 100 Gecs, and AG Cook.
+- **Randomization**: Features full randomization with chaos control slider (10-100%) and gentle mutation. Includes audibility safeguards to prevent silent outputs.
 
 ## External Dependencies
 - **React**: Frontend library.
@@ -40,4 +40,3 @@ Core architectural decisions include:
 - **shadcn/ui**: Reusable UI components.
 - **Tone.js**: Web Audio framework for audio synthesis and manipulation.
 - **Web Audio API**: Browser-native API for processing and synthesizing audio.
-- **OpenAI**: Used for the AI sound generation feature.

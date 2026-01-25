@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
-import { Dices, Shuffle, Sparkles, Loader2 } from "lucide-react";
+import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
 import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset, PitchState, SpectralScrambler } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
-import { useToast } from "@/hooks/use-toast";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -122,93 +121,6 @@ function randomWaveshaperCurve(): WaveshaperCurve {
 
 export function RandomizeControls({ currentParams, onRandomize }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
-  const [isAILoading, setIsAILoading] = useState(false);
-  const { toast } = useToast();
-
-  const aiRandomize = async () => {
-    setIsAILoading(true);
-    try {
-      const response = await fetch("/api/ai-randomize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ style: "hyperpop" }),
-      });
-      
-      if (!response.ok) throw new Error("AI request failed");
-      
-      const data = await response.json();
-      if (!data.success || !data.params) throw new Error("Invalid AI response");
-      
-      const aiP = data.params;
-      
-      const convertOsc = (osc: any): Oscillator => ({
-        enabled: osc.enabled ?? false,
-        waveform: osc.waveform ?? "sine",
-        pitch: hzToPitchState(Math.max(20, Math.min(20000, osc.pitchHz ?? 440))),
-        detune: osc.detune ?? 0,
-        drift: osc.drift ?? 0,
-        level: osc.level ?? 100,
-        fmEnabled: osc.fmEnabled ?? false,
-        fmRatio: osc.fmRatio ?? 2,
-        fmRatioPreset: "custom",
-        fmDepth: osc.fmDepth ?? 100,
-        fmWaveform: osc.fmWaveform ?? "sine",
-        fmFeedback: osc.fmFeedback ?? 0,
-        amEnabled: false,
-        amRatio: 1,
-        amDepth: 50,
-        amWaveform: "sine",
-        pmEnabled: osc.pmEnabled ?? false,
-        pmRatio: osc.pmRatio ?? 2,
-        pmRatioPreset: "custom",
-        pmDepth: osc.pmDepth ?? 10,
-        pmWaveform: osc.pmWaveform ?? "sine",
-        pmFeedback: osc.pmFeedback ?? 0,
-        indexEnvEnabled: osc.indexEnvEnabled ?? false,
-        indexEnvDecay: osc.indexEnvDecay ?? 15,
-        indexEnvDepth: osc.indexEnvDepth ?? 20,
-      });
-      
-      const params: SynthParameters = {
-        oscillators: {
-          osc1: convertOsc(aiP.oscillators?.osc1 ?? {}),
-          osc2: convertOsc(aiP.oscillators?.osc2 ?? {}),
-          osc3: convertOsc(aiP.oscillators?.osc3 ?? {}),
-        },
-        envelopes: {
-          env1: { ...defaultSynthParameters.envelopes.env1, ...aiP.envelopes?.env1, enabled: true },
-          env2: { ...defaultSynthParameters.envelopes.env2, ...aiP.envelopes?.env2 },
-          env3: { ...defaultSynthParameters.envelopes.env3, ...aiP.envelopes?.env3 },
-        },
-        filter: { ...defaultSynthParameters.filter, ...aiP.filter },
-        modal: defaultSynthParameters.modal,
-        additive: defaultSynthParameters.additive,
-        granular: defaultSynthParameters.granular,
-        clickLayer: { ...defaultSynthParameters.clickLayer, ...aiP.clickLayer },
-        subOsc: { ...defaultSynthParameters.subOsc, ...aiP.subOsc },
-        spectralScrambler: { ...defaultSynthParameters.spectralScrambler, ...aiP.spectralScrambler },
-        saturationChain: { ...defaultSynthParameters.saturationChain, ...aiP.saturationChain },
-        waveshaper: { ...defaultSynthParameters.waveshaper, ...aiP.waveshaper },
-        convolver: defaultSynthParameters.convolver,
-        mastering: { ...defaultSynthParameters.mastering, ...aiP.mastering },
-        effects: { ...defaultSynthParameters.effects, ...aiP.effects },
-        output: { volume: 75, pan: 0 },
-      };
-      
-      onRandomize(params);
-      toast({ title: "AI Sound Generated", description: "New hyperpop percussion created!" });
-    } catch (error) {
-      console.error("AI randomize error:", error);
-      toast({ 
-        title: "AI Generation Failed", 
-        description: "Falling back to standard randomize.", 
-        variant: "destructive" 
-      });
-      randomizeAll();
-    } finally {
-      setIsAILoading(false);
-    }
-  };
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
     const fmPreset = randomRatioPreset();
@@ -653,20 +565,6 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
 
   return (
     <div className="flex items-center gap-1" data-testid="randomize-controls">
-      <Button
-        onClick={aiRandomize}
-        disabled={isAILoading}
-        variant="outline"
-        size="sm"
-        data-testid="button-ai-randomize"
-      >
-        {isAILoading ? (
-          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-        ) : (
-          <Sparkles className="w-3 h-3 mr-1" />
-        )}
-        AI
-      </Button>
       <Button
         onClick={randomizeAll}
         variant="secondary"
