@@ -2194,6 +2194,15 @@ export default function Synthesizer() {
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
               />
+
+              {/* Modulator Rack */}
+              <ModulatorRack
+                modulators={params.modulators}
+                routes={params.modulationRoutes}
+                tempo={params.tempo}
+                onUpdateModulators={(modulators) => setParams({ ...params, modulators })}
+                onUpdateRoutes={(modulationRoutes) => setParams({ ...params, modulationRoutes })}
+              />
             </div>
           </TabsContent>
 
@@ -2301,14 +2310,6 @@ export default function Synthesizer() {
           </TabsContent>
         </Tabs>
       </div>
-      
-      <ModulatorRack
-        modulators={params.modulators}
-        routes={params.modulationRoutes}
-        tempo={params.tempo}
-        onUpdateModulators={(modulators) => setParams({ ...params, modulators })}
-        onUpdateRoutes={(modulationRoutes) => setParams({ ...params, modulationRoutes })}
-      />
     </div>
   );
 }
