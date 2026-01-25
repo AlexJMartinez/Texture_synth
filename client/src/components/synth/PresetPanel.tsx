@@ -213,14 +213,14 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-5 w-5 min-h-5 min-w-5 p-0 invisible group-hover:visible flex-shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           deletePreset(preset.id);
                         }}
                         data-testid={`button-delete-${preset.id}`}
                       >
-                        <Trash2 className="w-2 h-2 text-destructive" />
+                        <Trash2 className="w-3 h-3 text-destructive" />
                       </Button>
                     </div>
                   ))}
