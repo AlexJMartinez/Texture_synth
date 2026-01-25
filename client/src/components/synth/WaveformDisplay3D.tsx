@@ -194,7 +194,7 @@ export function WaveformDisplay3D({ audioBuffer, isPlaying, className = "" }: Wa
       />
       {!audioBuffer && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-muted-foreground text-xs opacity-40">Trigger to preview</span>
+          <span className="text-muted-foreground/80 text-sm font-medium">Trigger to preview</span>
         </div>
       )}
     </div>
