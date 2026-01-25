@@ -43,14 +43,6 @@ export function Knob({
     onChange(resetValue);
   }, [defaultValue, min, onChange]);
 
-  const handleTouchEnd = useCallback(() => {
-    const now = Date.now();
-    if (now - lastTapTime.current < 300) {
-      handleDoubleClick();
-    }
-    lastTapTime.current = now;
-  }, [handleDoubleClick]);
-
   const sizeClasses = {
     xs: "w-7 h-7",
     sm: "w-9 h-9",
@@ -92,6 +84,13 @@ export function Knob({
     startValue.current = normalizeValue(value);
   }, [value, normalizeValue]);
 
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    startY.current = e.touches[0].clientY;
+    startValue.current = normalizeValue(value);
+  }, [value, normalizeValue]);
+
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
@@ -103,20 +102,45 @@ export function Knob({
     onChange(Math.max(min, Math.min(max, snappedValue)));
   }, [isDragging, denormalizeValue, step, min, max, onChange]);
 
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging) return;
+    e.preventDefault();
+
+    const delta = (startY.current - e.touches[0].clientY) / 150;
+    const newNormalized = Math.max(0, Math.min(1, startValue.current + delta));
+    const newValue = denormalizeValue(newNormalized);
+    
+    const snappedValue = Math.round(newValue / step) * step;
+    onChange(Math.max(min, Math.min(max, snappedValue)));
+  }, [isDragging, denormalizeValue, step, min, max, onChange]);
+
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
   }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTapTime.current < 300) {
+      handleDoubleClick();
+    }
+    lastTapTime.current = now;
+    setIsDragging(false);
+  }, [handleDoubleClick]);
 
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleMouseMove);
       window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleTouchEnd);
       return () => {
         window.removeEventListener("mousemove", handleMouseMove);
         window.removeEventListener("mouseup", handleMouseUp);
+        window.removeEventListener("touchmove", handleTouchMove);
+        window.removeEventListener("touchend", handleTouchEnd);
       };
     }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -155,8 +179,8 @@ export function Knob({
             : 'inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 4px 8px rgba(0,0,0,0.4)',
         }}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
         onDoubleClick={handleDoubleClick}
-        onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
       >
         <div
