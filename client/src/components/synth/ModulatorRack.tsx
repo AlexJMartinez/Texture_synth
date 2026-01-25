@@ -1,0 +1,397 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Knob } from "./Knob";
+import { Switch } from "@/components/ui/switch";
+import { Plus, X, Waves, TrendingUp, Shuffle, Sliders } from "lucide-react";
+import type { 
+  Modulator, 
+  ModulationRoute, 
+  LfoModulator, 
+  EnvelopeModulator, 
+  RandomModulator, 
+  MacroModulator,
+  LfoShape,
+  DelayDivision,
+  ModulatorType 
+} from "@shared/schema";
+
+interface ModulatorRackProps {
+  modulators: Modulator[];
+  routes: ModulationRoute[];
+  tempo: number;
+  onUpdateModulators: (modulators: Modulator[]) => void;
+  onUpdateRoutes: (routes: ModulationRoute[]) => void;
+}
+
+const LFO_SHAPES: { value: LfoShape; label: string }[] = [
+  { value: "sine", label: "Sin" },
+  { value: "triangle", label: "Tri" },
+  { value: "sawtooth", label: "Saw" },
+  { value: "square", label: "Sqr" },
+  { value: "random", label: "Rnd" },
+];
+
+const RATE_DIVISIONS: { value: DelayDivision; label: string }[] = [
+  { value: "1/1", label: "1/1" },
+  { value: "1/2", label: "1/2" },
+  { value: "1/4", label: "1/4" },
+  { value: "1/8", label: "1/8" },
+  { value: "1/16", label: "1/16" },
+  { value: "1/4T", label: "1/4T" },
+  { value: "1/8T", label: "1/8T" },
+];
+
+const MODULATOR_COLORS: Record<ModulatorType, string> = {
+  lfo: "bg-blue-500/20 border-blue-500/50",
+  envelope: "bg-orange-500/20 border-orange-500/50",
+  random: "bg-purple-500/20 border-purple-500/50",
+  macro: "bg-green-500/20 border-green-500/50",
+};
+
+const MODULATOR_ICONS: Record<ModulatorType, typeof Waves> = {
+  lfo: Waves,
+  envelope: TrendingUp,
+  random: Shuffle,
+  macro: Sliders,
+};
+
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 9);
+}
+
+function createDefaultModulator(type: ModulatorType): Modulator {
+  const id = generateId();
+  const baseProps = { id, enabled: true };
+  
+  switch (type) {
+    case "lfo":
+      return {
+        ...baseProps,
+        type: "lfo",
+        name: "LFO",
+        shape: "sine",
+        rate: 1,
+        rateSync: false,
+        rateDivision: "1/4",
+        phase: 0,
+        amount: 50,
+        bipolar: true,
+      };
+    case "envelope":
+      return {
+        ...baseProps,
+        type: "envelope",
+        name: "Env",
+        attack: 10,
+        decay: 200,
+        sustain: 50,
+        release: 300,
+        amount: 50,
+        bipolar: false,
+      };
+    case "random":
+      return {
+        ...baseProps,
+        type: "random",
+        name: "Rnd",
+        rate: 4,
+        smooth: 20,
+        amount: 50,
+        bipolar: true,
+      };
+    case "macro":
+      return {
+        ...baseProps,
+        type: "macro",
+        name: "Macro",
+        value: 50,
+        amount: 100,
+      };
+  }
+}
+
+function LfoEditor({ mod, onChange }: { mod: LfoModulator; onChange: (m: LfoModulator) => void }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      <div className="flex flex-col items-center">
+        <Select value={mod.shape} onValueChange={(v) => onChange({ ...mod, shape: v as LfoShape })}>
+          <SelectTrigger className="h-5 w-12 text-[8px]" data-testid={`select-lfo-shape-${mod.id}`}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LFO_SHAPES.map((s) => (
+              <SelectItem key={s.value} value={s.value} className="text-[9px]">{s.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span className="text-[7px] text-muted-foreground">Shape</span>
+      </div>
+      <div className="flex items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => onChange({ ...mod, rateSync: !mod.rateSync })}
+          className={`px-1 py-0.5 text-[7px] rounded ${mod.rateSync ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+          data-testid={`button-lfo-sync-${mod.id}`}
+        >
+          {mod.rateSync ? "Sync" : "Hz"}
+        </button>
+      </div>
+      {mod.rateSync ? (
+        <div className="flex flex-col items-center">
+          <Select value={mod.rateDivision} onValueChange={(v) => onChange({ ...mod, rateDivision: v as DelayDivision })}>
+            <SelectTrigger className="h-5 w-12 text-[8px]" data-testid={`select-lfo-division-${mod.id}`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RATE_DIVISIONS.map((d) => (
+                <SelectItem key={d.value} value={d.value} className="text-[9px]">{d.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <span className="text-[7px] text-muted-foreground">Div</span>
+        </div>
+      ) : (
+        <Knob value={mod.rate} min={0.01} max={50} step={0.01} label="Rate" unit="Hz" onChange={(v) => onChange({ ...mod, rate: v })} size="xs" />
+      )}
+      <Knob value={mod.phase} min={0} max={360} step={1} label="Phs" unit="°" onChange={(v) => onChange({ ...mod, phase: v })} size="xs" />
+      <Knob value={mod.amount} min={0} max={100} step={1} label="Amt" unit="%" onChange={(v) => onChange({ ...mod, amount: v })} size="xs" />
+    </div>
+  );
+}
+
+function EnvelopeEditor({ mod, onChange }: { mod: EnvelopeModulator; onChange: (m: EnvelopeModulator) => void }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      <Knob value={mod.attack} min={0} max={2000} step={1} label="A" unit="ms" onChange={(v) => onChange({ ...mod, attack: v })} size="xs" />
+      <Knob value={mod.decay} min={0} max={5000} step={1} label="D" unit="ms" onChange={(v) => onChange({ ...mod, decay: v })} size="xs" />
+      <Knob value={mod.sustain} min={0} max={100} step={1} label="S" unit="%" onChange={(v) => onChange({ ...mod, sustain: v })} size="xs" />
+      <Knob value={mod.release} min={0} max={5000} step={1} label="R" unit="ms" onChange={(v) => onChange({ ...mod, release: v })} size="xs" />
+      <Knob value={mod.amount} min={0} max={100} step={1} label="Amt" unit="%" onChange={(v) => onChange({ ...mod, amount: v })} size="xs" />
+    </div>
+  );
+}
+
+function RandomEditor({ mod, onChange }: { mod: RandomModulator; onChange: (m: RandomModulator) => void }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      <Knob value={mod.rate} min={0.1} max={50} step={0.1} label="Rate" unit="Hz" onChange={(v) => onChange({ ...mod, rate: v })} size="xs" />
+      <Knob value={mod.smooth} min={0} max={100} step={1} label="Smth" unit="%" onChange={(v) => onChange({ ...mod, smooth: v })} size="xs" />
+      <Knob value={mod.amount} min={0} max={100} step={1} label="Amt" unit="%" onChange={(v) => onChange({ ...mod, amount: v })} size="xs" />
+    </div>
+  );
+}
+
+function MacroEditor({ mod, onChange }: { mod: MacroModulator; onChange: (m: MacroModulator) => void }) {
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      <Knob value={mod.value} min={0} max={100} step={1} label="Val" unit="%" onChange={(v) => onChange({ ...mod, value: v })} size="sm" accentColor="primary" />
+      <Knob value={mod.amount} min={0} max={100} step={1} label="Amt" unit="%" onChange={(v) => onChange({ ...mod, amount: v })} size="xs" />
+    </div>
+  );
+}
+
+function ModulatorCard({ 
+  mod, 
+  routes,
+  onUpdate, 
+  onDelete,
+  onAddRoute,
+  onUpdateRoute,
+  onDeleteRoute,
+}: { 
+  mod: Modulator;
+  routes: ModulationRoute[];
+  onUpdate: (m: Modulator) => void;
+  onDelete: () => void;
+  onAddRoute: () => void;
+  onUpdateRoute: (route: ModulationRoute) => void;
+  onDeleteRoute: (routeId: string) => void;
+}) {
+  const Icon = MODULATOR_ICONS[mod.type];
+  const modRoutes = routes.filter(r => r.modulatorId === mod.id);
+  
+  const updateMod = <K extends keyof Modulator>(key: K, value: Modulator[K]) => {
+    onUpdate({ ...mod, [key]: value } as Modulator);
+  };
+
+  return (
+    <div className={`rounded-md border p-2 ${MODULATOR_COLORS[mod.type]} min-w-[180px]`} data-testid={`modulator-card-${mod.id}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1">
+          <Icon className="w-3 h-3" />
+          <input
+            type="text"
+            value={mod.name}
+            onChange={(e) => updateMod("name", e.target.value)}
+            className="bg-transparent border-none text-[10px] font-medium w-16 focus:outline-none focus:ring-1 focus:ring-primary/50 rounded px-0.5"
+            data-testid={`input-mod-name-${mod.id}`}
+          />
+        </div>
+        <div className="flex items-center gap-1">
+          <Switch
+            checked={mod.enabled}
+            onCheckedChange={(v) => updateMod("enabled", v)}
+            className="scale-50"
+            data-testid={`switch-mod-enabled-${mod.id}`}
+          />
+          <Button size="icon" variant="ghost" onClick={onDelete} className="h-4 w-4" data-testid={`button-delete-mod-${mod.id}`}>
+            <X className="w-2.5 h-2.5" />
+          </Button>
+        </div>
+      </div>
+
+      {mod.type === "lfo" && <LfoEditor mod={mod} onChange={onUpdate as (m: LfoModulator) => void} />}
+      {mod.type === "envelope" && <EnvelopeEditor mod={mod} onChange={onUpdate as (m: EnvelopeModulator) => void} />}
+      {mod.type === "random" && <RandomEditor mod={mod} onChange={onUpdate as (m: RandomModulator) => void} />}
+      {mod.type === "macro" && <MacroEditor mod={mod} onChange={onUpdate as (m: MacroModulator) => void} />}
+
+      {("bipolar" in mod) && (
+        <div className="flex justify-center mt-1">
+          <button
+            type="button"
+            onClick={() => onUpdate({ ...mod, bipolar: !mod.bipolar } as Modulator)}
+            className={`px-1.5 py-0.5 text-[7px] rounded ${mod.bipolar ? "bg-primary/80 text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+            data-testid={`button-mod-bipolar-${mod.id}`}
+          >
+            {mod.bipolar ? "±" : "+"}
+          </button>
+        </div>
+      )}
+
+      <div className="mt-2 border-t border-border/30 pt-1.5">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[8px] text-muted-foreground">Targets</span>
+          <Button size="icon" variant="ghost" onClick={onAddRoute} className="h-4 w-4" data-testid={`button-add-route-${mod.id}`}>
+            <Plus className="w-2.5 h-2.5" />
+          </Button>
+        </div>
+        <div className="space-y-1 max-h-20 overflow-y-auto">
+          {modRoutes.map((route) => (
+            <div key={route.id} className="flex items-center gap-1 text-[8px]">
+              <input
+                type="text"
+                value={route.targetPath}
+                onChange={(e) => onUpdateRoute({ ...route, targetPath: e.target.value })}
+                placeholder="param.path"
+                className="flex-1 bg-muted/50 rounded px-1 py-0.5 text-[8px] border-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                data-testid={`input-route-target-${route.id}`}
+              />
+              <input
+                type="number"
+                value={route.depth}
+                onChange={(e) => onUpdateRoute({ ...route, depth: Number(e.target.value) })}
+                className="w-10 bg-muted/50 rounded px-1 py-0.5 text-[8px] text-center border-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                min={-100}
+                max={100}
+                data-testid={`input-route-depth-${route.id}`}
+              />
+              <Button size="icon" variant="ghost" onClick={() => onDeleteRoute(route.id)} className="h-3.5 w-3.5" data-testid={`button-delete-route-${route.id}`}>
+                <X className="w-2 h-2" />
+              </Button>
+            </div>
+          ))}
+          {modRoutes.length === 0 && (
+            <span className="text-[7px] text-muted-foreground italic">No targets</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, onUpdateRoutes }: ModulatorRackProps) {
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
+  const addModulator = (type: ModulatorType) => {
+    const newMod = createDefaultModulator(type);
+    onUpdateModulators([...modulators, newMod]);
+    setAddMenuOpen(false);
+  };
+
+  const updateModulator = (id: string, updated: Modulator) => {
+    onUpdateModulators(modulators.map(m => m.id === id ? updated : m));
+  };
+
+  const deleteModulator = (id: string) => {
+    onUpdateModulators(modulators.filter(m => m.id !== id));
+    onUpdateRoutes(routes.filter(r => r.modulatorId !== id));
+  };
+
+  const addRoute = (modulatorId: string) => {
+    const newRoute: ModulationRoute = {
+      id: generateId(),
+      modulatorId,
+      targetPath: "",
+      depth: 50,
+    };
+    onUpdateRoutes([...routes, newRoute]);
+  };
+
+  const updateRoute = (updated: ModulationRoute) => {
+    onUpdateRoutes(routes.map(r => r.id === updated.id ? updated : r));
+  };
+
+  const deleteRoute = (routeId: string) => {
+    onUpdateRoutes(routes.filter(r => r.id !== routeId));
+  };
+
+  return (
+    <div className="bg-card/50 border-t border-border p-2" data-testid="modulator-rack">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Modulators</span>
+        <div className="relative">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            className="h-6 text-[9px] gap-1"
+            data-testid="button-add-modulator"
+          >
+            <Plus className="w-3 h-3" /> Add
+          </Button>
+          {addMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-md shadow-lg z-50 py-1 min-w-[100px]">
+              {(["lfo", "envelope", "random", "macro"] as const).map((type) => {
+                const Icon = MODULATOR_ICONS[type];
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => addModulator(type)}
+                    className="w-full px-3 py-1.5 text-[10px] text-left hover:bg-accent flex items-center gap-2"
+                    data-testid={`button-add-${type}`}
+                  >
+                    <Icon className="w-3 h-3" />
+                    <span className="capitalize">{type}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {modulators.length === 0 ? (
+        <div className="text-center py-4 text-[10px] text-muted-foreground">
+          No modulators added. Click "Add" to create LFOs, envelopes, or macros.
+        </div>
+      ) : (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {modulators.map((mod) => (
+            <ModulatorCard
+              key={mod.id}
+              mod={mod}
+              routes={routes}
+              onUpdate={(m) => updateModulator(mod.id, m)}
+              onDelete={() => deleteModulator(mod.id)}
+              onAddRoute={() => addRoute(mod.id)}
+              onUpdateRoute={updateRoute}
+              onDeleteRoute={deleteRoute}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

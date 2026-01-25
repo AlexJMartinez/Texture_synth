@@ -45,6 +45,91 @@ export type ModRatioPreset = z.infer<typeof ModRatioPreset>;
 export const PitchModeType = z.enum(["hz", "st", "oct"]);
 export type PitchModeType = z.infer<typeof PitchModeType>;
 
+export const DelaySyncMode = z.enum(["ms", "sync"]);
+export type DelaySyncMode = z.infer<typeof DelaySyncMode>;
+
+export const DelayDivision = z.enum([
+  "1/1", "1/2", "1/4", "1/8", "1/16", "1/32",
+  "1/2T", "1/4T", "1/8T", "1/16T",
+  "1/2D", "1/4D", "1/8D", "1/16D"
+]);
+export type DelayDivision = z.infer<typeof DelayDivision>;
+
+export const LfoShape = z.enum(["sine", "triangle", "sawtooth", "square", "random"]);
+export type LfoShape = z.infer<typeof LfoShape>;
+
+export const ModulatorType = z.enum(["lfo", "envelope", "random", "macro"]);
+export type ModulatorType = z.infer<typeof ModulatorType>;
+
+const LfoModulatorSchema = z.object({
+  type: z.literal("lfo"),
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  shape: LfoShape,
+  rate: z.number().min(0.01).max(50),
+  rateSync: z.boolean(),
+  rateDivision: DelayDivision,
+  phase: z.number().min(0).max(360),
+  amount: z.number().min(0).max(100),
+  bipolar: z.boolean(),
+});
+
+const EnvelopeModulatorSchema = z.object({
+  type: z.literal("envelope"),
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  attack: z.number().min(0).max(2000),
+  decay: z.number().min(0).max(5000),
+  sustain: z.number().min(0).max(100),
+  release: z.number().min(0).max(5000),
+  amount: z.number().min(0).max(100),
+  bipolar: z.boolean(),
+});
+
+const RandomModulatorSchema = z.object({
+  type: z.literal("random"),
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  rate: z.number().min(0.1).max(50),
+  smooth: z.number().min(0).max(100),
+  amount: z.number().min(0).max(100),
+  bipolar: z.boolean(),
+});
+
+const MacroModulatorSchema = z.object({
+  type: z.literal("macro"),
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+  value: z.number().min(0).max(100),
+  amount: z.number().min(0).max(100),
+});
+
+export const ModulatorSchema = z.discriminatedUnion("type", [
+  LfoModulatorSchema,
+  EnvelopeModulatorSchema,
+  RandomModulatorSchema,
+  MacroModulatorSchema,
+]);
+
+export type Modulator = z.infer<typeof ModulatorSchema>;
+export type LfoModulator = z.infer<typeof LfoModulatorSchema>;
+export type EnvelopeModulator = z.infer<typeof EnvelopeModulatorSchema>;
+export type RandomModulator = z.infer<typeof RandomModulatorSchema>;
+export type MacroModulator = z.infer<typeof MacroModulatorSchema>;
+
+const ModulationRouteSchema = z.object({
+  id: z.string(),
+  modulatorId: z.string(),
+  targetPath: z.string(),
+  depth: z.number().min(-100).max(100),
+});
+
+export type ModulationRoute = z.infer<typeof ModulationRouteSchema>;
+
 const PitchStateSchema = z.object({
   mode: PitchModeType,
   baseHz: z.number().min(20).max(20000),
@@ -297,11 +382,19 @@ export const SynthParametersSchema = z.object({
   
   spectralScrambler: SpectralScramblerSchema,
   
+  tempo: z.number().min(20).max(300),
+  
+  modulators: z.array(ModulatorSchema),
+  
+  modulationRoutes: z.array(ModulationRouteSchema),
+  
   effects: z.object({
     saturation: z.number().min(0).max(100),
     bitcrusher: z.number().min(1).max(16),
     delayEnabled: z.boolean(),
+    delaySyncMode: DelaySyncMode,
     delayTime: z.number().min(0).max(2000),
+    delayDivision: DelayDivision,
     delayFeedback: z.number().min(0).max(95),
     delayMix: z.number().min(0).max(100),
     reverbEnabled: z.boolean(),
@@ -560,11 +653,16 @@ export const defaultSynthParameters: SynthParameters = {
   waveshaper: { ...defaultWaveshaper },
   convolver: { ...defaultConvolver },
   spectralScrambler: { ...defaultSpectralScrambler },
+  tempo: 120,
+  modulators: [],
+  modulationRoutes: [],
   effects: {
     saturation: 20,
     bitcrusher: 16,
     delayEnabled: false,
+    delaySyncMode: "ms" as const,
     delayTime: 250,
+    delayDivision: "1/4" as const,
     delayFeedback: 30,
     delayMix: 30,
     reverbEnabled: false,

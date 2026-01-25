@@ -1,10 +1,28 @@
 import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import type { SynthParameters } from "@shared/schema";
+import type { SynthParameters, DelayDivision } from "@shared/schema";
 import { Sparkles, ChevronDown, ChevronRight, Shuffle } from "lucide-react";
+
+const DELAY_DIVISIONS: { value: DelayDivision; label: string }[] = [
+  { value: "1/1", label: "1/1" },
+  { value: "1/2", label: "1/2" },
+  { value: "1/4", label: "1/4" },
+  { value: "1/8", label: "1/8" },
+  { value: "1/16", label: "1/16" },
+  { value: "1/32", label: "1/32" },
+  { value: "1/2T", label: "1/2T" },
+  { value: "1/4T", label: "1/4T" },
+  { value: "1/8T", label: "1/8T" },
+  { value: "1/16T", label: "1/16T" },
+  { value: "1/2D", label: "1/2D" },
+  { value: "1/4D", label: "1/4D" },
+  { value: "1/8D", label: "1/8D" },
+  { value: "1/16D", label: "1/16D" },
+];
 
 function randomizeEffects(): Partial<SynthParameters["effects"]> {
   return {
@@ -128,10 +146,59 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
           onToggle={(v) => updateEffects("delayEnabled", v)}
           testId="switch-delay"
         >
-          <div className="flex justify-center gap-1">
-            <Knob value={effects.delayTime} min={0} max={2000} step={1} label="T" unit="ms" onChange={(v) => updateEffects("delayTime", v)} size="xs" />
-            <Knob value={effects.delayFeedback} min={0} max={95} step={1} label="FB" unit="%" onChange={(v) => updateEffects("delayFeedback", v)} size="xs" />
-            <Knob value={effects.delayMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("delayMix", v)} size="xs" />
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-center gap-1">
+              <button
+                type="button"
+                onClick={() => updateEffects("delaySyncMode", effects.delaySyncMode === "ms" ? "sync" : "ms")}
+                className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${
+                  effects.delaySyncMode === "ms"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                data-testid="button-delay-ms"
+              >
+                ms
+              </button>
+              <button
+                type="button"
+                onClick={() => updateEffects("delaySyncMode", effects.delaySyncMode === "sync" ? "ms" : "sync")}
+                className={`px-1.5 py-0.5 text-[9px] rounded transition-colors ${
+                  effects.delaySyncMode === "sync"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+                data-testid="button-delay-sync"
+              >
+                sync
+              </button>
+            </div>
+            <div className="flex justify-center gap-1">
+              {effects.delaySyncMode === "ms" ? (
+                <Knob value={effects.delayTime} min={0} max={2000} step={1} label="T" unit="ms" onChange={(v) => updateEffects("delayTime", v)} size="xs" />
+              ) : (
+                <div className="flex flex-col items-center">
+                  <Select
+                    value={effects.delayDivision}
+                    onValueChange={(v) => updateEffects("delayDivision", v as DelayDivision)}
+                  >
+                    <SelectTrigger className="h-6 w-14 text-[9px]" data-testid="select-delay-division">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {DELAY_DIVISIONS.map((d) => (
+                        <SelectItem key={d.value} value={d.value} className="text-[10px]">
+                          {d.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <span className="text-[8px] text-muted-foreground mt-0.5">Div</span>
+                </div>
+              )}
+              <Knob value={effects.delayFeedback} min={0} max={95} step={1} label="FB" unit="%" onChange={(v) => updateEffects("delayFeedback", v)} size="xs" />
+              <Knob value={effects.delayMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("delayMix", v)} size="xs" />
+            </div>
           </div>
         </EffectSection>
 

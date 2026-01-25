@@ -18,7 +18,11 @@ import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
 import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
 import { MasteringPanel } from "@/components/synth/MasteringPanel";
 import { SpectralScramblerPanel } from "@/components/synth/SpectralScramblerPanel";
+import { CollapsiblePanel } from "@/components/synth/CollapsiblePanel";
+import { Knob } from "@/components/synth/Knob";
+import { ModulatorRack } from "@/components/synth/ModulatorRack";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Clock } from "lucide-react";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -30,6 +34,213 @@ import { pitchToHz } from "@/lib/pitchUtils";
 import { triggerAHD, stopWithFade, EPS } from "@/lib/envelopeAHD";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
+
+// Convert beat division to ms based on tempo
+function divisionToMs(division: string, tempo: number): number {
+  const beatMs = (60 / tempo) * 1000; // Quarter note in ms
+  const divisionMap: Record<string, number> = {
+    "1/1": 4,      // Whole note = 4 beats
+    "1/2": 2,      // Half note = 2 beats
+    "1/4": 1,      // Quarter = 1 beat
+    "1/8": 0.5,    // Eighth = 0.5 beats
+    "1/16": 0.25,  // Sixteenth = 0.25 beats
+    "1/32": 0.125, // Thirty-second = 0.125 beats
+    "1/2T": 2 * (2/3),      // Half triplet
+    "1/4T": 1 * (2/3),      // Quarter triplet
+    "1/8T": 0.5 * (2/3),    // Eighth triplet
+    "1/16T": 0.25 * (2/3),  // Sixteenth triplet
+    "1/2D": 2 * 1.5,        // Dotted half
+    "1/4D": 1 * 1.5,        // Dotted quarter
+    "1/8D": 0.5 * 1.5,      // Dotted eighth
+    "1/16D": 0.25 * 1.5,    // Dotted sixteenth
+  };
+  return beatMs * (divisionMap[division] || 1);
+}
+
+// Get effective delay time (either ms or calculated from tempo/division)
+function getEffectiveDelayTime(params: SynthParameters): number {
+  if (params.effects.delaySyncMode === "sync") {
+    return divisionToMs(params.effects.delayDivision, params.tempo);
+  }
+  return params.effects.delayTime;
+}
+
+// Modulation evaluation system
+interface ModulatorState {
+  randomValue: number;
+  lastRandomTime: number;
+  prevRandomValue: number;
+}
+
+function createModulatorStates(modulators: SynthParameters["modulators"]): Map<string, ModulatorState> {
+  const states = new Map<string, ModulatorState>();
+  for (const mod of modulators) {
+    states.set(mod.id, {
+      randomValue: Math.random(),
+      lastRandomTime: 0,
+      prevRandomValue: Math.random(),
+    });
+  }
+  return states;
+}
+
+function evaluateLfo(
+  mod: { shape: string; rate: number; rateSync: boolean; rateDivision: string; phase: number; amount: number; bipolar: boolean },
+  time: number,
+  tempo: number
+): number {
+  const rateHz = mod.rateSync ? 1 / (divisionToMs(mod.rateDivision, tempo) / 1000) : mod.rate;
+  const phase = (mod.phase / 360) * Math.PI * 2;
+  const t = time * rateHz * Math.PI * 2 + phase;
+  
+  let value: number;
+  switch (mod.shape) {
+    case "sine":
+      value = Math.sin(t);
+      break;
+    case "triangle":
+      value = 2 * Math.abs(2 * ((t / (Math.PI * 2)) % 1) - 1) - 1;
+      break;
+    case "sawtooth":
+      value = 2 * ((t / (Math.PI * 2)) % 1) - 1;
+      break;
+    case "square":
+      value = Math.sin(t) >= 0 ? 1 : -1;
+      break;
+    case "random":
+      value = Math.sin(t * 7.3) * Math.cos(t * 3.7);
+      break;
+    default:
+      value = 0;
+  }
+  
+  if (!mod.bipolar) {
+    value = (value + 1) / 2;
+  }
+  
+  return value * (mod.amount / 100);
+}
+
+function evaluateEnvelope(
+  mod: { attack: number; decay: number; sustain: number; release: number; amount: number; bipolar: boolean },
+  time: number,
+  duration: number
+): number {
+  const attackEnd = mod.attack / 1000;
+  const decayEnd = attackEnd + mod.decay / 1000;
+  const sustainLevel = mod.sustain / 100;
+  const releaseStart = Math.max(0, duration - mod.release / 1000);
+  
+  let value: number;
+  if (time < attackEnd) {
+    value = time / attackEnd;
+  } else if (time < decayEnd) {
+    const decayProgress = (time - attackEnd) / (mod.decay / 1000);
+    value = 1 - decayProgress * (1 - sustainLevel);
+  } else if (time < releaseStart) {
+    value = sustainLevel;
+  } else {
+    const releaseProgress = (time - releaseStart) / (mod.release / 1000);
+    value = sustainLevel * (1 - releaseProgress);
+  }
+  
+  value = Math.max(0, Math.min(1, value));
+  
+  if (mod.bipolar) {
+    value = value * 2 - 1;
+  }
+  
+  return value * (mod.amount / 100);
+}
+
+function evaluateRandom(
+  mod: { rate: number; smooth: number; amount: number; bipolar: boolean },
+  time: number,
+  state: ModulatorState
+): number {
+  const period = 1 / mod.rate;
+  const currentPeriod = Math.floor(time / period);
+  const lastPeriod = Math.floor(state.lastRandomTime / period);
+  
+  if (currentPeriod !== lastPeriod) {
+    state.prevRandomValue = state.randomValue;
+    state.randomValue = Math.random();
+    state.lastRandomTime = time;
+  }
+  
+  const t = (time % period) / period;
+  const smoothFactor = mod.smooth / 100;
+  const smoothT = t < smoothFactor ? t / smoothFactor * 0.5 : 
+                  t > (1 - smoothFactor) ? 0.5 + (t - (1 - smoothFactor)) / smoothFactor * 0.5 : 
+                  0.5;
+  
+  let value = state.prevRandomValue + (state.randomValue - state.prevRandomValue) * smoothT;
+  
+  if (mod.bipolar) {
+    value = value * 2 - 1;
+  }
+  
+  return value * (mod.amount / 100);
+}
+
+function evaluateMacro(mod: { value: number; amount: number }): number {
+  return (mod.value / 100) * (mod.amount / 100);
+}
+
+function evaluateModulator(
+  mod: SynthParameters["modulators"][0],
+  time: number,
+  duration: number,
+  tempo: number,
+  state: ModulatorState
+): number {
+  if (!mod.enabled) return 0;
+  
+  switch (mod.type) {
+    case "lfo":
+      return evaluateLfo(mod, time, tempo);
+    case "envelope":
+      return evaluateEnvelope(mod, time, duration);
+    case "random":
+      return evaluateRandom(mod, time, state);
+    case "macro":
+      return evaluateMacro(mod);
+    default:
+      return 0;
+  }
+}
+
+function getModulatedValue(
+  basePath: string,
+  baseValue: number,
+  min: number,
+  max: number,
+  modulators: SynthParameters["modulators"],
+  routes: SynthParameters["modulationRoutes"],
+  time: number,
+  duration: number,
+  tempo: number,
+  states: Map<string, ModulatorState>
+): number {
+  let totalMod = 0;
+  
+  for (const route of routes) {
+    if (route.targetPath === basePath) {
+      const mod = modulators.find(m => m.id === route.modulatorId);
+      if (mod) {
+        const state = states.get(mod.id);
+        if (state) {
+          const modValue = evaluateModulator(mod, time, duration, tempo, state);
+          totalMod += modValue * (route.depth / 100);
+        }
+      }
+    }
+  }
+  
+  const range = max - min;
+  const modulatedValue = baseValue + totalMod * range;
+  return Math.max(min, Math.min(max, modulatedValue));
+}
 
 // Fix 1: Tail padding for reverb/delay decay (in seconds)
 // Increased for heavily processed sounds with reverb/delay
@@ -699,7 +910,7 @@ export default function Synthesizer() {
 
     if (params.effects.delayEnabled && params.effects.delayMix > 0) {
       const delayNode = ctx.createDelay(3);
-      delayNode.delayTime.value = params.effects.delayTime / 1000;
+      delayNode.delayTime.value = getEffectiveDelayTime(params) / 1000;
       const delayFeedback = ctx.createGain();
       delayFeedback.gain.value = params.effects.delayFeedback / 100;
       const delayWet = ctx.createGain();
@@ -1621,7 +1832,7 @@ export default function Synthesizer() {
     let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay + (TAIL_PAD * 1000);
     
     if (params.effects.delayEnabled) {
-      baseDuration += params.effects.delayTime * 3;
+      baseDuration += getEffectiveDelayTime(params) * 3;
     }
     if (params.effects.reverbEnabled || (params.convolver.enabled && params.convolver.useCustomIR)) {
       baseDuration += params.effects.reverbDecay * 1000;
@@ -2037,9 +2248,29 @@ export default function Synthesizer() {
             </div>
           </TabsContent>
 
-          {/* Master Tab: Mastering, Output */}
+          {/* Master Tab: Mastering, Output, Tempo */}
           <TabsContent value="master" className="flex-1 overflow-y-auto mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <CollapsiblePanel
+                title="Tempo"
+                icon={<Clock className="w-3 h-3 text-primary" />}
+                defaultOpen={true}
+                data-testid="panel-tempo"
+              >
+                <div className="flex justify-center">
+                  <Knob
+                    value={params.tempo}
+                    min={20}
+                    max={300}
+                    step={1}
+                    label="BPM"
+                    onChange={(v) => setParams({ ...params, tempo: v })}
+                    size="sm"
+                    accentColor="primary"
+                    data-testid="knob-tempo"
+                  />
+                </div>
+              </CollapsiblePanel>
               <MasteringPanel
                 mastering={params.mastering}
                 onChange={(mastering) => setParams({ ...params, mastering })}
@@ -2070,6 +2301,14 @@ export default function Synthesizer() {
           </TabsContent>
         </Tabs>
       </div>
+      
+      <ModulatorRack
+        modulators={params.modulators}
+        routes={params.modulationRoutes}
+        tempo={params.tempo}
+        onUpdateModulators={(modulators) => setParams({ ...params, modulators })}
+        onUpdateRoutes={(modulationRoutes) => setParams({ ...params, modulationRoutes })}
+      />
     </div>
   );
 }

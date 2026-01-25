@@ -23,7 +23,14 @@ Core architectural decisions include:
   - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click).
 - **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
-- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay, Convolution Reverb, and Chorus.
+- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, and Chorus.
+  - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).
+- **Modulation System**: Phaseplant-style modulator rack at the bottom of the UI.
+  - **LFO**: Sine, triangle, sawtooth, square, random shapes with rate sync option, phase control, and bipolar/unipolar modes.
+  - **Envelope**: ADSR modulator with attack, decay, sustain, release controls.
+  - **Random/S&H**: Sample-and-hold random modulation with rate and smoothing controls.
+  - **Macro**: Manual control knobs assignable to multiple parameters.
+  - **Modulation Routing**: Assign any modulator to any parameter with depth control.
 - **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling.
 - **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing and Hermitian symmetry for real-valued output. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, spectral gating (-60dB to 0dB threshold for tearing/crackle effects), spectral stretch/squeeze (0.5x-2.0x for moving frequencies up/down), bin density control (5%-100% for sparse/broken sounds), and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet. DC and Nyquist bins are preserved unshifted but apply gating/density for signal integrity.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
