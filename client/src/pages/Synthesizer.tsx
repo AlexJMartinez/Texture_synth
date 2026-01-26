@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import * as Tone from "tone";
 import { WaveformDisplay3D } from "@/components/synth/WaveformDisplay3D";
 import { EnvelopePanel } from "@/components/synth/EnvelopePanel";
-import { OscillatorPanel } from "@/components/synth/OscillatorPanel";
+import { OscillatorPanel, OscEnvelope } from "@/components/synth/OscillatorPanel";
 import { FilterPanel } from "@/components/synth/FilterPanel";
 import { EffectsPanel } from "@/components/synth/EffectsPanel";
 import { OutputPanel } from "@/components/synth/OutputPanel";
@@ -344,6 +344,38 @@ async function loadStoredIR(name: string): Promise<AudioBuffer | null> {
   }
 }
 
+const defaultOscEnvelope: OscEnvelope = {
+  enabled: false,
+  attack: 0,
+  hold: 0,
+  decay: 200,
+  curve: "exponential",
+};
+
+interface OscEnvelopes {
+  osc1: OscEnvelope;
+  osc2: OscEnvelope;
+  osc3: OscEnvelope;
+}
+
+const defaultOscEnvelopes: OscEnvelopes = {
+  osc1: { ...defaultOscEnvelope },
+  osc2: { ...defaultOscEnvelope },
+  osc3: { ...defaultOscEnvelope },
+};
+
+function loadOscEnvelopes(): OscEnvelopes {
+  try {
+    const stored = localStorage.getItem("oscEnvelopes");
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn("Failed to load osc envelopes from localStorage");
+  }
+  return defaultOscEnvelopes;
+}
+
 export default function Synthesizer() {
   const [params, setParams] = useState<SynthParameters>(defaultSynthParameters);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(defaultExportSettings);
@@ -351,10 +383,16 @@ export default function Synthesizer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
+  const [oscEnvelopes, setOscEnvelopes] = useState<OscEnvelopes>(loadOscEnvelopes);
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Persist osc envelopes to localStorage
+  useEffect(() => {
+    localStorage.setItem("oscEnvelopes", JSON.stringify(oscEnvelopes));
+  }, [oscEnvelopes]);
 
   const handleIRLoaded = useCallback((buffer: AudioBuffer) => {
     customIRBufferRef.current = buffer;
@@ -760,7 +798,8 @@ export default function Synthesizer() {
     params: SynthParameters,
     duration: number,
     seed: number = Date.now(),
-    sourcesCollector?: AudioScheduledSourceNode[]
+    sourcesCollector?: AudioScheduledSourceNode[],
+    perOscEnvelopes?: OscEnvelopes
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -1438,14 +1477,21 @@ export default function Synthesizer() {
         }
       }
 
-      const ampEnv = params.envelopes.env3;
       const baseLevel = osc.level / 100;
       
-      triggerAHD(oscGain.gain, now, {
-        attack: ampEnv.attack / 1000,
-        hold: ampEnv.hold / 1000,
-        decay: ampEnv.decay / 1000
-      }, baseLevel, { startFromCurrent: false });
+      // Check for per-oscillator envelope (if enabled, use it; otherwise just set level)
+      const oscEnv = perOscEnvelopes?.[key as keyof OscEnvelopes];
+      if (oscEnv && oscEnv.enabled) {
+        // Per-oscillator AHD - shapes this oscillator independently before master
+        triggerAHD(oscGain.gain, now, {
+          attack: oscEnv.attack / 1000,
+          hold: oscEnv.hold / 1000,
+          decay: oscEnv.decay / 1000
+        }, baseLevel, { startFromCurrent: false });
+      } else {
+        // No per-osc envelope - just set constant level (master envelope handles overall shape)
+        oscGain.gain.setValueAtTime(baseLevel, now);
+      }
 
       finalGain.connect(masterGain);
       
@@ -1912,7 +1958,7 @@ export default function Synthesizer() {
     // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
     const buffer = await Tone.Offline(async (offlineCtx) => {
       const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-      await generateSound(rawCtx, params, totalDuration, seed);
+      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes);
     }, durationInSeconds);
     
     // Convert Tone.ToneAudioBuffer to AudioBuffer
@@ -2171,6 +2217,8 @@ export default function Synthesizer() {
                       onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc1: osc } })}
                       title="OSC 1"
                       index={1}
+                      envelope={oscEnvelopes.osc1}
+                      onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc1: env })}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -2179,6 +2227,8 @@ export default function Synthesizer() {
                       onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc2: osc } })}
                       title="OSC 2"
                       index={2}
+                      envelope={oscEnvelopes.osc2}
+                      onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc2: env })}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -2187,6 +2237,8 @@ export default function Synthesizer() {
                       onChange={(osc) => setParams({ ...params, oscillators: { ...params.oscillators, osc3: osc } })}
                       title="OSC 3"
                       index={3}
+                      envelope={oscEnvelopes.osc3}
+                      onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc3: env })}
                     />
                   </TabsContent>
                 </Tabs>

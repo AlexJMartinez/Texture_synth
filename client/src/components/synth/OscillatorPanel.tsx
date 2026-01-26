@@ -4,9 +4,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType } from "@shared/schema";
+import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType, EnvelopeCurve } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
-import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle } from "lucide-react";
+import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2 } from "lucide-react";
+
+export interface OscEnvelope {
+  enabled: boolean;
+  attack: number;
+  hold: number;
+  decay: number;
+  curve: EnvelopeCurve;
+}
 import {
   pitchToHz,
   getKnobValue,
@@ -57,14 +65,23 @@ interface OscillatorPanelProps {
   onChange: (oscillator: Oscillator) => void;
   title: string;
   index: number;
+  envelope?: OscEnvelope;
+  onEnvelopeChange?: (envelope: OscEnvelope) => void;
 }
 
-export function OscillatorPanel({ oscillator, onChange, title, index }: OscillatorPanelProps) {
+export function OscillatorPanel({ oscillator, onChange, title, index, envelope, onEnvelopeChange }: OscillatorPanelProps) {
   const pitch = normalizePitch(oscillator.pitch);
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
   const [amOpen, setAmOpen] = useState(oscillator.amEnabled);
   const [pmOpen, setPmOpen] = useState(oscillator.pmEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
+  const [oscEnvOpen, setOscEnvOpen] = useState(envelope?.enabled ?? false);
+
+  const updateEnvelope = <K extends keyof OscEnvelope>(key: K, value: OscEnvelope[K]) => {
+    if (envelope && onEnvelopeChange) {
+      onEnvelopeChange({ ...envelope, [key]: value });
+    }
+  };
   const prevStRef = useRef(pitch.st);
   
   const updateOscillator = <K extends keyof Oscillator>(
@@ -519,6 +536,85 @@ export function OscillatorPanel({ oscillator, onChange, title, index }: Oscillat
             </div>
           )}
         </div>
+
+        {envelope && onEnvelopeChange && (
+          <div className={`rounded border border-border/50 transition-opacity ${!envelope.enabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
+            <div className="flex items-center justify-between px-1.5 py-0.5">
+              <button
+                type="button"
+                onClick={() => setOscEnvOpen(!oscEnvOpen)}
+                className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                {oscEnvOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+                <Volume2 className="w-2.5 h-2.5 text-primary" />
+                AHD
+              </button>
+              <Switch
+                checked={envelope.enabled}
+                onCheckedChange={(v) => updateEnvelope("enabled", v)}
+                className="scale-50"
+                data-testid={`switch-osc-env-${index}`}
+              />
+            </div>
+            {oscEnvOpen && (
+              <div className="px-1.5 pb-1.5 space-y-1">
+                <div className="flex justify-center gap-1">
+                  <Knob
+                    value={envelope.attack}
+                    min={0}
+                    max={2000}
+                    step={1}
+                    label="A"
+                    unit="ms"
+                    onChange={(v) => updateEnvelope("attack", v)}
+                    accentColor="primary"
+                    size="xs"
+                    logarithmic
+                    defaultValue={0}
+                  />
+                  <Knob
+                    value={envelope.hold}
+                    min={0}
+                    max={2000}
+                    step={1}
+                    label="H"
+                    unit="ms"
+                    onChange={(v) => updateEnvelope("hold", v)}
+                    size="xs"
+                    defaultValue={0}
+                  />
+                  <Knob
+                    value={envelope.decay}
+                    min={0}
+                    max={5000}
+                    step={1}
+                    label="D"
+                    unit="ms"
+                    onChange={(v) => updateEnvelope("decay", v)}
+                    accentColor="accent"
+                    size="xs"
+                    logarithmic
+                    defaultValue={200}
+                  />
+                </div>
+                <Select
+                  value={envelope.curve}
+                  onValueChange={(v) => updateEnvelope("curve", v as EnvelopeCurve)}
+                  disabled={!envelope.enabled}
+                >
+                  <SelectTrigger className="h-5 text-[10px]" data-testid={`select-osc-env-curve-${index}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="linear">Linear</SelectItem>
+                    <SelectItem value="exponential">Exp</SelectItem>
+                    <SelectItem value="logarithmic">Log</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </CollapsiblePanel>
   );
