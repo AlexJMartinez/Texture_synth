@@ -858,6 +858,17 @@ export default function Synthesizer() {
     const masterGain = ctx.createGain();
     masterGain.gain.value = 0.0001;
     
+    // Per-oscillator envelope bypass: oscillators with their own AHD envelopes
+    // connect here instead of masterGain, so they're not affected by master envelope
+    const perOscBypassGain = ctx.createGain();
+    perOscBypassGain.gain.value = 1.0;
+    
+    // Combined gain: merges masterGain (with master envelope) and perOscBypassGain
+    const combinedGain = ctx.createGain();
+    combinedGain.gain.value = 1.0;
+    masterGain.connect(combinedGain);
+    perOscBypassGain.connect(combinedGain);
+    
     // Fix 2: Create safety fade gain at the end of the chain
     const safetyFadeGain = ctx.createGain();
     safetyFadeGain.gain.value = 1.0;
@@ -874,7 +885,7 @@ export default function Synthesizer() {
     const panNode = ctx.createStereoPanner();
     panNode.pan.value = params.output.pan / 100;
     
-    let lastNode: AudioNode = masterGain;
+    let lastNode: AudioNode = combinedGain;
     
     if (params.filter.enabled) {
       if (params.filter.type === "comb") {
@@ -1553,18 +1564,20 @@ export default function Synthesizer() {
       // Check for per-oscillator envelope (if enabled, use it; otherwise just set level)
       const oscEnv = perOscEnvelopes?.[key as keyof OscEnvelopes];
       if (oscEnv && oscEnv.enabled) {
-        // Per-oscillator AHD - shapes this oscillator independently before master
+        // Per-oscillator AHD - shapes this oscillator independently, bypasses master envelope
         triggerAHD(oscGain.gain, now, {
           attack: oscEnv.attack / 1000,
           hold: oscEnv.hold / 1000,
           decay: oscEnv.decay / 1000
         }, baseLevel, { startFromCurrent: false });
+        // Route to bypass gain (not affected by master amplitude envelope)
+        finalGain.connect(perOscBypassGain);
       } else {
-        // No per-osc envelope - just set constant level (master envelope handles overall shape)
+        // No per-osc envelope - use master envelope for amplitude shaping
         oscGain.gain.setValueAtTime(baseLevel, now);
+        // Route to masterGain (affected by master amplitude envelope)
+        finalGain.connect(masterGain);
       }
-
-      finalGain.connect(masterGain);
       
       sourceNode.start(now);
       sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
