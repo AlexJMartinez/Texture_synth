@@ -2253,6 +2253,8 @@ export default function Synthesizer() {
               onRandomize={setParams}
               oscEnvelopes={oscEnvelopes}
               onOscEnvelopesRandomize={setOscEnvelopes}
+              convolverSettings={convolverSettings}
+              onConvolverSettingsRandomize={setConvolverSettings}
             />
           </div>
           {/* Waveform full-width on mobile only */}

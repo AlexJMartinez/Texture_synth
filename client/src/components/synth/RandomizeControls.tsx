@@ -7,6 +7,7 @@ import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve
 import { defaultSynthParameters } from "@shared/schema";
 import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
 import type { OscEnvelope, OscEnvelopes } from "./OscillatorPanel";
+import type { ConvolverSettings } from "./ConvolverPanel";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -37,6 +38,8 @@ interface RandomizeControlsProps {
   onRandomize: (params: SynthParameters) => void;
   oscEnvelopes?: OscEnvelopes;
   onOscEnvelopesRandomize?: (envelopes: OscEnvelopes) => void;
+  convolverSettings?: ConvolverSettings;
+  onConvolverSettingsRandomize?: (settings: ConvolverSettings) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -151,7 +154,7 @@ function randomWaveshaperCurve(): WaveshaperCurve {
   return (["softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"] as const)[Math.floor(Math.random() * 7)];
 }
 
-export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, onOscEnvelopesRandomize }: RandomizeControlsProps) {
+export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, onOscEnvelopesRandomize, convolverSettings, onConvolverSettingsRandomize }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
@@ -367,6 +370,17 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         osc1: randomizeOscEnvelope(chaos),
         osc2: randomizeOscEnvelope(chaos),
         osc3: randomizeOscEnvelope(chaos),
+      });
+    }
+    
+    if (onConvolverSettingsRandomize) {
+      onConvolverSettingsRandomize({
+        predelay: Math.round(randomInRange(0, 200 * chaos)),
+        decay: Math.round(randomInRange(30, 100)),
+        lowCut: Math.round(randomInRange(20, 500, true)),
+        highCut: Math.round(randomInRange(4000, 20000, true)),
+        reverse: Math.random() > 0.85,
+        stretch: Math.round(randomInRange(0.5, 2.0) * 100) / 100,
       });
     }
   };
@@ -596,6 +610,17 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         osc1: mutateOscEnvelope(oscEnvelopes.osc1, strength),
         osc2: mutateOscEnvelope(oscEnvelopes.osc2, strength),
         osc3: mutateOscEnvelope(oscEnvelopes.osc3, strength),
+      });
+    }
+    
+    if (onConvolverSettingsRandomize && convolverSettings) {
+      onConvolverSettingsRandomize({
+        predelay: Math.round(mutateValue(convolverSettings.predelay, 0, 500)),
+        decay: Math.round(mutateValue(convolverSettings.decay, 10, 100)),
+        lowCut: Math.round(mutateValue(convolverSettings.lowCut, 20, 2000, true)),
+        highCut: Math.round(mutateValue(convolverSettings.highCut, 2000, 20000, true)),
+        reverse: convolverSettings.reverse,
+        stretch: Math.round(mutateValue(convolverSettings.stretch, 0.5, 2.0) * 100) / 100,
       });
     }
   };
