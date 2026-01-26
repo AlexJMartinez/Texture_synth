@@ -12,7 +12,7 @@ import { TriggerButton } from "@/components/synth/TriggerButton";
 import { RandomizeControls } from "@/components/synth/RandomizeControls";
 import { SynthEngineSelector } from "@/components/synth/SynthEngineSelector";
 import { WaveshaperPanel } from "@/components/synth/WaveshaperPanel";
-import { ConvolverPanel } from "@/components/synth/ConvolverPanel";
+import { ConvolverPanel, ConvolverSettings, loadConvolverSettings, saveConvolverSettings, defaultConvolverSettings } from "@/components/synth/ConvolverPanel";
 import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
 import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
 import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
@@ -384,6 +384,7 @@ export default function Synthesizer() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [oscEnvelopes, setOscEnvelopes] = useState<OscEnvelopes>(loadOscEnvelopes);
+  const [convolverSettings, setConvolverSettings] = useState<ConvolverSettings>(loadConvolverSettings);
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
@@ -793,13 +794,57 @@ export default function Synthesizer() {
     }
   }, []);
 
+  const processIRBuffer = useCallback((
+    ctx: AudioContext | OfflineAudioContext,
+    irBuffer: AudioBuffer,
+    settings: ConvolverSettings
+  ): AudioBuffer => {
+    const { reverse, stretch, decay, lowCut, highCut } = settings;
+    
+    const stretchedLength = Math.floor(irBuffer.length * stretch);
+    const decayLength = Math.floor(stretchedLength * (decay / 100));
+    const finalLength = Math.max(1, decayLength);
+    
+    const processedBuffer = ctx.createBuffer(
+      irBuffer.numberOfChannels,
+      finalLength,
+      irBuffer.sampleRate
+    );
+    
+    for (let ch = 0; ch < irBuffer.numberOfChannels; ch++) {
+      const inputData = irBuffer.getChannelData(ch);
+      const outputData = processedBuffer.getChannelData(ch);
+      
+      for (let i = 0; i < finalLength; i++) {
+        const srcIndex = Math.floor(i / stretch);
+        const clampedIndex = Math.min(srcIndex, inputData.length - 1);
+        let sample = inputData[clampedIndex];
+        
+        const fadeStart = finalLength * 0.7;
+        if (i > fadeStart) {
+          const fadeProgress = (i - fadeStart) / (finalLength - fadeStart);
+          sample *= 1 - fadeProgress;
+        }
+        
+        outputData[i] = sample;
+      }
+      
+      if (reverse) {
+        outputData.reverse();
+      }
+    }
+    
+    return processedBuffer;
+  }, []);
+
   const generateSound = useCallback(async (
     ctx: AudioContext | OfflineAudioContext,
     params: SynthParameters,
     duration: number,
     seed: number = Date.now(),
     sourcesCollector?: AudioScheduledSourceNode[],
-    perOscEnvelopes?: OscEnvelopes
+    perOscEnvelopes?: OscEnvelopes,
+    convSettings?: ConvolverSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -969,20 +1014,39 @@ export default function Synthesizer() {
       }
       
       if (irBuffer) {
+        const settings = convSettings || defaultConvolverSettings;
+        const processedIR = processIRBuffer(ctx, irBuffer, settings);
+        
         const convolver = ctx.createConvolver();
-        const irCopy = ctx.createBuffer(irBuffer.numberOfChannels, irBuffer.length, irBuffer.sampleRate);
-        for (let ch = 0; ch < irBuffer.numberOfChannels; ch++) {
-          irCopy.copyToChannel(irBuffer.getChannelData(ch), ch);
-        }
-        convolver.buffer = irCopy;
+        convolver.buffer = processedIR;
         
         const convolverWet = ctx.createGain();
         const convolverDry = ctx.createGain();
         convolverWet.gain.value = params.convolver.mix / 100;
         convolverDry.gain.value = 1 - params.convolver.mix / 100;
         
-        lastNode.connect(convolver);
-        convolver.connect(convolverWet);
+        let convolverInput: AudioNode = lastNode;
+        if (settings.predelay > 0) {
+          const predelayNode = ctx.createDelay(1);
+          predelayNode.delayTime.value = settings.predelay / 1000;
+          lastNode.connect(predelayNode);
+          convolverInput = predelayNode;
+        }
+        
+        const lowCutFilter = ctx.createBiquadFilter();
+        lowCutFilter.type = "highpass";
+        lowCutFilter.frequency.value = settings.lowCut;
+        lowCutFilter.Q.value = 0.7;
+        
+        const highCutFilter = ctx.createBiquadFilter();
+        highCutFilter.type = "lowpass";
+        highCutFilter.frequency.value = settings.highCut;
+        highCutFilter.Q.value = 0.7;
+        
+        convolverInput.connect(convolver);
+        convolver.connect(lowCutFilter);
+        lowCutFilter.connect(highCutFilter);
+        highCutFilter.connect(convolverWet);
         lastNode.connect(convolverDry);
         
         const convolverMix = ctx.createGain();
@@ -1958,7 +2022,7 @@ export default function Synthesizer() {
     // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
     const buffer = await Tone.Offline(async (offlineCtx) => {
       const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes);
+      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings);
     }, durationInSeconds);
     
     // Convert Tone.ToneAudioBuffer to AudioBuffer
@@ -2336,6 +2400,8 @@ export default function Synthesizer() {
                 convolver={params.convolver}
                 onChange={(convolver) => setParams({ ...params, convolver })}
                 onIRLoaded={handleIRLoaded}
+                settings={convolverSettings}
+                onSettingsChange={setConvolverSettings}
               />
               <SpectralScramblerPanel
                 spectralScrambler={params.spectralScrambler}

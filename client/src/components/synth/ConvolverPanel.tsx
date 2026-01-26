@@ -4,15 +4,36 @@ import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Convolver } from "@shared/schema";
-import { Radio, Upload, Trash2 } from "lucide-react";
+import { Radio, Upload, Trash2, RotateCcw } from "lucide-react";
+
+export interface ConvolverSettings {
+  predelay: number;
+  decay: number;
+  lowCut: number;
+  highCut: number;
+  reverse: boolean;
+  stretch: number;
+}
+
+export const defaultConvolverSettings: ConvolverSettings = {
+  predelay: 0,
+  decay: 100,
+  lowCut: 20,
+  highCut: 20000,
+  reverse: false,
+  stretch: 1.0,
+};
 
 interface ConvolverPanelProps {
   convolver: Convolver;
   onChange: (convolver: Convolver) => void;
   onIRLoaded?: (buffer: AudioBuffer, name: string) => void;
+  settings?: ConvolverSettings;
+  onSettingsChange?: (settings: ConvolverSettings) => void;
 }
 
 const IR_STORAGE_KEY = "synth-custom-irs";
+const CONVOLVER_SETTINGS_KEY = "synth-convolver-settings";
 
 interface StoredIR {
   name: string;
@@ -32,10 +53,28 @@ function saveIRs(irs: StoredIR[]) {
   localStorage.setItem(IR_STORAGE_KEY, JSON.stringify(irs));
 }
 
-export function ConvolverPanel({ convolver, onChange, onIRLoaded }: ConvolverPanelProps) {
+export function loadConvolverSettings(): ConvolverSettings {
+  try {
+    const stored = localStorage.getItem(CONVOLVER_SETTINGS_KEY);
+    if (stored) {
+      return { ...defaultConvolverSettings, ...JSON.parse(stored) };
+    }
+  } catch {
+    // Fall through to default
+  }
+  return { ...defaultConvolverSettings };
+}
+
+export function saveConvolverSettings(settings: ConvolverSettings) {
+  localStorage.setItem(CONVOLVER_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export function ConvolverPanel({ convolver, onChange, onIRLoaded, settings, onSettingsChange }: ConvolverPanelProps) {
   const [customIRs, setCustomIRs] = useState<StoredIR[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const currentSettings = settings || defaultConvolverSettings;
 
   useEffect(() => {
     setCustomIRs(getStoredIRs());
@@ -43,6 +82,14 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded }: ConvolverPan
 
   const updateConvolver = <K extends keyof Convolver>(key: K, value: Convolver[K]) => {
     onChange({ ...convolver, [key]: value });
+  };
+
+  const updateSettings = <K extends keyof ConvolverSettings>(key: K, value: ConvolverSettings[K]) => {
+    if (onSettingsChange) {
+      const newSettings = { ...currentSettings, [key]: value };
+      onSettingsChange(newSettings);
+      saveConvolverSettings(newSettings);
+    }
   };
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,7 +166,7 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded }: ConvolverPan
         </div>
 
         <div className={`space-y-2 ${!convolver.enabled ? "opacity-50 pointer-events-none" : ""}`}>
-          <div className="flex justify-center">
+          <div className="grid grid-cols-3 gap-1">
             <Knob
               value={convolver.mix}
               min={0}
@@ -131,10 +178,98 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded }: ConvolverPan
               accentColor="accent"
               size="xs"
             />
+            <Knob
+              value={currentSettings.predelay}
+              min={0}
+              max={500}
+              step={1}
+              label="Pre"
+              unit="ms"
+              onChange={(v) => updateSettings("predelay", v)}
+              accentColor="accent"
+              size="xs"
+            />
+            <Knob
+              value={currentSettings.decay}
+              min={10}
+              max={100}
+              step={1}
+              label="Size"
+              unit="%"
+              onChange={(v) => updateSettings("decay", v)}
+              accentColor="accent"
+              size="xs"
+            />
+          </div>
+          
+          <div className="grid grid-cols-3 gap-1">
+            <Knob
+              value={currentSettings.lowCut}
+              min={20}
+              max={2000}
+              step={1}
+              label="Lo Cut"
+              unit="Hz"
+              onChange={(v) => updateSettings("lowCut", v)}
+              accentColor="accent"
+              size="xs"
+              logarithmic
+            />
+            <Knob
+              value={currentSettings.highCut}
+              min={1000}
+              max={20000}
+              step={100}
+              label="Hi Cut"
+              unit="Hz"
+              onChange={(v) => updateSettings("highCut", v)}
+              accentColor="accent"
+              size="xs"
+              logarithmic
+            />
+            <Knob
+              value={currentSettings.stretch}
+              min={0.5}
+              max={2.0}
+              step={0.01}
+              label="Stretch"
+              unit="x"
+              onChange={(v) => updateSettings("stretch", v)}
+              accentColor="accent"
+              size="xs"
+            />
+          </div>
+          
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-muted-foreground">Reverse</span>
+              <Switch
+                checked={currentSettings.reverse}
+                onCheckedChange={(v) => updateSettings("reverse", v)}
+                className="scale-50"
+                data-testid="switch-convolver-reverse"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[9px]"
+              onClick={() => {
+                if (onSettingsChange) {
+                  onSettingsChange({ ...defaultConvolverSettings });
+                  saveConvolverSettings(defaultConvolverSettings);
+                }
+              }}
+              title="Reset to defaults"
+              data-testid="button-convolver-reset"
+            >
+              <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
+              Reset
+            </Button>
           </div>
 
           <div className="border-t border-border/50 pt-1.5 space-y-1.5">
-            <div className="text-[10px] text-muted-foreground mb-1">Custom IRs</div>
+            <div className="text-[10px] text-muted-foreground mb-1">Impulse Responses</div>
             
             <input
               ref={fileInputRef}
@@ -189,7 +324,7 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded }: ConvolverPan
 
             {customIRs.length === 0 && (
               <p className="text-[9px] text-muted-foreground text-center py-1">
-                No custom IRs loaded. Upload WAV or AIFF files.
+                No IRs loaded. Upload WAV/AIFF files.
               </p>
             )}
           </div>
