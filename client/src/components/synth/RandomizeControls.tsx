@@ -6,6 +6,7 @@ import { useState } from "react";
 import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset, PitchState, SpectralScrambler } from "@shared/schema";
 import { defaultSynthParameters } from "@shared/schema";
 import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
+import type { OscEnvelope, OscEnvelopes } from "./OscillatorPanel";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -34,6 +35,34 @@ function mutatePitchState(current: PitchState | number | undefined, amount: numb
 interface RandomizeControlsProps {
   currentParams: SynthParameters;
   onRandomize: (params: SynthParameters) => void;
+  oscEnvelopes?: OscEnvelopes;
+  onOscEnvelopesRandomize?: (envelopes: OscEnvelopes) => void;
+}
+
+function randomizeOscEnvelope(chaos: number): OscEnvelope {
+  return {
+    enabled: Math.random() > 0.6,
+    attack: Math.round(randExp(0, 50 * chaos, 2.0)),
+    hold: Math.round(randExp(0, 100 * chaos, 2.0)),
+    decay: Math.round(randExp(50, 2000, 1.5)),
+    curve: randomCurve(),
+  };
+}
+
+function mutateOscEnvelope(env: OscEnvelope, strength: number): OscEnvelope {
+  const mutateValue = (current: number, min: number, max: number): number => {
+    const range = max - min;
+    const mutation = (Math.random() - 0.5) * 2 * strength * range;
+    return Math.max(min, Math.min(max, current + mutation));
+  };
+  
+  return {
+    enabled: env.enabled,
+    attack: Math.round(mutateValue(env.attack, 0, 500)),
+    hold: Math.round(mutateValue(env.hold, 0, 500)),
+    decay: Math.round(mutateValue(env.decay, 20, 5000)),
+    curve: env.curve,
+  };
 }
 
 function randomInRange(min: number, max: number, logarithmic = false): number {
@@ -122,7 +151,7 @@ function randomWaveshaperCurve(): WaveshaperCurve {
   return (["softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"] as const)[Math.floor(Math.random() * 7)];
 }
 
-export function RandomizeControls({ currentParams, onRandomize }: RandomizeControlsProps) {
+export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, onOscEnvelopesRandomize }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
@@ -332,6 +361,14 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     };
 
     onRandomize(params);
+    
+    if (onOscEnvelopesRandomize) {
+      onOscEnvelopesRandomize({
+        osc1: randomizeOscEnvelope(chaos),
+        osc2: randomizeOscEnvelope(chaos),
+        osc3: randomizeOscEnvelope(chaos),
+      });
+    }
   };
 
   const mutate = () => {
@@ -553,6 +590,14 @@ export function RandomizeControls({ currentParams, onRandomize }: RandomizeContr
     };
 
     onRandomize(params);
+    
+    if (onOscEnvelopesRandomize && oscEnvelopes) {
+      onOscEnvelopesRandomize({
+        osc1: mutateOscEnvelope(oscEnvelopes.osc1, strength),
+        osc2: mutateOscEnvelope(oscEnvelopes.osc2, strength),
+        osc3: mutateOscEnvelope(oscEnvelopes.osc3, strength),
+      });
+    }
   };
 
   const reset = () => {

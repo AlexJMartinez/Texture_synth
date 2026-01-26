@@ -15,6 +15,12 @@ export interface OscEnvelope {
   decay: number;
   curve: EnvelopeCurve;
 }
+
+export interface OscEnvelopes {
+  osc1: OscEnvelope;
+  osc2: OscEnvelope;
+  osc3: OscEnvelope;
+}
 import {
   pitchToHz,
   getKnobValue,

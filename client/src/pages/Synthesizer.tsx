@@ -2180,6 +2180,8 @@ export default function Synthesizer() {
             <RandomizeControls
               currentParams={params}
               onRandomize={setParams}
+              oscEnvelopes={oscEnvelopes}
+              onOscEnvelopesRandomize={setOscEnvelopes}
             />
           </div>
           {/* Waveform full-width on mobile only */}
