@@ -30,6 +30,7 @@ Core architectural decisions include:
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, and Chorus.
   - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).
+  - **Enhanced Convolver**: Kilohearts-style convolution reverb with custom IR loading plus advanced processing: pre-delay (0-500ms), size/decay (10-100% with exponential curve), lo/hi cut filters (20Hz-20kHz with frequency clamping), reverse toggle, and time-stretch (0.5x-2x with linear interpolation). Settings stored in localStorage separately from presets.
 - **Modulation System**: Phaseplant-style modulator rack at the bottom of the UI.
   - **LFO**: Sine, triangle, sawtooth, square, random shapes with rate sync option, phase control, and bipolar/unipolar modes.
   - **Envelope**: ADSR modulator with attack, decay, sustain, release controls.
