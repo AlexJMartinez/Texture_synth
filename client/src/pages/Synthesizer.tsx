@@ -1980,10 +1980,27 @@ export default function Synthesizer() {
     return { masterGain, safetyFadeGain };
   }, [createImpulseResponse]);
 
-  const getTotalDuration = useCallback((params: SynthParameters): number => {
+  const getTotalDuration = useCallback((params: SynthParameters, perOscEnvelopes?: OscEnvelopes): number => {
     const ampEnv = params.envelopes.env3;
-    // Fix 1: Add tail padding for reverb/delay decay
-    let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay + (TAIL_PAD * 1000);
+    // Start with master envelope duration
+    let baseDuration = ampEnv.attack + ampEnv.hold + ampEnv.decay;
+    
+    // Check per-oscillator envelopes - use the longest one if enabled
+    if (perOscEnvelopes) {
+      const oscKeys = ['osc1', 'osc2', 'osc3'] as const;
+      for (const key of oscKeys) {
+        const osc = params.oscillators[key];
+        const oscEnv = perOscEnvelopes[key];
+        // Only consider if oscillator is enabled AND per-osc envelope is enabled
+        if (osc.enabled && oscEnv && oscEnv.enabled) {
+          const oscEnvDuration = oscEnv.attack + oscEnv.hold + oscEnv.decay;
+          baseDuration = Math.max(baseDuration, oscEnvDuration);
+        }
+      }
+    }
+    
+    // Add tail padding for reverb/delay decay
+    baseDuration += (TAIL_PAD * 1000);
     
     if (params.effects.delayEnabled) {
       baseDuration += getEffectiveDelayTime(params) * 3;
@@ -2032,7 +2049,7 @@ export default function Synthesizer() {
     
     setIsPlaying(true);
 
-    const totalDuration = getTotalDuration(params);
+    const totalDuration = getTotalDuration(params, oscEnvelopes);
     
     // Fix 5 & 6: Use same OfflineAudioContext for preview and export with locked seed
     const seed = Date.now();
@@ -2092,7 +2109,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
