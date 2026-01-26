@@ -799,11 +799,10 @@ export default function Synthesizer() {
     irBuffer: AudioBuffer,
     settings: ConvolverSettings
   ): AudioBuffer => {
-    const { reverse, stretch, decay, lowCut, highCut } = settings;
+    const { reverse, stretch, decay } = settings;
     
     const stretchedLength = Math.floor(irBuffer.length * stretch);
-    const decayLength = Math.floor(stretchedLength * (decay / 100));
-    const finalLength = Math.max(1, decayLength);
+    const finalLength = Math.max(1, stretchedLength);
     
     const processedBuffer = ctx.createBuffer(
       irBuffer.numberOfChannels,
@@ -811,20 +810,24 @@ export default function Synthesizer() {
       irBuffer.sampleRate
     );
     
+    const decayRate = decay / 100;
+    const decayExponent = 3 + (1 - decayRate) * 5;
+    
     for (let ch = 0; ch < irBuffer.numberOfChannels; ch++) {
       const inputData = irBuffer.getChannelData(ch);
       const outputData = processedBuffer.getChannelData(ch);
       
       for (let i = 0; i < finalLength; i++) {
-        const srcIndex = Math.floor(i / stretch);
-        const clampedIndex = Math.min(srcIndex, inputData.length - 1);
-        let sample = inputData[clampedIndex];
+        const srcPos = i / stretch;
+        const srcIndex = Math.floor(srcPos);
+        const frac = srcPos - srcIndex;
+        const idx0 = Math.min(srcIndex, inputData.length - 1);
+        const idx1 = Math.min(srcIndex + 1, inputData.length - 1);
+        let sample = inputData[idx0] * (1 - frac) + inputData[idx1] * frac;
         
-        const fadeStart = finalLength * 0.7;
-        if (i > fadeStart) {
-          const fadeProgress = (i - fadeStart) / (finalLength - fadeStart);
-          sample *= 1 - fadeProgress;
-        }
+        const position = i / finalLength;
+        const envelope = Math.pow(1 - position, decayExponent);
+        sample *= envelope;
         
         outputData[i] = sample;
       }
@@ -1033,14 +1036,18 @@ export default function Synthesizer() {
           convolverInput = predelayNode;
         }
         
+        const nyquist = ctx.sampleRate / 2;
+        const clampedLowCut = Math.max(20, Math.min(settings.lowCut, nyquist - 100));
+        const clampedHighCut = Math.max(clampedLowCut + 100, Math.min(settings.highCut, nyquist - 10));
+        
         const lowCutFilter = ctx.createBiquadFilter();
         lowCutFilter.type = "highpass";
-        lowCutFilter.frequency.value = settings.lowCut;
+        lowCutFilter.frequency.value = clampedLowCut;
         lowCutFilter.Q.value = 0.7;
         
         const highCutFilter = ctx.createBiquadFilter();
         highCutFilter.type = "lowpass";
-        highCutFilter.frequency.value = settings.highCut;
+        highCutFilter.frequency.value = clampedHighCut;
         highCutFilter.Q.value = 0.7;
         
         convolverInput.connect(convolver);
