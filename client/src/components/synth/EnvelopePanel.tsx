@@ -151,34 +151,39 @@ export function EnvelopePanel({ envelope, onChange, type }: EnvelopePanelProps) 
           <Knob
             value={envelope.attack}
             min={0}
-            max={2000}
+            max={type === "amp" ? 10000 : 2000}
             step={1}
             label="Attack"
             unit="ms"
             onChange={(v) => updateEnvelope("attack", v)}
             accentColor="primary"
             size="xs"
+            logarithmic={type === "amp"}
+            defaultValue={0}
           />
           <Knob
             value={envelope.hold}
             min={0}
-            max={2000}
+            max={type === "amp" ? 5000 : 2000}
             step={1}
             label="Hold"
             unit="ms"
             onChange={(v) => updateEnvelope("hold", v)}
             size="xs"
+            defaultValue={0}
           />
           <Knob
             value={envelope.decay}
             min={0}
-            max={10000}
+            max={type === "amp" ? 30000 : 10000}
             step={1}
             label="Decay"
             unit="ms"
             onChange={(v) => updateEnvelope("decay", v)}
             accentColor="accent"
             size="xs"
+            logarithmic={type === "amp"}
+            defaultValue={type === "amp" ? 500 : 200}
           />
           {config.showAmount && (
             <Knob

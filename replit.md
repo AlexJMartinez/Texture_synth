@@ -22,6 +22,9 @@ Core architectural decisions include:
   - **Additive Synthesis**: Harmonic stacking with partialCount (1-8 active harmonics), randomness (0-100% pitch and level variation), spread, decay slope, and per-partial level/detune controls.
   - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click).
 - **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
+  - **Amp Envelope**: Extended ranges matching contemporary synths - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for fine control at fast times and long pad tails.
+  - **Filter/Pitch Envelopes**: Standard ranges - Attack 0-2s, Hold 0-2s, Decay 0-10s.
+  - **Pitch Envelope**: Uses semitone-based modulation (-48 to +48 st) for authentic 808-style pitch drops with exponential curve option.
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, and Chorus.
   - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).

@@ -58,19 +58,36 @@ export function Knob({
   };
 
   const normalizeValue = useCallback((val: number) => {
-    if (logarithmic && min > 0) {
-      const logMin = Math.log(min);
-      const logMax = Math.log(max);
-      return (Math.log(val) - logMin) / (logMax - logMin);
+    if (logarithmic) {
+      if (min > 0) {
+        const logMin = Math.log(min);
+        const logMax = Math.log(max);
+        return (Math.log(val) - logMin) / (logMax - logMin);
+      } else {
+        // Pseudo-logarithmic for ranges starting at 0
+        // Use a small offset to avoid log(0)
+        const offset = 1;
+        const logMax = Math.log(max + offset);
+        const logOffset = Math.log(offset);
+        return (Math.log(val + offset) - logOffset) / (logMax - logOffset);
+      }
     }
     return (val - min) / (max - min);
   }, [min, max, logarithmic]);
 
   const denormalizeValue = useCallback((normalized: number) => {
-    if (logarithmic && min > 0) {
-      const logMin = Math.log(min);
-      const logMax = Math.log(max);
-      return Math.exp(logMin + normalized * (logMax - logMin));
+    if (logarithmic) {
+      if (min > 0) {
+        const logMin = Math.log(min);
+        const logMax = Math.log(max);
+        return Math.exp(logMin + normalized * (logMax - logMin));
+      } else {
+        // Pseudo-logarithmic for ranges starting at 0
+        const offset = 1;
+        const logMax = Math.log(max + offset);
+        const logOffset = Math.log(offset);
+        return Math.exp(logOffset + normalized * (logMax - logOffset)) - offset;
+      }
     }
     return min + normalized * (max - min);
   }, [min, max, logarithmic]);
