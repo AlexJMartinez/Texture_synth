@@ -15,6 +15,7 @@ The UI features a clean, professional audio design with a tabbed organization sy
 
 Core architectural decisions include:
 - **Multi-Oscillator Architecture**: Three main oscillators with sine, triangle, sawtooth, and square waveforms, featuring per-oscillator pitch, detune, drift, level, and FM/PM/AM synthesis capabilities.
+- **Per-Oscillator Envelopes**: Independent AHD (Attack/Hold/Decay) envelopes for each oscillator, allowing individual amplitude shaping before mixing to master. Stored in localStorage separately from presets. Each oscillator's ENV section has a toggle to enable and A/H/D knobs for timing control.
 - **Click Layer**: A dedicated transient generator with ultra-fast noise, various noise types, filter options, and sample rate reduction.
 - **Sub Oscillator**: A separate layer for low-end, offering sine and triangle waveforms with dedicated envelopes and filtering.
 - **Advanced Synthesis Engines**: Selectable Modal, Additive, and Granular synthesis engines for diverse sound generation.
