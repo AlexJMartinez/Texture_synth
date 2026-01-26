@@ -249,12 +249,13 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
       effects: {
         saturation: Math.round(randomInRange(0, 80 * chaos)),
         bitcrusher: Math.round(randomInRange(4, 16)),
+        // One-shot delay: short times for transient thickening/slap, low feedback, subtle mix
         delayEnabled: Math.random() > 0.6,
-        delaySyncMode: Math.random() > 0.5 ? "sync" as const : "ms" as const,
-        delayTime: Math.round(randomInRange(50, 500)),
-        delayDivision: (["1/4", "1/8", "1/16", "1/4T", "1/8T"] as const)[Math.floor(Math.random() * 5)],
-        delayFeedback: Math.round(randomInRange(20, 60)),
-        delayMix: Math.round(randomInRange(20, 50)),
+        delaySyncMode: "ms" as const, // Use ms mode for precise one-shot control
+        delayTime: Math.round(randExp(1, 40, 1.5)), // 1-40ms: transient thickening (1-5ms), slap (5-20ms), tight echo (20-40ms)
+        delayDivision: (["1/32", "1/16", "1/16T"] as const)[Math.floor(Math.random() * 3)], // Shorter divisions if sync mode used
+        delayFeedback: Math.round(randExp(0, 15, 2.0)), // 0-15%: one-shots should decay once, not repeat
+        delayMix: Math.round(randExp(3, 20, 1.5)), // 3-20%: delay should support, not announce itself
         reverbEnabled: Math.random() > 0.6,
         reverbSize: Math.round(randomInRange(30, 80)),
         reverbMix: Math.round(randomInRange(15, 40)),
@@ -497,10 +498,11 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         bitcrusher: Math.round(mutateValue(currentParams.effects.bitcrusher, 1, 16)),
         delayEnabled: currentParams.effects.delayEnabled,
         delaySyncMode: currentParams.effects.delaySyncMode,
-        delayTime: Math.round(mutateValue(currentParams.effects.delayTime, 0, 2000)),
+        // One-shot delay mutation: keep within short/subtle ranges
+        delayTime: Math.round(mutateValue(currentParams.effects.delayTime, 1, 40)), // 1-40ms for one-shots
         delayDivision: currentParams.effects.delayDivision,
-        delayFeedback: Math.round(mutateValue(currentParams.effects.delayFeedback, 0, 95)),
-        delayMix: Math.round(mutateValue(currentParams.effects.delayMix, 0, 100)),
+        delayFeedback: Math.round(mutateValue(currentParams.effects.delayFeedback, 0, 15)), // 0-15% max
+        delayMix: Math.round(mutateValue(currentParams.effects.delayMix, 3, 20)), // 3-20% subtle mix
         reverbEnabled: currentParams.effects.reverbEnabled,
         reverbSize: Math.round(mutateValue(currentParams.effects.reverbSize, 0, 100)),
         reverbMix: Math.round(mutateValue(currentParams.effects.reverbMix, 0, 100)),
