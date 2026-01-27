@@ -30,7 +30,14 @@ Core architectural decisions include:
   - **Pitch Envelope**: Uses semitone-based modulation (-48 to +48 st) for authentic 808-style pitch drops with exponential curve option.
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, Algorithmic Reverb, and Chorus.
-  - **Algorithmic Reverb**: Three reverb types (Hall/Plate/Room) with type-specific presets for size and decay, plus advanced controls for damping, diffusion, and modulation. Settings stored in localStorage.
+  - **Algorithmic Reverb**: Three reverb types (Hall/Plate/Room) with enhanced impulse response generation featuring:
+    - Type-specific early reflections (8/6/4 reflections for hall/plate/room)
+    - Pre-delay control (0-200ms)
+    - Damping for high-frequency decay control (0-100%)
+    - Diffusion for tail density (0-100%)
+    - Internal modulation to prevent metallic artifacts (0-100%)
+    - Stereo width/decorrelation control (0-100%)
+    - All settings stored in localStorage
   - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).
   - **Enhanced Convolver**: Kilohearts-style convolution reverb with custom IR loading plus advanced processing: pre-delay (0-500ms), size/decay (10-100% with exponential curve), lo/hi cut filters (20Hz-20kHz with frequency clamping), reverse toggle, and time-stretch (0.5x-2x with linear interpolation). Settings stored in localStorage separately from presets.
 - **Modulation System**: Phaseplant-style modulator rack at the bottom of the UI.
@@ -38,7 +45,7 @@ Core architectural decisions include:
   - **Envelope**: ADSR modulator with attack, decay, sustain, release controls.
   - **Random/S&H**: Sample-and-hold random modulation with rate and smoothing controls.
   - **Macro**: Manual control knobs assignable to multiple parameters.
-  - **Modulation Routing**: Assign any modulator to any parameter with depth control.
+  - **Modulation Routing**: Assign any modulator to 75+ parameters with depth control, including filter, oscillators, effects, spectral scrambler, mastering, and envelope amounts. Visual feedback shows colored rings on modulated knobs matching modulator colors (LFO=blue, Envelope=orange, Random=purple, Macro=green).
 - **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling.
 - **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing and Hermitian symmetry for real-valued output. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, spectral gating (-60dB to 0dB threshold for tearing/crackle effects), spectral stretch/squeeze (0.5x-2.0x for moving frequencies up/down), bin density control (5%-100% for sparse/broken sounds), and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet. DC and Nyquist bins are preserved unshifted but apply gating/density for signal integrity.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
