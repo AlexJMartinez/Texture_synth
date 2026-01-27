@@ -1,4 +1,10 @@
 import { useRef, useCallback, useEffect, useState } from "react";
+import { useModulationsForPath } from "@/contexts/ModulationContext";
+
+interface ModulationIndicator {
+  color: string;
+  modulatorName: string;
+}
 
 interface KnobProps {
   value: number;
@@ -13,6 +19,8 @@ interface KnobProps {
   accentColor?: "primary" | "accent";
   showValueOnHover?: boolean;
   defaultValue?: number;
+  modulationPath?: string;
+  modulations?: ModulationIndicator[];
   "data-testid"?: string;
 }
 
@@ -29,8 +37,13 @@ export function Knob({
   accentColor = "primary",
   showValueOnHover = true,
   defaultValue,
+  modulationPath,
+  modulations: externalModulations,
   "data-testid": testId,
 }: KnobProps) {
+  // Get modulations from context if a path is provided, or use external modulations
+  const contextModulations = useModulationsForPath(modulationPath || "");
+  const modulations = externalModulations || contextModulations;
   const knobRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovering, setIsHovering] = useState(false);
@@ -194,6 +207,10 @@ export function Knob({
 
   const showValue = showValueOnHover && (isDragging || isHovering);
 
+  // Combine multiple modulator colors into a single gradient or use the first one
+  const hasModulations = modulations && modulations.length > 0;
+  const primaryModColor = hasModulations ? modulations[0].color : null;
+
   return (
     <div 
       className="flex flex-col items-center gap-0.5 flex-1 min-w-0" 
@@ -201,20 +218,32 @@ export function Knob({
       onMouseEnter={() => setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
-      <div
-        ref={knobRef}
-        className={`relative ${sizeClasses[size]} rounded-full cursor-pointer select-none transition-transform ${isDragging ? 'scale-105' : ''}`}
-        style={{
-          background: 'linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)))',
-          boxShadow: isDragging 
-            ? `inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 15px hsl(var(--${accentColor})/0.4)`
-            : 'inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 4px 8px rgba(0,0,0,0.4)',
-        }}
-        onMouseDown={handleMouseDown}
-        onTouchStart={handleTouchStart}
-        onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}
-      >
+      <div className="relative">
+        {/* Modulation indicator ring - positioned around the knob */}
+        {hasModulations && primaryModColor && (
+          <div 
+            className="absolute -inset-1 rounded-full animate-pulse pointer-events-none"
+            style={{
+              border: `2px solid ${primaryModColor}`,
+              boxShadow: `0 0 8px ${primaryModColor}, 0 0 16px ${primaryModColor}50`,
+            }}
+            title={modulations.map(m => m.modulatorName).join(', ')}
+          />
+        )}
+        <div
+          ref={knobRef}
+          className={`relative ${sizeClasses[size]} rounded-full cursor-pointer select-none transition-transform ${isDragging ? 'scale-105' : ''}`}
+          style={{
+            background: 'linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)))',
+            boxShadow: isDragging 
+              ? `inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 15px hsl(var(--${accentColor})/0.4)`
+              : 'inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 4px 8px rgba(0,0,0,0.4)',
+          }}
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          onDoubleClick={handleDoubleClick}
+          onWheel={handleWheel}
+        >
         <div
           className="absolute inset-0 flex items-center justify-center"
           style={{ transform: `rotate(${rotation}deg)` }}
@@ -249,6 +278,7 @@ export function Knob({
             style={{ filter: `drop-shadow(0 0 3px hsl(var(--${accentColor})/0.5))` }}
           />
         </svg>
+        </div>
       </div>
       <span className="text-[10px] font-medium text-muted-foreground truncate max-w-full">{label}</span>
       <div className="h-3 flex items-center justify-center">

@@ -43,6 +43,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
             onChange={(v) => update("level", v)}
             accentColor="accent"
             size="xs"
+            modulationPath="clickLayer.level"
           />
           <Knob
             value={clickLayer.decay}

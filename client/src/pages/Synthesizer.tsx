@@ -31,6 +31,7 @@ import { SpectralScramblerPanel } from "@/components/synth/SpectralScramblerPane
 import { CollapsiblePanel } from "@/components/synth/CollapsiblePanel";
 import { Knob } from "@/components/synth/Knob";
 import { ModulatorRack } from "@/components/synth/ModulatorRack";
+import { ModulationProvider } from "@/contexts/ModulationContext";
 import { KeySelector, KeyState, keyToFrequency, frequencyToNearestKey } from "@/components/synth/KeySelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock } from "lucide-react";
@@ -2353,6 +2354,7 @@ export default function Synthesizer() {
   }, [handleTrigger]);
 
   return (
+    <ModulationProvider modulators={params.modulators} routes={params.modulationRoutes}>
     <div className="h-screen bg-background p-2 overflow-hidden flex flex-col">
       <div className="max-w-5xl mx-auto w-full flex flex-col flex-1 min-h-0">
         {/* Header with trigger and controls */}
@@ -2635,6 +2637,7 @@ export default function Synthesizer() {
         </Tabs>
       </div>
     </div>
+    </ModulationProvider>
   );
 }
 

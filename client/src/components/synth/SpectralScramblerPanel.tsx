@@ -54,6 +54,7 @@ export function SpectralScramblerPanel({ spectralScrambler, onChange }: Spectral
             onChange={(v) => onChange({ scrambleAmount: v })}
             size="sm"
             data-testid="knob-scramble-amount"
+            modulationPath="spectralScrambler.scrambleAmount"
           />
           
           <Knob
@@ -108,6 +109,7 @@ export function SpectralScramblerPanel({ spectralScrambler, onChange }: Spectral
             onChange={(v) => onChange({ mix: v })}
             size="sm"
             data-testid="knob-spectral-mix"
+            modulationPath="spectralScrambler.mix"
           />
           
           <div className="flex flex-col items-center gap-1">

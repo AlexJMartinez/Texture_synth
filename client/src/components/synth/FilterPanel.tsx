@@ -97,6 +97,7 @@ export function FilterPanel({ filter, onChange }: FilterPanelProps) {
             logarithmic
             accentColor="accent"
             size="xs"
+            modulationPath="filter.frequency"
           />
           <Knob
             value={filter.resonance}
@@ -108,6 +109,7 @@ export function FilterPanel({ filter, onChange }: FilterPanelProps) {
             onChange={(v) => updateFilter("resonance", v)}
             accentColor="primary"
             size="xs"
+            modulationPath="filter.resonance"
           />
           {showCombDelay && (
             <Knob
@@ -131,6 +133,7 @@ export function FilterPanel({ filter, onChange }: FilterPanelProps) {
               unit="dB"
               onChange={(v) => updateFilter("gain", v)}
               size="xs"
+              modulationPath="filter.gain"
             />
           )}
         </div>

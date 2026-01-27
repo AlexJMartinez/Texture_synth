@@ -73,6 +73,7 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
             onChange={(v) => update("level", v)}
             accentColor="accent"
             size="xs"
+            modulationPath="subOsc.level"
           />
           <Knob
             value={subOsc.attack}

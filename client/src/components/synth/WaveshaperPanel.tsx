@@ -99,6 +99,7 @@ export function WaveshaperPanel({ waveshaper, onChange }: WaveshaperPanelProps) 
               onChange={(v) => updateWaveshaper("drive", v)}
               accentColor="primary"
               size="xs"
+              modulationPath="waveshaper.amount"
             />
             <Knob
               value={waveshaper.mix}
@@ -110,6 +111,7 @@ export function WaveshaperPanel({ waveshaper, onChange }: WaveshaperPanelProps) 
               onChange={(v) => updateWaveshaper("mix", v)}
               accentColor="accent"
               size="xs"
+              modulationPath="waveshaper.mix"
             />
           </div>
 

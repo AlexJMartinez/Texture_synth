@@ -52,6 +52,7 @@ export function SaturationChainPanel({ saturation, onChange }: SaturationChainPa
               onChange={(v) => update("tapeDrive", v)}
               accentColor="primary"
               size="xs"
+              modulationPath="saturationChain.tapeDrive"
             />
             <Knob
               value={saturation.tapeWarmth}
@@ -88,6 +89,7 @@ export function SaturationChainPanel({ saturation, onChange }: SaturationChainPa
               onChange={(v) => update("tubeDrive", v)}
               accentColor="primary"
               size="xs"
+              modulationPath="saturationChain.tubeDrive"
             />
             <Knob
               value={saturation.tubeBias}
@@ -124,6 +126,7 @@ export function SaturationChainPanel({ saturation, onChange }: SaturationChainPa
               onChange={(v) => update("transistorDrive", v)}
               accentColor="accent"
               size="xs"
+              modulationPath="saturationChain.transistorDrive"
             />
             <Knob
               value={saturation.transistorAsymmetry}
@@ -150,6 +153,7 @@ export function SaturationChainPanel({ saturation, onChange }: SaturationChainPa
             onChange={(v) => update("mix", v)}
             accentColor="primary"
             size="xs"
+            modulationPath="saturationChain.mix"
           />
         </div>
       </div>

@@ -207,6 +207,7 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
               onChange={(v) => updateEffects("bitcrusher", v)}
               accentColor="accent"
               size="xs"
+              modulationPath="effects.bitcrusher.bitDepth"
             />
           </div>
         </div>
@@ -267,8 +268,8 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
                   <span className="text-[8px] text-muted-foreground mt-0.5">Div</span>
                 </div>
               )}
-              <Knob value={effects.delayFeedback} min={0} max={95} step={1} label="FB" unit="%" onChange={(v) => updateEffects("delayFeedback", v)} size="xs" />
-              <Knob value={effects.delayMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("delayMix", v)} size="xs" />
+              <Knob value={effects.delayFeedback} min={0} max={95} step={1} label="FB" unit="%" onChange={(v) => updateEffects("delayFeedback", v)} size="xs" modulationPath="effects.delay.feedback" />
+              <Knob value={effects.delayMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("delayMix", v)} size="xs" modulationPath="effects.delay.mix" />
             </div>
           </div>
         </EffectSection>
@@ -302,8 +303,8 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
             {/* Main Reverb Controls */}
             <div className="flex justify-center gap-1">
               <Knob value={effects.reverbSize} min={0} max={100} step={1} label="Sz" unit="%" onChange={(v) => updateEffects("reverbSize", v)} size="xs" />
-              <Knob value={effects.reverbDecay} min={0.1} max={10} step={0.1} label="Dc" unit="s" onChange={(v) => updateEffects("reverbDecay", v)} size="xs" />
-              <Knob value={effects.reverbMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("reverbMix", v)} size="xs" />
+              <Knob value={effects.reverbDecay} min={0.1} max={10} step={0.1} label="Dc" unit="s" onChange={(v) => updateEffects("reverbDecay", v)} size="xs" modulationPath="effects.reverb.decay" />
+              <Knob value={effects.reverbMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("reverbMix", v)} size="xs" modulationPath="effects.reverb.mix" />
             </div>
             {/* Advanced Reverb Controls */}
             <div className="flex justify-center gap-1">
@@ -321,8 +322,8 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
           testId="switch-chorus"
         >
           <div className="flex justify-center gap-1">
-            <Knob value={effects.chorusRate} min={0.1} max={10} step={0.1} label="Rt" unit="Hz" onChange={(v) => updateEffects("chorusRate", v)} size="xs" />
-            <Knob value={effects.chorusDepth} min={0} max={100} step={1} label="Dp" unit="%" onChange={(v) => updateEffects("chorusDepth", v)} size="xs" />
+            <Knob value={effects.chorusRate} min={0.1} max={10} step={0.1} label="Rt" unit="Hz" onChange={(v) => updateEffects("chorusRate", v)} size="xs" modulationPath="effects.chorus.rate" />
+            <Knob value={effects.chorusDepth} min={0} max={100} step={1} label="Dp" unit="%" onChange={(v) => updateEffects("chorusDepth", v)} size="xs" modulationPath="effects.chorus.depth" />
             <Knob value={effects.chorusMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("chorusMix", v)} size="xs" />
           </div>
         </EffectSection>

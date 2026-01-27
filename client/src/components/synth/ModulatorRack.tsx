@@ -50,6 +50,22 @@ const MODULATOR_COLORS: Record<ModulatorType, string> = {
   macro: "bg-green-500/20 border-green-500/50",
 };
 
+// Glow classes for when modulator has active routes
+export const MODULATOR_GLOW_COLORS: Record<ModulatorType, string> = {
+  lfo: "shadow-[0_0_8px_2px_rgba(59,130,246,0.5)]",
+  envelope: "shadow-[0_0_8px_2px_rgba(249,115,22,0.5)]",
+  random: "shadow-[0_0_8px_2px_rgba(168,85,247,0.5)]",
+  macro: "shadow-[0_0_8px_2px_rgba(34,197,94,0.5)]",
+};
+
+// RGB colors for knob indicators
+export const MODULATOR_INDICATOR_COLORS: Record<ModulatorType, string> = {
+  lfo: "#3b82f6",
+  envelope: "#f97316",
+  random: "#a855f7",
+  macro: "#22c55e",
+};
+
 const MODULATOR_ICONS: Record<ModulatorType, typeof Waves> = {
   lfo: Waves,
   envelope: TrendingUp,
@@ -265,8 +281,12 @@ function ModulatorCard({
     onUpdate({ ...mod, [key]: value } as Modulator);
   };
 
+  // Check if modulator has active routes with valid targets
+  const hasActiveRoutes = modRoutes.some(r => r.targetPath && r.targetPath.length > 0);
+  const glowClass = hasActiveRoutes ? MODULATOR_GLOW_COLORS[mod.type] : "";
+
   return (
-    <div className={`rounded-md border p-2 ${MODULATOR_COLORS[mod.type]} min-w-[180px]`} data-testid={`modulator-card-${mod.id}`}>
+    <div className={`rounded-md border p-2 ${MODULATOR_COLORS[mod.type]} ${glowClass} min-w-[180px] transition-shadow duration-300`} data-testid={`modulator-card-${mod.id}`}>
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1">
           <Icon className="w-3 h-3" />

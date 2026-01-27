@@ -215,6 +215,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
             unit="ct"
             onChange={(v) => updateOscillator("detune", v)}
             size="xs"
+            modulationPath={`oscillators.osc${index}.detune`}
           />
           <Knob
             value={oscillator.drift}
@@ -236,6 +237,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
             onChange={(v) => updateOscillator("level", v)}
             accentColor="primary"
             size="xs"
+            modulationPath={`oscillators.osc${index}.level`}
           />
         </div>
 
@@ -322,6 +324,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
                   onChange={(v) => updateOscillator("fmDepth", v)}
                   accentColor="accent"
                   size="xs"
+                  modulationPath={`oscillators.osc${index}.fmDepth`}
                 />
                 <Knob
                   value={oscillator.fmFeedback * 100}
@@ -626,6 +629,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
                   onChange={(v) => updateOscillator("pmDepth", v)}
                   accentColor="accent"
                   size="xs"
+                  modulationPath={`oscillators.osc${index}.pmDepth`}
                 />
                 <Knob
                   value={oscillator.pmFeedback * 100}
