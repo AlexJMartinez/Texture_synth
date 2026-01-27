@@ -1,0 +1,185 @@
+The core mindset (important)
+
+For one-shots, convolution is not about realism.
+It’s about imprinting texture, size, and material onto a transient.
+
+Think:
+	•	“What surface did this hit interact with?”
+	•	not “What room is this in?”
+
+⸻
+
+Best-practice parameters for one-shots
+
+Impulse Response (IR) choice
+
+Best IR types:
+	•	Short rooms (closets, booths, tiles)
+	•	Plates
+	•	Springs
+	•	Metallic hits / found sounds
+	•	Designed / synthetic IRs
+
+Avoid by default:
+	•	Halls
+	•	Cathedrals
+	•	Long ambiences
+	•	IRs > ~500 ms unless doing cinematic FX
+
+Rule of thumb:
+If you hear the space clearly → it’s probably too long.
+
+⸻
+
+IR length / truncation
+
+Target:
+	•	50–300 ms (often much shorter)
+
+Why:
+	•	Keeps the hit feeling like a single event
+	•	Prevents tails from turning the one-shot into a phrase
+	•	Reduces export inconsistencies
+
+Pro move:
+Manually trim the IR tail and fade it out yourself instead of relying on decay knobs.
+
+⸻
+
+Wet / Dry Mix
+
+Typical range:
+	•	3–15%
+
+Why:
+	•	Convolution adds density and realism fast
+	•	A little goes a long way
+	•	High wet = smeared transient
+
+Advanced trick:
+Envelope or transient-gate the wet signal so:
+	•	Wet peaks after the transient (1–10 ms)
+	•	Then dies quickly
+
+⸻
+
+Pre-Delay
+
+Typical range:
+	•	0–10 ms
+
+Why:
+	•	Preserves the transient snap
+	•	Keeps convolution from softening attack
+
+Rule:
+If your transient loses edge → increase pre-delay slightly or shorten the IR.
+
+⸻
+
+Filtering (critical)
+
+Always filter convolution on one-shots.
+
+High-pass:
+	•	150–600 Hz (higher for kicks)
+
+Low-pass:
+	•	3–8 kHz
+
+Why:
+	•	Prevents low-end smearing
+	•	Avoids fizzy tails
+	•	Makes convolution feel embedded, not layered
+
+⸻
+
+Stereo width
+
+Best practice:
+	•	Mono input → subtle stereo IR
+	•	Or mono IR → stereo after processing
+
+Avoid:
+	•	Wide stereo IRs on bass-heavy one-shots
+
+Test:
+Always collapse to mono and listen for phase loss.
+
+⸻
+
+High-value convolution techniques for one-shots
+
+1. Texture imprinting
+
+Use non-room IRs:
+	•	Scrapes
+	•	Metal pings
+	•	Glass hits
+	•	Distorted noise bursts
+
+Result:
+	•	Your one-shot inherits material character
+	•	No obvious “reverb”
+
+This is HUGE for:
+	•	Industrial
+	•	Glitch
+	•	Sci-fi
+	•	Percussive sound design
+
+⸻
+
+2. Transient-only convolution
+
+Split your sound:
+	•	Transient → dry
+	•	Body → convolution
+
+Result:
+	•	Maximum punch
+	•	Controlled spatial density
+
+This is how cinematic hits stay huge but sharp.
+
+⸻
+
+3. Reverse-IR micro swells
+	•	Reverse a very short IR
+	•	Blend at 5–10% wet
+	•	Trim aggressively
+
+Result:
+	•	Pre-impact inhale
+	•	Feels bigger without a tail
+
+⸻
+
+4. Frequency-selective convolution
+
+Band-limit what feeds the convolver:
+	•	Mid-only convolution (500 Hz – 3 kHz)
+	•	Dry lows, dry highs
+
+Result:
+	•	Body thickens
+	•	No mud, no fizz
+
+⸻
+
+Export-safe checklist (important for generators)
+
+Before bouncing one-shots:
+	•	✅ Tail fully decays before file end
+	•	✅ No denormal noise at silence
+	•	✅ Mono compatibility checked
+	•	✅ Wet signal does not extend past intended length
+
+If your exports sound different than playback:
+You almost always have:
+	•	Hidden IR tails
+	•	Look-ahead behavior
+	•	Offline vs realtime convolution mismatch
+
+Solution:
+Freeze → re-trim → normalize inside your generator.

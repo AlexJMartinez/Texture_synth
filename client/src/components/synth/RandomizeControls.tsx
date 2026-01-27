@@ -8,6 +8,7 @@ import { defaultSynthParameters } from "@shared/schema";
 import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
 import type { OscEnvelope, OscEnvelopes } from "./OscillatorPanel";
 import type { ConvolverSettings } from "./ConvolverPanel";
+import { getRandomOneShotIR } from "@/lib/builtinIRs";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -316,10 +317,11 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         oversample: (["none", "2x", "4x"] as const)[Math.floor(Math.random() * 3)],
       },
       convolver: {
-        enabled: currentParams.convolver.useCustomIR && Math.random() > 0.5,
-        irName: currentParams.convolver.irName,
-        mix: Math.round(randomInRange(30, 70)),
-        useCustomIR: currentParams.convolver.useCustomIR,
+        // One-shot convolution: always use built-in IRs, subtle mix
+        enabled: Math.random() > 0.5,
+        irName: getRandomOneShotIR(), // Use optimized one-shot IR
+        mix: Math.round(randExp(3, 15, 1.5)), // 3-15%: convolution adds density fast, a little goes a long way
+        useCustomIR: false, // Use built-in one-shot optimized IRs
       },
       spectralScrambler: {
         enabled: Math.random() > 0.7,
@@ -375,13 +377,14 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
     }
     
     if (onConvolverSettingsRandomize) {
+      // One-shot convolver settings: short pre-delay, tight filtering, no extreme stretch
       onConvolverSettingsRandomize({
-        predelay: Math.round(randomInRange(0, 200 * chaos)),
-        decay: Math.round(randomInRange(30, 100)),
-        lowCut: Math.round(randomInRange(20, 500, true)),
-        highCut: Math.round(randomInRange(4000, 20000, true)),
-        reverse: Math.random() > 0.85,
-        stretch: Math.round(randomInRange(0.5, 2.0) * 100) / 100,
+        predelay: Math.round(randExp(0, 10, 2.0)), // 0-10ms: preserve transient snap
+        decay: Math.round(randomInRange(60, 100)), // 60-100%: built-in IRs are already short (50-300ms)
+        lowCut: Math.round(randomInRange(150, 600, true)), // 150-600Hz: prevent low-end smearing
+        highCut: Math.round(randomInRange(3000, 8000, true)), // 3-8kHz: avoid fizzy tails
+        reverse: Math.random() > 0.92, // Rare: ~8% chance for micro-swell effect
+        stretch: Math.round(randomInRange(0.8, 1.2) * 100) / 100, // 0.8-1.2x: keep IR character intact
       });
     }
   };
@@ -547,7 +550,8 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
       convolver: {
         enabled: currentParams.convolver.enabled,
         irName: currentParams.convolver.irName,
-        mix: Math.round(mutateValue(currentParams.convolver.mix, 0, 100)),
+        // One-shot convolution mutation: keep mix subtle (3-15%)
+        mix: Math.round(mutateValue(currentParams.convolver.mix, 3, 15)),
         useCustomIR: currentParams.convolver.useCustomIR,
       },
       spectralScrambler: {
@@ -616,13 +620,14 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
     }
     
     if (onConvolverSettingsRandomize && convolverSettings) {
+      // One-shot convolver settings mutation: keep within safe ranges
       onConvolverSettingsRandomize({
-        predelay: Math.round(mutateValue(convolverSettings.predelay, 0, 500)),
-        decay: Math.round(mutateValue(convolverSettings.decay, 10, 100)),
-        lowCut: Math.round(mutateValue(convolverSettings.lowCut, 20, 2000, true)),
-        highCut: Math.round(mutateValue(convolverSettings.highCut, 2000, 20000, true)),
+        predelay: Math.round(mutateValue(convolverSettings.predelay, 0, 10)), // 0-10ms max
+        decay: Math.round(mutateValue(convolverSettings.decay, 60, 100)), // Keep full decay
+        lowCut: Math.round(mutateValue(convolverSettings.lowCut, 150, 600, true)), // 150-600Hz
+        highCut: Math.round(mutateValue(convolverSettings.highCut, 3000, 8000, true)), // 3-8kHz
         reverse: convolverSettings.reverse,
-        stretch: Math.round(mutateValue(convolverSettings.stretch, 0.5, 2.0) * 100) / 100,
+        stretch: Math.round(mutateValue(convolverSettings.stretch, 0.8, 1.2) * 100) / 100, // 0.8-1.2x
       });
     }
   };

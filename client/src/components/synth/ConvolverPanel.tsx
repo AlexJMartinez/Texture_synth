@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Convolver } from "@shared/schema";
-import { Radio, Upload, Trash2, RotateCcw } from "lucide-react";
+import { Radio, Upload, Trash2, RotateCcw, Disc, ChevronDown } from "lucide-react";
+import { BUILTIN_IRS, generateBuiltinIR, type BuiltinIR } from "@/lib/builtinIRs";
 
 export interface ConvolverSettings {
   predelay: number;
@@ -67,6 +68,86 @@ export function loadConvolverSettings(): ConvolverSettings {
 
 export function saveConvolverSettings(settings: ConvolverSettings) {
   localStorage.setItem(CONVOLVER_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+const categoryIcons: Record<string, string> = {
+  plate: "🔲",
+  spring: "〰️",
+  room: "🏠",
+  metallic: "⚙️",
+  synthetic: "💎",
+};
+
+const categoryLabels: Record<string, string> = {
+  plate: "Plates",
+  spring: "Springs",
+  room: "Rooms",
+  metallic: "Metal",
+  synthetic: "Synth",
+};
+
+function BuiltinIRSelector({ selectedIR, onSelect }: { selectedIR: string | null; onSelect: (id: string) => void }) {
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  
+  const categories = ["plate", "spring", "room", "metallic", "synthetic"] as const;
+  const selectedIRInfo = BUILTIN_IRS.find(ir => ir.id === selectedIR);
+  
+  return (
+    <div className="space-y-1">
+      <div className="text-[9px] text-muted-foreground">Built-in (One-Shot Optimized)</div>
+      
+      {selectedIRInfo && (
+        <div className="flex items-center gap-1.5 px-1.5 py-1 bg-primary/15 border border-primary/40 rounded text-[10px]">
+          <Disc className="w-3 h-3 text-primary" />
+          <span className="font-medium">{selectedIRInfo.name}</span>
+          <span className="text-muted-foreground ml-auto">{Math.round(selectedIRInfo.duration * 1000)}ms</span>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-5 gap-0.5">
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            onClick={() => setExpandedCategory(expandedCategory === cat ? null : cat)}
+            className={`px-1 py-1 text-[8px] rounded transition-colors ${
+              expandedCategory === cat 
+                ? "bg-primary/20 text-primary" 
+                : "bg-muted/30 hover:bg-muted/50 text-muted-foreground"
+            }`}
+            title={categoryLabels[cat]}
+            data-testid={`button-ir-category-${cat}`}
+          >
+            {categoryLabels[cat]}
+          </button>
+        ))}
+      </div>
+      
+      {expandedCategory && (
+        <div className="space-y-0.5 max-h-24 overflow-y-auto bg-muted/20 rounded p-1">
+          {BUILTIN_IRS.filter(ir => ir.category === expandedCategory).map((ir) => (
+            <button
+              key={ir.id}
+              type="button"
+              onClick={() => {
+                onSelect(ir.id);
+                setExpandedCategory(null);
+              }}
+              className={`w-full flex items-center justify-between px-1.5 py-0.5 rounded text-[9px] transition-colors ${
+                selectedIR === ir.id
+                  ? "bg-primary/20 border border-primary/50"
+                  : "hover:bg-muted/50"
+              }`}
+              data-testid={`button-ir-${ir.id}`}
+            >
+              <span>{ir.name}</span>
+              <span className="text-muted-foreground">{Math.round(ir.duration * 1000)}ms</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function ConvolverPanel({ convolver, onChange, onIRLoaded, settings, onSettingsChange }: ConvolverPanelProps) {
@@ -271,6 +352,21 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded, settings, onSe
           <div className="border-t border-border/50 pt-1.5 space-y-1.5">
             <div className="text-[10px] text-muted-foreground mb-1">Impulse Responses</div>
             
+            <BuiltinIRSelector 
+              selectedIR={!convolver.useCustomIR ? convolver.irName : null}
+              onSelect={(id) => {
+                updateConvolver("irName", id);
+                updateConvolver("useCustomIR", false);
+                const buffer = generateBuiltinIR(id, 44100);
+                if (buffer && onIRLoaded) {
+                  const irInfo = BUILTIN_IRS.find(ir => ir.id === id);
+                  onIRLoaded(buffer, irInfo?.name || id);
+                }
+              }}
+            />
+            
+            <div className="text-[9px] text-muted-foreground mt-2 mb-1">Custom IRs</div>
+            
             <input
               ref={fileInputRef}
               type="file"
@@ -293,7 +389,7 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded, settings, onSe
             </Button>
 
             {customIRs.length > 0 && (
-              <div className="space-y-1 max-h-24 overflow-y-auto">
+              <div className="space-y-1 max-h-20 overflow-y-auto">
                 {customIRs.map((ir) => (
                   <div
                     key={ir.name}
@@ -320,12 +416,6 @@ export function ConvolverPanel({ convolver, onChange, onIRLoaded, settings, onSe
                   </div>
                 ))}
               </div>
-            )}
-
-            {customIRs.length === 0 && (
-              <p className="text-[9px] text-muted-foreground text-center py-1">
-                No IRs loaded. Upload WAV/AIFF files.
-              </p>
             )}
           </div>
         </div>
