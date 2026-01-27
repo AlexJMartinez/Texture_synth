@@ -27,14 +27,15 @@ export function SpectralScramblerPanel({ spectralScrambler, onChange }: Spectral
       }
     >
       <div className="space-y-3">
-        <div className="flex flex-wrap gap-4 items-end">
+        {/* Responsive grid: 4 cols on mobile, 8 cols on larger screens */}
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 sm:gap-4 items-end">
           <div className="flex flex-col gap-1">
             <Label className="text-xs text-muted-foreground">FFT Size</Label>
             <Select 
               value={spectralScrambler.fftSize} 
               onValueChange={(v) => onChange({ fftSize: v as "256" | "512" | "1024" | "2048" })}
             >
-              <SelectTrigger className="w-20 h-8" data-testid="select-fft-size">
+              <SelectTrigger className="w-full h-8" data-testid="select-fft-size">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
