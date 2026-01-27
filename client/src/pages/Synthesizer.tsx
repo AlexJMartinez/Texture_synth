@@ -1266,7 +1266,8 @@ export default function Synthesizer() {
     
     // Fix 2: Schedule safety fade at the end (25ms fade for smoother fadeout)
     const safetyFadeTime = 0.025; // 25ms for smooth fade on heavy FX
-    const envelopeEndTime = durationSec - TAIL_PAD; // When envelope ends
+    // Ensure envelopeEndTime is never negative (minimum 0.01s to prevent "value should be positive" error)
+    const envelopeEndTime = Math.max(0.01, durationSec - TAIL_PAD); // When envelope ends
     safetyFadeGain.gain.setValueAtTime(1.0, now + envelopeEndTime);
     safetyFadeGain.gain.linearRampToValueAtTime(0, now + envelopeEndTime + safetyFadeTime);
     
@@ -2718,7 +2719,8 @@ export default function Synthesizer() {
     // Fix 5 & 6: Use same OfflineAudioContext for preview and export with locked seed
     const seed = Date.now();
     const sampleRate = 44100;
-    const durationInSeconds = totalDuration / 1000;
+    // Ensure duration is at least 0.1s to prevent "value should be positive" error in Tone.Offline
+    const durationInSeconds = Math.max(0.1, totalDuration / 1000);
     
     // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
     const buffer = await Tone.Offline(async (offlineCtx) => {
