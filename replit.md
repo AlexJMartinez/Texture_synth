@@ -58,6 +58,7 @@ Core architectural decisions include:
   - **Dynamic Shaping**: Envelope-follower driven distortion with sensitivity, attack, and release controls.
   - **Chebyshev Polynomials**: Order 2-7 for harmonic-rich distortion.
   - **Foldback Iterations**: 1-5 iterations for aggressive wavefold saturation.
+  - **Custom Curve Editor**: Interactive canvas with draggable control points (2-10 points), Catmull-Rom spline interpolation for smooth curves, add/remove points via double-click or buttons, endpoint-only vertical movement, touch support, and localStorage persistence.
 - **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing and Hermitian symmetry for real-valued output. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, spectral gating (-60dB to 0dB threshold for tearing/crackle effects), spectral stretch/squeeze (0.5x-2.0x for moving frequencies up/down), bin density control (5%-100% for sparse/broken sounds), and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet. DC and Nyquist bins are preserved unshifted but apply gating/density for signal integrity.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
 - **Mastering Section**: Includes a Soft-Knee Compressor, HF Exciter, and Stereo Widener.

@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Waveshaper, WaveshaperCurve } from "@shared/schema";
-import { Zap, ChevronDown, ChevronUp, Shuffle } from "lucide-react";
+import { Zap, ChevronDown, ChevronUp, Shuffle, Pencil } from "lucide-react";
+import { CustomCurveEditor, type CurvePoint } from "./CustomCurveEditor";
 import {
   type AdvancedWaveshaperSettings,
   type WaveshaperBandCurve,
@@ -551,6 +552,38 @@ export function WaveshaperPanel({ waveshaper, onChange, advancedSettings, onAdva
                   size="xs"
                   modulationPath="waveshaper.foldbackIterations"
                 />
+              </div>
+
+              <div className="space-y-1 pt-1 border-t border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <Pencil className="h-3 w-3 text-muted-foreground" />
+                    <span className="text-[9px] text-muted-foreground font-medium">Custom Curve</span>
+                  </div>
+                  <Switch
+                    checked={localAdvanced.customCurveEnabled}
+                    onCheckedChange={(v) => updateAdvanced("customCurveEnabled", v)}
+                    className="scale-50"
+                    data-testid="switch-custom-curve"
+                  />
+                </div>
+                {localAdvanced.customCurveEnabled && (
+                  <CustomCurveEditor
+                    points={localAdvanced.customCurvePoints.map(p => ({
+                      x: (p.x + 1) / 2,
+                      y: (p.y + 1) / 2
+                    }))}
+                    onChange={(points: CurvePoint[]) => {
+                      const normalizedPoints = points.map(p => ({
+                        x: p.x * 2 - 1,
+                        y: p.y * 2 - 1
+                      }));
+                      updateAdvanced("customCurvePoints", normalizedPoints);
+                    }}
+                    width={180}
+                    height={120}
+                  />
+                )}
               </div>
             </div>
           )}
