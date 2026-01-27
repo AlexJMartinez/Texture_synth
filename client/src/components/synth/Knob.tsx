@@ -96,10 +96,25 @@ export function Knob({
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
+    
+    // Shift+click for fine-tune ±1 (or ±step)
+    if (e.shiftKey && knobRef.current) {
+      const rect = knobRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const midX = rect.width / 2;
+      
+      // Right half = increment, left half = decrement (matches knob arc direction)
+      const fineStep = step || 1;
+      const delta = clickX > midX ? fineStep : -fineStep;
+      const newValue = Math.max(min, Math.min(max, value + delta));
+      onChange(newValue);
+      return;
+    }
+    
     setIsDragging(true);
     startY.current = e.clientY;
     startValue.current = normalizeValue(value);
-  }, [value, normalizeValue]);
+  }, [value, normalizeValue, step, min, max, onChange]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     e.preventDefault();
