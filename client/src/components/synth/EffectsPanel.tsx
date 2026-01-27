@@ -15,6 +15,8 @@ export interface ReverbSettings {
   damping: number; // 0-100, how quickly high frequencies decay
   diffusion: number; // 0-100, density of reflections
   modulation: number; // 0-100, subtle pitch modulation for lushness
+  predelay: number; // 0-200ms, time before reverb tail starts
+  stereoWidth: number; // 0-100, stereo spread of the reverb
 }
 
 export const defaultReverbSettings: ReverbSettings = {
@@ -22,13 +24,23 @@ export const defaultReverbSettings: ReverbSettings = {
   damping: 50,
   diffusion: 70,
   modulation: 20,
+  predelay: 10,
+  stereoWidth: 80,
 };
 
-// Presets for each reverb type
-export const reverbTypePresets: Record<ReverbType, { size: number; decay: number; damping: number; diffusion: number; modulation: number }> = {
-  hall: { size: 80, decay: 3.5, damping: 40, diffusion: 85, modulation: 25 },
-  plate: { size: 60, decay: 1.8, damping: 55, diffusion: 90, modulation: 15 },
-  room: { size: 35, decay: 0.6, damping: 65, diffusion: 60, modulation: 10 },
+// Presets for each reverb type with enhanced characteristics
+export const reverbTypePresets: Record<ReverbType, { 
+  size: number; 
+  decay: number; 
+  damping: number; 
+  diffusion: number; 
+  modulation: number;
+  predelay: number;
+  stereoWidth: number;
+}> = {
+  hall: { size: 80, decay: 3.5, damping: 40, diffusion: 85, modulation: 25, predelay: 25, stereoWidth: 90 },
+  plate: { size: 60, decay: 1.8, damping: 55, diffusion: 90, modulation: 15, predelay: 5, stereoWidth: 75 },
+  room: { size: 35, decay: 0.6, damping: 65, diffusion: 60, modulation: 10, predelay: 10, stereoWidth: 60 },
 };
 
 const REVERB_SETTINGS_KEY = "synth-reverb-settings";
@@ -151,6 +163,8 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
         damping: preset.damping,
         diffusion: preset.diffusion,
         modulation: preset.modulation,
+        predelay: preset.predelay,
+        stereoWidth: preset.stereoWidth,
       });
       // Also update size and decay in the main effects
       onChange({
@@ -308,9 +322,11 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
             </div>
             {/* Advanced Reverb Controls */}
             <div className="flex justify-center gap-1">
-              <Knob value={currentReverbSettings.damping} min={0} max={100} step={1} label="Dmp" unit="%" onChange={(v) => updateReverbSettings("damping", v)} size="xs" />
-              <Knob value={currentReverbSettings.diffusion} min={0} max={100} step={1} label="Dif" unit="%" onChange={(v) => updateReverbSettings("diffusion", v)} size="xs" />
-              <Knob value={currentReverbSettings.modulation} min={0} max={100} step={1} label="Mod" unit="%" onChange={(v) => updateReverbSettings("modulation", v)} size="xs" />
+              <Knob value={currentReverbSettings.predelay} min={0} max={200} step={1} label="Pre" unit="ms" onChange={(v) => updateReverbSettings("predelay", v)} size="xs" modulationPath="effects.reverb.predelay" />
+              <Knob value={currentReverbSettings.damping} min={0} max={100} step={1} label="Dmp" unit="%" onChange={(v) => updateReverbSettings("damping", v)} size="xs" modulationPath="effects.reverb.damping" />
+              <Knob value={currentReverbSettings.diffusion} min={0} max={100} step={1} label="Dif" unit="%" onChange={(v) => updateReverbSettings("diffusion", v)} size="xs" modulationPath="effects.reverb.diffusion" />
+              <Knob value={currentReverbSettings.modulation} min={0} max={100} step={1} label="Mod" unit="%" onChange={(v) => updateReverbSettings("modulation", v)} size="xs" modulationPath="effects.reverb.modulation" />
+              <Knob value={currentReverbSettings.stereoWidth} min={0} max={100} step={1} label="Wid" unit="%" onChange={(v) => updateReverbSettings("stereoWidth", v)} size="xs" modulationPath="effects.reverb.stereoWidth" />
             </div>
           </div>
         </EffectSection>

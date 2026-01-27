@@ -80,46 +80,90 @@ interface ModulationTarget {
 }
 
 const MODULATION_TARGETS: ModulationTarget[] = [
+  // Filter
   { path: "filter.frequency", label: "Filter Freq", category: "Filter" },
   { path: "filter.resonance", label: "Filter Res", category: "Filter" },
   { path: "filter.gain", label: "Filter Gain", category: "Filter" },
   
+  // Oscillators
   { path: "oscillators.osc1.level", label: "OSC1 Level", category: "Oscillators" },
   { path: "oscillators.osc1.detune", label: "OSC1 Detune", category: "Oscillators" },
   { path: "oscillators.osc1.fmDepth", label: "OSC1 FM Depth", category: "Oscillators" },
   { path: "oscillators.osc1.pmDepth", label: "OSC1 PM Depth", category: "Oscillators" },
+  { path: "oscillators.osc1.drift", label: "OSC1 Drift", category: "Oscillators" },
   { path: "oscillators.osc2.level", label: "OSC2 Level", category: "Oscillators" },
   { path: "oscillators.osc2.detune", label: "OSC2 Detune", category: "Oscillators" },
   { path: "oscillators.osc2.fmDepth", label: "OSC2 FM Depth", category: "Oscillators" },
   { path: "oscillators.osc2.pmDepth", label: "OSC2 PM Depth", category: "Oscillators" },
+  { path: "oscillators.osc2.drift", label: "OSC2 Drift", category: "Oscillators" },
   { path: "oscillators.osc3.level", label: "OSC3 Level", category: "Oscillators" },
   { path: "oscillators.osc3.detune", label: "OSC3 Detune", category: "Oscillators" },
   { path: "oscillators.osc3.fmDepth", label: "OSC3 FM Depth", category: "Oscillators" },
   { path: "oscillators.osc3.pmDepth", label: "OSC3 PM Depth", category: "Oscillators" },
+  { path: "oscillators.osc3.drift", label: "OSC3 Drift", category: "Oscillators" },
   
+  // Effects - Delay
+  { path: "effects.delay.time", label: "Delay Time", category: "Effects" },
   { path: "effects.delay.feedback", label: "Delay Feedback", category: "Effects" },
   { path: "effects.delay.mix", label: "Delay Mix", category: "Effects" },
+  
+  // Effects - Distortion
   { path: "effects.distortion.drive", label: "Distortion Drive", category: "Effects" },
   { path: "effects.distortion.mix", label: "Distortion Mix", category: "Effects" },
+  
+  // Effects - Bitcrusher
   { path: "effects.bitcrusher.bitDepth", label: "Bitcrush Bits", category: "Effects" },
   { path: "effects.bitcrusher.mix", label: "Bitcrush Mix", category: "Effects" },
+  
+  // Effects - Reverb
+  { path: "effects.reverb.size", label: "Reverb Size", category: "Effects" },
   { path: "effects.reverb.decay", label: "Reverb Decay", category: "Effects" },
   { path: "effects.reverb.mix", label: "Reverb Mix", category: "Effects" },
+  { path: "effects.reverb.predelay", label: "Reverb Pre", category: "Effects" },
+  { path: "effects.reverb.damping", label: "Reverb Damp", category: "Effects" },
+  { path: "effects.reverb.diffusion", label: "Reverb Diff", category: "Effects" },
+  { path: "effects.reverb.stereoWidth", label: "Reverb Width", category: "Effects" },
+  { path: "effects.reverb.modulation", label: "Reverb Mod", category: "Effects" },
+  
+  // Effects - Chorus
   { path: "effects.chorus.depth", label: "Chorus Depth", category: "Effects" },
   { path: "effects.chorus.rate", label: "Chorus Rate", category: "Effects" },
+  { path: "effects.chorus.mix", label: "Chorus Mix", category: "Effects" },
   
+  // Layers
   { path: "clickLayer.level", label: "Click Level", category: "Layers" },
+  { path: "clickLayer.decay", label: "Click Decay", category: "Layers" },
   { path: "subOsc.level", label: "Sub Level", category: "Layers" },
+  { path: "subOsc.pitch", label: "Sub Pitch", category: "Layers" },
   
+  // Shaping - Waveshaper
   { path: "waveshaper.amount", label: "Waveshaper Amt", category: "Shaping" },
   { path: "waveshaper.mix", label: "Waveshaper Mix", category: "Shaping" },
+  
+  // Shaping - Spectral Scrambler
   { path: "spectralScrambler.scrambleAmount", label: "Spectral Scramble", category: "Shaping" },
+  { path: "spectralScrambler.binShift", label: "Spectral Shift", category: "Shaping" },
+  { path: "spectralScrambler.binDensity", label: "Spectral Density", category: "Shaping" },
+  { path: "spectralScrambler.gate", label: "Spectral Gate", category: "Shaping" },
+  { path: "spectralScrambler.stretch", label: "Spectral Stretch", category: "Shaping" },
   { path: "spectralScrambler.mix", label: "Spectral Mix", category: "Shaping" },
   
+  // Saturation
   { path: "saturationChain.tapeDrive", label: "Tape Drive", category: "Saturation" },
   { path: "saturationChain.tubeDrive", label: "Tube Drive", category: "Saturation" },
   { path: "saturationChain.transistorDrive", label: "Transistor Drive", category: "Saturation" },
   { path: "saturationChain.mix", label: "Saturation Mix", category: "Saturation" },
+  
+  // Mastering
+  { path: "mastering.compressor.threshold", label: "Comp Threshold", category: "Mastering" },
+  { path: "mastering.compressor.ratio", label: "Comp Ratio", category: "Mastering" },
+  { path: "mastering.exciter.amount", label: "Exciter Amt", category: "Mastering" },
+  { path: "mastering.widener.amount", label: "Widener Amt", category: "Mastering" },
+  { path: "mastering.limiter.ceiling", label: "Limiter Ceiling", category: "Mastering" },
+  
+  // Envelopes
+  { path: "envelopes.pitch.amount", label: "Pitch Env Amt", category: "Envelopes" },
+  { path: "envelopes.filter.amount", label: "Filter Env Amt", category: "Envelopes" },
 ];
 
 function generateId(): string {

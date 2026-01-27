@@ -471,22 +471,154 @@ export default function Synthesizer() {
     }));
   }, [params.oscillators]);
 
-  // Fix 6: Accept seeded random function for deterministic impulse response generation
+  // Enhanced algorithmic reverb impulse response generator
   const createImpulseResponse = useCallback((
     ctx: BaseAudioContext, 
     duration: number, 
     decay: number,
-    randomFn: () => number = Math.random
+    randomFn: () => number = Math.random,
+    reverbType: "hall" | "plate" | "room" = "plate",
+    damping: number = 50,
+    diffusion: number = 70,
+    modulation: number = 20,
+    predelay: number = 10,
+    stereoWidth: number = 80
   ): AudioBuffer => {
     const sampleRate = ctx.sampleRate;
-    const length = Math.floor(sampleRate * duration);
-    const impulse = ctx.createBuffer(2, length, sampleRate);
+    const predelaySamples = Math.floor((predelay / 1000) * sampleRate);
+    const totalLength = Math.floor(sampleRate * duration) + predelaySamples;
+    const impulse = ctx.createBuffer(2, totalLength, sampleRate);
+    
+    // Early reflection patterns based on reverb type
+    // These simulate the first discrete echoes before the diffuse tail
+    const earlyReflections: { delay: number; gain: number; pan: number }[] = [];
+    
+    if (reverbType === "hall") {
+      // Large hall - longer delays, more reflections, wider stereo
+      earlyReflections.push(
+        { delay: 0.012, gain: 0.7, pan: -0.3 },
+        { delay: 0.019, gain: 0.6, pan: 0.4 },
+        { delay: 0.028, gain: 0.5, pan: -0.2 },
+        { delay: 0.037, gain: 0.45, pan: 0.5 },
+        { delay: 0.048, gain: 0.4, pan: -0.6 },
+        { delay: 0.061, gain: 0.35, pan: 0.3 },
+        { delay: 0.077, gain: 0.3, pan: -0.4 },
+        { delay: 0.095, gain: 0.25, pan: 0.6 }
+      );
+    } else if (reverbType === "plate") {
+      // Plate reverb - dense, quick buildup, bright
+      earlyReflections.push(
+        { delay: 0.005, gain: 0.8, pan: 0.1 },
+        { delay: 0.009, gain: 0.7, pan: -0.2 },
+        { delay: 0.013, gain: 0.65, pan: 0.3 },
+        { delay: 0.018, gain: 0.55, pan: -0.1 },
+        { delay: 0.024, gain: 0.5, pan: 0.25 },
+        { delay: 0.031, gain: 0.4, pan: -0.35 }
+      );
+    } else {
+      // Room - short, few reflections, close
+      earlyReflections.push(
+        { delay: 0.008, gain: 0.6, pan: -0.2 },
+        { delay: 0.014, gain: 0.5, pan: 0.3 },
+        { delay: 0.022, gain: 0.4, pan: -0.15 },
+        { delay: 0.032, gain: 0.3, pan: 0.2 }
+      );
+    }
+    
+    // Damping affects how quickly high frequencies decay
+    const dampingFactor = 1 - (damping / 100) * 0.8;
+    
+    // Diffusion affects tail density
+    const diffusionFactor = diffusion / 100;
+    
+    // Stereo decorrelation
+    const widthFactor = stereoWidth / 100;
+    
+    // Modulation adds subtle pitch variation to prevent metallic artifacts
+    const modDepth = (modulation / 100) * 0.003; // Max 3ms modulation depth
+    const modRate = 0.5 + (modulation / 100) * 1.5; // 0.5-2 Hz modulation rate
     
     for (let channel = 0; channel < 2; channel++) {
       const channelData = impulse.getChannelData(channel);
-      for (let i = 0; i < length; i++) {
-        const t = i / sampleRate;
-        channelData[i] = (randomFn() * 2 - 1) * Math.exp(-t / decay);
+      const isLeft = channel === 0;
+      
+      // Stereo offset for decorrelation
+      const stereoOffset = isLeft ? -0.002 * widthFactor : 0.002 * widthFactor;
+      
+      // Add early reflections
+      for (const er of earlyReflections) {
+        const samplePos = predelaySamples + Math.floor((er.delay + stereoOffset) * sampleRate);
+        if (samplePos >= 0 && samplePos < totalLength) {
+          // Pan affects how much of this reflection goes to each channel
+          const panGain = isLeft ? 
+            Math.cos((er.pan * widthFactor + 1) * Math.PI / 4) :
+            Math.sin((er.pan * widthFactor + 1) * Math.PI / 4);
+          
+          // Add a short filtered noise burst for each early reflection
+          const erLength = Math.floor(0.005 * sampleRate);
+          for (let j = 0; j < erLength && samplePos + j < totalLength; j++) {
+            const erEnv = Math.exp(-j / (erLength * 0.3));
+            channelData[samplePos + j] += (randomFn() * 2 - 1) * er.gain * panGain * erEnv * 0.5;
+          }
+        }
+      }
+      
+      // Late diffuse tail with modulation
+      const tailStart = predelaySamples + Math.floor(0.05 * sampleRate);
+      const tailLength = totalLength - tailStart;
+      
+      // Create diffuse tail
+      for (let i = tailStart; i < totalLength; i++) {
+        const t = (i - tailStart) / sampleRate;
+        
+        // Modulated time for lushness
+        const modTime = t + modDepth * Math.sin(2 * Math.PI * modRate * t);
+        
+        // Base exponential decay
+        let envelope = Math.exp(-modTime / decay);
+        
+        // Additional high-frequency damping simulation
+        // Later samples have less high-frequency content
+        const hfDamping = Math.exp(-t * dampingFactor * 2);
+        
+        // Generate noise with diffusion-controlled density
+        let noise = 0;
+        
+        // High diffusion = more dense noise
+        // Low diffusion = more sparse, grainy texture
+        if (randomFn() < diffusionFactor * 0.95 + 0.05) {
+          noise = randomFn() * 2 - 1;
+          
+          // Apply simple lowpass as damping approximation
+          // Blend between full-bandwidth and filtered noise based on damping and time
+          const lpBlend = t * (1 - dampingFactor);
+          const lpNoise = noise * hfDamping;
+          noise = noise * (1 - lpBlend) + lpNoise * lpBlend;
+        }
+        
+        // Stereo decorrelation - slight phase offset
+        const stereoPhase = isLeft ? 0 : Math.PI * 0.3 * widthFactor;
+        const stereoMod = 1 + 0.1 * Math.sin(2 * Math.PI * 0.7 * t + stereoPhase) * widthFactor;
+        
+        channelData[i] += noise * envelope * stereoMod;
+      }
+    }
+    
+    // Normalize to prevent clipping
+    let maxVal = 0;
+    for (let ch = 0; ch < 2; ch++) {
+      const data = impulse.getChannelData(ch);
+      for (let i = 0; i < totalLength; i++) {
+        maxVal = Math.max(maxVal, Math.abs(data[i]));
+      }
+    }
+    if (maxVal > 0.99) {
+      const scale = 0.95 / maxVal;
+      for (let ch = 0; ch < 2; ch++) {
+        const data = impulse.getChannelData(ch);
+        for (let i = 0; i < totalLength; i++) {
+          data[i] *= scale;
+        }
       }
     }
     
@@ -919,7 +1051,8 @@ export default function Synthesizer() {
     seed: number = Date.now(),
     sourcesCollector?: AudioScheduledSourceNode[],
     perOscEnvelopes?: OscEnvelopes,
-    convSettings?: ConvolverSettings
+    convSettings?: ConvolverSettings,
+    revSettings?: ReverbSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -1147,8 +1280,20 @@ export default function Synthesizer() {
     } else if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
       const convolver = ctx.createConvolver();
       const reverbDuration = 0.5 + (params.effects.reverbSize / 100) * 3;
-      // Fix 6: Use seeded random for deterministic reverb impulse response
-      convolver.buffer = createImpulseResponse(ctx, reverbDuration, params.effects.reverbDecay, seededRandom);
+      // Use enhanced impulse response with full reverb settings
+      const rs = revSettings || defaultReverbSettings;
+      convolver.buffer = createImpulseResponse(
+        ctx, 
+        reverbDuration, 
+        params.effects.reverbDecay, 
+        seededRandom,
+        rs.type,
+        rs.damping,
+        rs.diffusion,
+        rs.modulation,
+        rs.predelay,
+        rs.stereoWidth
+      );
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = params.effects.reverbMix / 100;
       
@@ -2148,7 +2293,7 @@ export default function Synthesizer() {
     // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
     const buffer = await Tone.Offline(async (offlineCtx) => {
       const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings);
+      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings);
     }, durationInSeconds);
     
     // Convert Tone.ToneAudioBuffer to AudioBuffer
