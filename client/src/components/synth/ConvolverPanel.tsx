@@ -92,29 +92,42 @@ function BuiltinIRSelector({ selectedIR, onSelect }: { selectedIR: string | null
   const categories = ["plate", "spring", "room", "metallic", "synthetic"] as const;
   const selectedIRInfo = BUILTIN_IRS.find(ir => ir.id === selectedIR);
   
+  // Handle category toggle with touch support
+  const handleCategoryClick = (cat: string) => {
+    setExpandedCategory(expandedCategory === cat ? null : cat);
+  };
+  
+  // Handle IR selection with touch support
+  const handleIRSelect = (irId: string) => {
+    onSelect(irId);
+    setExpandedCategory(null);
+  };
+  
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="text-[9px] text-muted-foreground">Built-in (One-Shot Optimized)</div>
       
       {selectedIRInfo && (
-        <div className="flex items-center gap-1.5 px-1.5 py-1 bg-primary/15 border border-primary/40 rounded text-[10px]">
-          <Disc className="w-3 h-3 text-primary" />
-          <span className="font-medium">{selectedIRInfo.name}</span>
-          <span className="text-muted-foreground ml-auto">{Math.round(selectedIRInfo.duration * 1000)}ms</span>
+        <div className="flex items-center gap-1.5 px-2 py-1.5 bg-primary/15 border border-primary/40 rounded text-[10px] min-h-[28px]">
+          <Disc className="w-3 h-3 text-primary flex-shrink-0" />
+          <span className="font-medium truncate">{selectedIRInfo.name}</span>
+          <span className="text-muted-foreground ml-auto flex-shrink-0">{Math.round(selectedIRInfo.duration * 1000)}ms</span>
         </div>
       )}
       
-      <div className="grid grid-cols-5 gap-0.5">
+      {/* Category buttons - touch-friendly with larger tap targets */}
+      <div className="grid grid-cols-5 gap-1">
         {categories.map((cat) => (
           <button
             key={cat}
             type="button"
-            onClick={() => setExpandedCategory(expandedCategory === cat ? null : cat)}
-            className={`px-1 py-1 text-[8px] rounded transition-colors ${
+            onClick={() => handleCategoryClick(cat)}
+            className={`px-1 py-1.5 text-[9px] rounded transition-colors min-h-[32px] select-none active:scale-95 ${
               expandedCategory === cat 
-                ? "bg-primary/20 text-primary" 
-                : "bg-muted/30 hover:bg-muted/50 text-muted-foreground"
+                ? "bg-primary/25 text-primary border border-primary/40" 
+                : "bg-muted/40 hover:bg-muted/60 active:bg-muted/70 text-muted-foreground border border-transparent"
             }`}
+            style={{ touchAction: 'manipulation' }}
             title={categoryLabels[cat]}
             data-testid={`button-ir-category-${cat}`}
           >
@@ -123,24 +136,23 @@ function BuiltinIRSelector({ selectedIR, onSelect }: { selectedIR: string | null
         ))}
       </div>
       
+      {/* IR list - touch-friendly with larger tap targets */}
       {expandedCategory && (
-        <div className="space-y-0.5 max-h-24 overflow-y-auto bg-muted/20 rounded p-1">
+        <div className="space-y-1 max-h-32 overflow-y-auto bg-muted/20 rounded p-1.5 border border-muted/30">
           {BUILTIN_IRS.filter(ir => ir.category === expandedCategory).map((ir) => (
             <button
               key={ir.id}
               type="button"
-              onClick={() => {
-                onSelect(ir.id);
-                setExpandedCategory(null);
-              }}
-              className={`w-full flex items-center justify-between px-1.5 py-0.5 rounded text-[9px] transition-colors ${
+              onClick={() => handleIRSelect(ir.id)}
+              className={`w-full flex items-center justify-between px-2 py-2 rounded text-[10px] transition-colors min-h-[36px] select-none active:scale-[0.98] ${
                 selectedIR === ir.id
-                  ? "bg-primary/20 border border-primary/50"
-                  : "hover:bg-muted/50"
+                  ? "bg-primary/25 border border-primary/50"
+                  : "hover:bg-muted/50 active:bg-muted/60 border border-transparent"
               }`}
+              style={{ touchAction: 'manipulation' }}
               data-testid={`button-ir-${ir.id}`}
             >
-              <span>{ir.name}</span>
+              <span className="font-medium">{ir.name}</span>
               <span className="text-muted-foreground">{Math.round(ir.duration * 1000)}ms</span>
             </button>
           ))}
