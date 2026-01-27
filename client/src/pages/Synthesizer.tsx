@@ -4,7 +4,17 @@ import { WaveformDisplay3D } from "@/components/synth/WaveformDisplay3D";
 import { EnvelopePanel } from "@/components/synth/EnvelopePanel";
 import { OscillatorPanel, OscEnvelope } from "@/components/synth/OscillatorPanel";
 import { FilterPanel } from "@/components/synth/FilterPanel";
-import { EffectsPanel } from "@/components/synth/EffectsPanel";
+import { EffectsPanel, ReverbSettings, loadReverbSettings, saveReverbSettings, defaultReverbSettings } from "@/components/synth/EffectsPanel";
+import { 
+  type OscAdvancedFMSettings, 
+  type AdvancedGranularSettings,
+  loadAdvancedFMSettings, 
+  saveAdvancedFMSettings,
+  loadAdvancedGranularSettings,
+  saveAdvancedGranularSettings,
+  defaultOscAdvancedFMSettings,
+  defaultAdvancedGranularSettings
+} from "@/lib/advancedSynthSettings";
 import { OutputPanel } from "@/components/synth/OutputPanel";
 import { PresetPanel } from "@/components/synth/PresetPanel";
 import { ExportPanel, type ExportResult } from "@/components/synth/ExportPanel";
@@ -385,6 +395,9 @@ export default function Synthesizer() {
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [oscEnvelopes, setOscEnvelopes] = useState<OscEnvelopes>(loadOscEnvelopes);
   const [convolverSettings, setConvolverSettings] = useState<ConvolverSettings>(loadConvolverSettings);
+  const [reverbSettings, setReverbSettings] = useState<ReverbSettings>(loadReverbSettings);
+  const [advancedFMSettings, setAdvancedFMSettings] = useState<OscAdvancedFMSettings>(loadAdvancedFMSettings);
+  const [advancedGranularSettings, setAdvancedGranularSettings] = useState<AdvancedGranularSettings>(loadAdvancedGranularSettings);
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
@@ -2285,6 +2298,21 @@ export default function Synthesizer() {
               onOscEnvelopesRandomize={setOscEnvelopes}
               convolverSettings={convolverSettings}
               onConvolverSettingsRandomize={setConvolverSettings}
+              reverbSettings={reverbSettings}
+              onReverbSettingsRandomize={(settings) => {
+                setReverbSettings(settings);
+                saveReverbSettings(settings);
+              }}
+              advancedFMSettings={advancedFMSettings}
+              onAdvancedFMSettingsRandomize={(settings) => {
+                setAdvancedFMSettings(settings);
+                saveAdvancedFMSettings(settings);
+              }}
+              advancedGranularSettings={advancedGranularSettings}
+              onAdvancedGranularSettingsRandomize={(settings) => {
+                setAdvancedGranularSettings(settings);
+                saveAdvancedGranularSettings(settings);
+              }}
             />
           </div>
           {/* Waveform full-width on mobile only */}
@@ -2324,6 +2352,12 @@ export default function Synthesizer() {
                       index={1}
                       envelope={oscEnvelopes.osc1}
                       onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc1: env })}
+                      advancedFM={advancedFMSettings.osc1}
+                      onAdvancedFMChange={(settings) => {
+                        const newSettings = { ...advancedFMSettings, osc1: settings };
+                        setAdvancedFMSettings(newSettings);
+                        saveAdvancedFMSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -2334,6 +2368,12 @@ export default function Synthesizer() {
                       index={2}
                       envelope={oscEnvelopes.osc2}
                       onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc2: env })}
+                      advancedFM={advancedFMSettings.osc2}
+                      onAdvancedFMChange={(settings) => {
+                        const newSettings = { ...advancedFMSettings, osc2: settings };
+                        setAdvancedFMSettings(newSettings);
+                        saveAdvancedFMSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -2344,6 +2384,12 @@ export default function Synthesizer() {
                       index={3}
                       envelope={oscEnvelopes.osc3}
                       onEnvelopeChange={(env) => setOscEnvelopes({ ...oscEnvelopes, osc3: env })}
+                      advancedFM={advancedFMSettings.osc3}
+                      onAdvancedFMChange={(settings) => {
+                        const newSettings = { ...advancedFMSettings, osc3: settings };
+                        setAdvancedFMSettings(newSettings);
+                        saveAdvancedFMSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                 </Tabs>
@@ -2415,6 +2461,11 @@ export default function Synthesizer() {
                   onModalChange={(modal) => setParams({ ...params, modal })}
                   onAdditiveChange={(additive) => setParams({ ...params, additive })}
                   onGranularChange={(granular) => setParams({ ...params, granular })}
+                  advancedGranular={advancedGranularSettings}
+                  onAdvancedGranularChange={(settings) => {
+                    setAdvancedGranularSettings(settings);
+                    saveAdvancedGranularSettings(settings);
+                  }}
                 />
               </div>
             </div>
@@ -2426,6 +2477,11 @@ export default function Synthesizer() {
               <EffectsPanel
                 effects={params.effects}
                 onChange={(effects) => setParams({ ...params, effects })}
+                reverbSettings={reverbSettings}
+                onReverbSettingsChange={(settings) => {
+                  setReverbSettings(settings);
+                  saveReverbSettings(settings);
+                }}
               />
               <SaturationChainPanel
                 saturation={params.saturationChain}

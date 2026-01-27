@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,6 +6,48 @@ import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { SynthParameters, DelayDivision } from "@shared/schema";
 import { Sparkles, ChevronDown, ChevronRight, Shuffle } from "lucide-react";
+
+// Reverb type definitions - stored separately from schema
+export type ReverbType = "hall" | "plate" | "room";
+
+export interface ReverbSettings {
+  type: ReverbType;
+  damping: number; // 0-100, how quickly high frequencies decay
+  diffusion: number; // 0-100, density of reflections
+  modulation: number; // 0-100, subtle pitch modulation for lushness
+}
+
+export const defaultReverbSettings: ReverbSettings = {
+  type: "plate",
+  damping: 50,
+  diffusion: 70,
+  modulation: 20,
+};
+
+// Presets for each reverb type
+export const reverbTypePresets: Record<ReverbType, { size: number; decay: number; damping: number; diffusion: number; modulation: number }> = {
+  hall: { size: 80, decay: 3.5, damping: 40, diffusion: 85, modulation: 25 },
+  plate: { size: 60, decay: 1.8, damping: 55, diffusion: 90, modulation: 15 },
+  room: { size: 35, decay: 0.6, damping: 65, diffusion: 60, modulation: 10 },
+};
+
+const REVERB_SETTINGS_KEY = "synth-reverb-settings";
+
+export function loadReverbSettings(): ReverbSettings {
+  try {
+    const stored = localStorage.getItem(REVERB_SETTINGS_KEY);
+    if (stored) {
+      return { ...defaultReverbSettings, ...JSON.parse(stored) };
+    }
+  } catch {
+    // Fall through to default
+  }
+  return { ...defaultReverbSettings };
+}
+
+export function saveReverbSettings(settings: ReverbSettings) {
+  localStorage.setItem(REVERB_SETTINGS_KEY, JSON.stringify(settings));
+}
 
 const DELAY_DIVISIONS: { value: DelayDivision; label: string }[] = [
   { value: "1/1", label: "1/1" },
@@ -33,7 +75,7 @@ function randomizeEffects(): Partial<SynthParameters["effects"]> {
     delayFeedback: Math.floor(Math.random() * 60),
     delayMix: Math.floor(Math.random() * 50),
     reverbEnabled: Math.random() > 0.5,
-    reverbSize: Math.random() * 0.8,
+    reverbSize: Math.floor(Math.random() * 80), // 0-80% range (percentage)
     reverbDecay: 0.5 + Math.random() * 4,
     reverbMix: Math.floor(Math.random() * 50),
     chorusEnabled: Math.random() > 0.7,
@@ -46,6 +88,8 @@ function randomizeEffects(): Partial<SynthParameters["effects"]> {
 interface EffectsPanelProps {
   effects: SynthParameters["effects"];
   onChange: (effects: SynthParameters["effects"]) => void;
+  reverbSettings?: ReverbSettings;
+  onReverbSettingsChange?: (settings: ReverbSettings) => void;
 }
 
 interface EffectSectionProps {
@@ -82,12 +126,39 @@ function EffectSection({ title, enabled, onToggle, children, testId }: EffectSec
   );
 }
 
-export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
+export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettingsChange }: EffectsPanelProps) {
+  const currentReverbSettings = reverbSettings || defaultReverbSettings;
+  
   const updateEffects = <K extends keyof SynthParameters["effects"]>(
     key: K,
     value: SynthParameters["effects"][K]
   ) => {
     onChange({ ...effects, [key]: value });
+  };
+
+  const updateReverbSettings = <K extends keyof ReverbSettings>(key: K, value: ReverbSettings[K]) => {
+    if (onReverbSettingsChange) {
+      onReverbSettingsChange({ ...currentReverbSettings, [key]: value });
+    }
+  };
+
+  const handleReverbTypeChange = (type: ReverbType) => {
+    if (onReverbSettingsChange) {
+      const preset = reverbTypePresets[type];
+      // Update both the reverb settings and the main reverb parameters
+      onReverbSettingsChange({
+        type,
+        damping: preset.damping,
+        diffusion: preset.diffusion,
+        modulation: preset.modulation,
+      });
+      // Also update size and decay in the main effects
+      onChange({
+        ...effects,
+        reverbSize: preset.size,
+        reverbDecay: preset.decay,
+      });
+    }
   };
 
   const handleRandomize = () => {
@@ -208,10 +279,38 @@ export function EffectsPanel({ effects, onChange }: EffectsPanelProps) {
           onToggle={(v) => updateEffects("reverbEnabled", v)}
           testId="switch-reverb"
         >
-          <div className="flex justify-center gap-1">
-            <Knob value={effects.reverbSize} min={0} max={100} step={1} label="Sz" unit="%" onChange={(v) => updateEffects("reverbSize", v)} size="xs" />
-            <Knob value={effects.reverbDecay} min={0.1} max={10} step={0.1} label="Dc" unit="s" onChange={(v) => updateEffects("reverbDecay", v)} size="xs" />
-            <Knob value={effects.reverbMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("reverbMix", v)} size="xs" />
+          <div className="flex flex-col gap-1">
+            {/* Reverb Type Selector */}
+            <div className="flex items-center justify-center gap-0.5">
+              {(["room", "plate", "hall"] as ReverbType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => handleReverbTypeChange(type)}
+                  className={`px-2 py-1 text-[9px] rounded transition-colors min-h-[24px] select-none toggle-elevate ${
+                    currentReverbSettings.type === type
+                      ? "toggle-elevated bg-primary/25 text-primary border border-primary/40"
+                      : "bg-muted/40 text-muted-foreground border border-transparent"
+                  }`}
+                  style={{ touchAction: 'manipulation' }}
+                  data-testid={`button-reverb-type-${type}`}
+                >
+                  {type.charAt(0).toUpperCase() + type.slice(1)}
+                </button>
+              ))}
+            </div>
+            {/* Main Reverb Controls */}
+            <div className="flex justify-center gap-1">
+              <Knob value={effects.reverbSize} min={0} max={100} step={1} label="Sz" unit="%" onChange={(v) => updateEffects("reverbSize", v)} size="xs" />
+              <Knob value={effects.reverbDecay} min={0.1} max={10} step={0.1} label="Dc" unit="s" onChange={(v) => updateEffects("reverbDecay", v)} size="xs" />
+              <Knob value={effects.reverbMix} min={0} max={100} step={1} label="Mix" unit="%" onChange={(v) => updateEffects("reverbMix", v)} size="xs" />
+            </div>
+            {/* Advanced Reverb Controls */}
+            <div className="flex justify-center gap-1">
+              <Knob value={currentReverbSettings.damping} min={0} max={100} step={1} label="Dmp" unit="%" onChange={(v) => updateReverbSettings("damping", v)} size="xs" />
+              <Knob value={currentReverbSettings.diffusion} min={0} max={100} step={1} label="Dif" unit="%" onChange={(v) => updateReverbSettings("diffusion", v)} size="xs" />
+              <Knob value={currentReverbSettings.modulation} min={0} max={100} step={1} label="Mod" unit="%" onChange={(v) => updateReverbSettings("modulation", v)} size="xs" />
+            </div>
           </div>
         </EffectSection>
 

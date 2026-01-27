@@ -6,7 +6,8 @@ import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType, EnvelopeCurve } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
-import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2, Layers } from "lucide-react";
+import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
 
 export interface OscEnvelope {
   enabled: boolean;
@@ -73,11 +74,14 @@ interface OscillatorPanelProps {
   index: number;
   envelope?: OscEnvelope;
   onEnvelopeChange?: (envelope: OscEnvelope) => void;
+  advancedFM?: AdvancedFMSettings;
+  onAdvancedFMChange?: (settings: AdvancedFMSettings) => void;
 }
 
-export function OscillatorPanel({ oscillator, onChange, title, index, envelope, onEnvelopeChange }: OscillatorPanelProps) {
+export function OscillatorPanel({ oscillator, onChange, title, index, envelope, onEnvelopeChange, advancedFM, onAdvancedFMChange }: OscillatorPanelProps) {
   const pitch = normalizePitch(oscillator.pitch);
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
+  const [fmAdvancedOpen, setFmAdvancedOpen] = useState(false);
   const [amOpen, setAmOpen] = useState(oscillator.amEnabled);
   const [pmOpen, setPmOpen] = useState(oscillator.pmEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
@@ -331,6 +335,149 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
                   size="xs"
                 />
               </div>
+              
+              {/* Advanced FM Section */}
+              {advancedFM && onAdvancedFMChange && (
+                <div className="border-t border-border/30 pt-1 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setFmAdvancedOpen(!fmAdvancedOpen)}
+                    className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover-elevate w-full rounded px-1 py-0.5"
+                    data-testid={`button-fm-advanced-toggle-${index}`}
+                  >
+                    {fmAdvancedOpen ? <ChevronDown className="w-2 h-2" /> : <ChevronRight className="w-2 h-2" />}
+                    <Layers className="w-2 h-2" />
+                    <span>Advanced</span>
+                  </button>
+                  
+                  {fmAdvancedOpen && (
+                    <div className="space-y-1 mt-1">
+                      {/* Algorithm Selector */}
+                      <Select
+                        value={advancedFM.algorithm}
+                        onValueChange={(v) => onAdvancedFMChange({ ...advancedFM, algorithm: v as FMAlgorithm })}
+                        disabled={!oscillator.fmEnabled}
+                      >
+                        <SelectTrigger className="h-5 text-[9px]" data-testid={`select-fm-algorithm-${index}`}>
+                          <SelectValue placeholder="Algorithm" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="series">Series (Op2→Op1→C)</SelectItem>
+                          <SelectItem value="parallel">Parallel (Op1+Op2→C)</SelectItem>
+                          <SelectItem value="feedback">Cross-Mod (Op1↔Op2)</SelectItem>
+                          <SelectItem value="mixed">Mixed (Both→C)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Op1 Fine Tune */}
+                      <div className="flex justify-center gap-1">
+                        <Knob
+                          value={advancedFM.operator1Detune}
+                          min={-100}
+                          max={100}
+                          step={1}
+                          label="Op1 Dt"
+                          unit="¢"
+                          onChange={(v) => onAdvancedFMChange({ ...advancedFM, operator1Detune: v })}
+                          size="xs"
+                        />
+                      </div>
+                      
+                      {/* Operator 2 */}
+                      <div className="flex items-center gap-1 mt-1">
+                        <span className="text-[9px] text-muted-foreground">Op2</span>
+                        <Switch
+                          checked={advancedFM.operator2.enabled}
+                          onCheckedChange={(v) => onAdvancedFMChange({
+                            ...advancedFM,
+                            operator2: { ...advancedFM.operator2, enabled: v }
+                          })}
+                          className="scale-50"
+                          data-testid={`switch-fm-op2-${index}`}
+                        />
+                      </div>
+                      
+                      {advancedFM.operator2.enabled && (
+                        <div className="space-y-1 pl-1 border-l border-primary/30">
+                          <Select
+                            value={advancedFM.operator2.waveform}
+                            onValueChange={(v) => onAdvancedFMChange({
+                              ...advancedFM,
+                              operator2: { ...advancedFM.operator2, waveform: v as "sine" | "triangle" | "sawtooth" | "square" }
+                            })}
+                          >
+                            <SelectTrigger className="h-5 text-[9px]" data-testid={`select-fm-op2-wave-${index}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="sine">Sine</SelectItem>
+                              <SelectItem value="triangle">Triangle</SelectItem>
+                              <SelectItem value="sawtooth">Saw</SelectItem>
+                              <SelectItem value="square">Square</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <div className="flex justify-center gap-1">
+                            <Knob
+                              value={advancedFM.operator2.ratio}
+                              min={0.25}
+                              max={16}
+                              step={0.25}
+                              label="Ratio"
+                              onChange={(v) => onAdvancedFMChange({
+                                ...advancedFM,
+                                operator2: { ...advancedFM.operator2, ratio: v }
+                              })}
+                              size="xs"
+                            />
+                            <Knob
+                              value={advancedFM.operator2.ratioDetune}
+                              min={-100}
+                              max={100}
+                              step={1}
+                              label="Dt"
+                              unit="¢"
+                              onChange={(v) => onAdvancedFMChange({
+                                ...advancedFM,
+                                operator2: { ...advancedFM.operator2, ratioDetune: v }
+                              })}
+                              size="xs"
+                            />
+                          </div>
+                          <div className="flex justify-center gap-1">
+                            <Knob
+                              value={advancedFM.operator2.depth}
+                              min={0}
+                              max={1000}
+                              step={10}
+                              label="Depth"
+                              unit="Hz"
+                              onChange={(v) => onAdvancedFMChange({
+                                ...advancedFM,
+                                operator2: { ...advancedFM.operator2, depth: v }
+                              })}
+                              accentColor="accent"
+                              size="xs"
+                            />
+                            <Knob
+                              value={advancedFM.operator2.feedback * 100}
+                              min={0}
+                              max={100}
+                              step={1}
+                              label="FB"
+                              unit="%"
+                              onChange={(v) => onAdvancedFMChange({
+                                ...advancedFM,
+                                operator2: { ...advancedFM.operator2, feedback: v / 100 }
+                              })}
+                              size="xs"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

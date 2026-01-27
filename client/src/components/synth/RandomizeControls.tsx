@@ -8,7 +8,15 @@ import { defaultSynthParameters } from "@shared/schema";
 import { normalizePitch, pitchToHz, hzToPitchState } from "@/lib/pitchUtils";
 import type { OscEnvelope, OscEnvelopes } from "./OscillatorPanel";
 import type { ConvolverSettings } from "./ConvolverPanel";
+import type { ReverbSettings, ReverbType } from "./EffectsPanel";
 import { getRandomOneShotIR } from "@/lib/builtinIRs";
+import type { 
+  OscAdvancedFMSettings, 
+  AdvancedGranularSettings, 
+  AdvancedFMSettings,
+  FMAlgorithm,
+  GrainEnvelopeShape 
+} from "@/lib/advancedSynthSettings";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -41,6 +49,12 @@ interface RandomizeControlsProps {
   onOscEnvelopesRandomize?: (envelopes: OscEnvelopes) => void;
   convolverSettings?: ConvolverSettings;
   onConvolverSettingsRandomize?: (settings: ConvolverSettings) => void;
+  reverbSettings?: ReverbSettings;
+  onReverbSettingsRandomize?: (settings: ReverbSettings) => void;
+  advancedFMSettings?: OscAdvancedFMSettings;
+  onAdvancedFMSettingsRandomize?: (settings: OscAdvancedFMSettings) => void;
+  advancedGranularSettings?: AdvancedGranularSettings;
+  onAdvancedGranularSettingsRandomize?: (settings: AdvancedGranularSettings) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -155,7 +169,20 @@ function randomWaveshaperCurve(): WaveshaperCurve {
   return (["softclip", "hardclip", "foldback", "sinefold", "chebyshev", "asymmetric", "tube"] as const)[Math.floor(Math.random() * 7)];
 }
 
-export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, onOscEnvelopesRandomize, convolverSettings, onConvolverSettingsRandomize }: RandomizeControlsProps) {
+export function RandomizeControls({ 
+  currentParams, 
+  onRandomize, 
+  oscEnvelopes, 
+  onOscEnvelopesRandomize, 
+  convolverSettings, 
+  onConvolverSettingsRandomize,
+  reverbSettings,
+  onReverbSettingsRandomize,
+  advancedFMSettings,
+  onAdvancedFMSettingsRandomize,
+  advancedGranularSettings,
+  onAdvancedGranularSettingsRandomize
+}: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
@@ -385,6 +412,52 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         highCut: Math.round(randomInRange(3000, 8000, true)), // 3-8kHz: avoid fizzy tails
         reverse: Math.random() > 0.92, // Rare: ~8% chance for micro-swell effect
         stretch: Math.round(randomInRange(0.8, 1.2) * 100) / 100, // 0.8-1.2x: keep IR character intact
+      });
+    }
+    
+    // Randomize reverb settings (type, damping, diffusion, modulation)
+    if (onReverbSettingsRandomize) {
+      const reverbTypes: ReverbType[] = ["hall", "plate", "room"];
+      onReverbSettingsRandomize({
+        type: reverbTypes[Math.floor(Math.random() * 3)],
+        damping: Math.round(randomInRange(20, 80)),
+        diffusion: Math.round(randomInRange(40, 95)),
+        modulation: Math.round(randomInRange(5, 40)),
+      });
+    }
+    
+    // Randomize advanced FM settings (algorithm, operator 2)
+    if (onAdvancedFMSettingsRandomize) {
+      const algorithms: FMAlgorithm[] = ["series", "parallel", "feedback", "mixed"];
+      const randomAdvancedFM = (): AdvancedFMSettings => ({
+        algorithm: algorithms[Math.floor(Math.random() * 4)],
+        operator1Detune: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
+        operator2: {
+          enabled: Math.random() > 0.5,
+          ratio: [0.5, 1, 2, 3, 4, 6, 8][Math.floor(Math.random() * 7)],
+          ratioDetune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
+          depth: Math.round(randExp(50, 600, 1.5)),
+          waveform: ["sine", "triangle", "sawtooth", "square"][Math.floor(Math.random() * 4)] as "sine" | "triangle" | "sawtooth" | "square",
+          feedback: Math.round(Math.random() * 50) / 100,
+        },
+      });
+      onAdvancedFMSettingsRandomize({
+        osc1: randomAdvancedFM(),
+        osc2: randomAdvancedFM(),
+        osc3: randomAdvancedFM(),
+      });
+    }
+    
+    // Randomize advanced granular settings
+    if (onAdvancedGranularSettingsRandomize) {
+      const envelopeShapes: GrainEnvelopeShape[] = ["hanning", "gaussian", "triangle", "trapezoid", "rectangular"];
+      onAdvancedGranularSettingsRandomize({
+        envelopeShape: envelopeShapes[Math.floor(Math.random() * 5)],
+        positionJitter: Math.round(randomInRange(5, 60 * chaos)),
+        overlap: Math.round(randomInRange(20, 80)),
+        reverseProbability: Math.round(randExp(0, 30 * chaos, 2.0)), // Bias toward low reverse probability
+        stereoSpread: Math.round(randomInRange(10, 70)),
+        freeze: false, // Never randomize to freeze mode
       });
     }
   };
@@ -628,6 +701,49 @@ export function RandomizeControls({ currentParams, onRandomize, oscEnvelopes, on
         highCut: Math.round(mutateValue(convolverSettings.highCut, 3000, 8000, true)), // 3-8kHz
         reverse: convolverSettings.reverse,
         stretch: Math.round(mutateValue(convolverSettings.stretch, 0.8, 1.2) * 100) / 100, // 0.8-1.2x
+      });
+    }
+    
+    // Mutate reverb settings (keep type, adjust other params)
+    if (onReverbSettingsRandomize && reverbSettings) {
+      onReverbSettingsRandomize({
+        type: reverbSettings.type, // Keep current type
+        damping: Math.round(mutateValue(reverbSettings.damping, 10, 90)),
+        diffusion: Math.round(mutateValue(reverbSettings.diffusion, 30, 100)),
+        modulation: Math.round(mutateValue(reverbSettings.modulation, 0, 50)),
+      });
+    }
+    
+    // Mutate advanced FM settings
+    if (onAdvancedFMSettingsRandomize && advancedFMSettings) {
+      const mutateAdvancedFM = (fm: AdvancedFMSettings): AdvancedFMSettings => ({
+        algorithm: fm.algorithm, // Keep algorithm
+        operator1Detune: Math.round(mutateValue(fm.operator1Detune, -50, 50)),
+        operator2: {
+          enabled: fm.operator2.enabled,
+          ratio: fm.operator2.ratio, // Keep ratio
+          ratioDetune: Math.round(mutateValue(fm.operator2.ratioDetune, -50, 50)),
+          depth: Math.round(mutateValue(fm.operator2.depth, 0, 800)),
+          waveform: fm.operator2.waveform, // Keep waveform
+          feedback: Math.round(mutateValue(fm.operator2.feedback * 100, 0, 60)) / 100,
+        },
+      });
+      onAdvancedFMSettingsRandomize({
+        osc1: mutateAdvancedFM(advancedFMSettings.osc1),
+        osc2: mutateAdvancedFM(advancedFMSettings.osc2),
+        osc3: mutateAdvancedFM(advancedFMSettings.osc3),
+      });
+    }
+    
+    // Mutate advanced granular settings
+    if (onAdvancedGranularSettingsRandomize && advancedGranularSettings) {
+      onAdvancedGranularSettingsRandomize({
+        envelopeShape: advancedGranularSettings.envelopeShape, // Keep envelope shape
+        positionJitter: Math.round(mutateValue(advancedGranularSettings.positionJitter, 0, 80)),
+        overlap: Math.round(mutateValue(advancedGranularSettings.overlap, 10, 90)),
+        reverseProbability: Math.round(mutateValue(advancedGranularSettings.reverseProbability, 0, 40)),
+        stereoSpread: Math.round(mutateValue(advancedGranularSettings.stereoSpread, 0, 100)),
+        freeze: advancedGranularSettings.freeze, // Keep freeze state
       });
     }
   };
