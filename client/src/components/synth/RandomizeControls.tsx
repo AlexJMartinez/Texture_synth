@@ -299,9 +299,9 @@ export function RandomizeControls({
         delayFeedback: Math.round(randExp(0, 15, 2.0)), // 0-15%: one-shots should decay once, not repeat
         delayMix: Math.round(randExp(3, 20, 1.5)), // 3-20%: delay should support, not announce itself
         reverbEnabled: Math.random() > 0.6,
-        reverbSize: Math.round(randomInRange(30, 80)),
-        reverbMix: Math.round(randomInRange(15, 40)),
-        reverbDecay: Math.round(randomInRange(1, 4) * 10) / 10,
+        reverbSize: Math.round(randomInRange(15, 50)), // 15-50%: smaller rooms for tight one-shot tails
+        reverbMix: Math.round(randomInRange(8, 30)), // 8-30%: preserve transient clarity
+        reverbDecay: Math.round(randomInRange(0.3, 2) * 10) / 10, // 0.3-2s: short tails for one-shots
         chorusEnabled: Math.random() > 0.7,
         chorusRate: Math.round(randomInRange(0.5, 3) * 10) / 10,
         chorusDepth: Math.round(randomInRange(20, 60)),
@@ -430,15 +430,19 @@ export function RandomizeControls({
     }
     
     // Randomize reverb settings (type, damping, diffusion, modulation, predelay, stereoWidth)
+    // One-shot optimized: prefer room/plate (tighter), higher damping for faster HF decay, shorter predelay
     if (onReverbSettingsRandomize) {
-      const reverbTypes: ReverbType[] = ["hall", "plate", "room"];
+      const reverbTypes: ReverbType[] = ["room", "plate", "hall"]; // Room/plate more likely (appear first)
+      const typeWeights = [0.4, 0.4, 0.2]; // 40% room, 40% plate, 20% hall
+      const rand = Math.random();
+      const type = rand < typeWeights[0] ? "room" : rand < typeWeights[0] + typeWeights[1] ? "plate" : "hall";
       onReverbSettingsRandomize({
-        type: reverbTypes[Math.floor(Math.random() * 3)],
-        damping: Math.round(randomInRange(20, 80)),
-        diffusion: Math.round(randomInRange(40, 95)),
-        modulation: Math.round(randomInRange(5, 40)),
-        predelay: Math.round(randomInRange(0, 80 * chaos)),
-        stereoWidth: Math.round(randomInRange(50, 100)),
+        type,
+        damping: Math.round(randomInRange(45, 90)), // 45-90%: faster HF decay for cleaner one-shot tails
+        diffusion: Math.round(randomInRange(50, 95)), // 50-95%: good density without smearing
+        modulation: Math.round(randomInRange(5, 30)), // 5-30%: subtle modulation
+        predelay: Math.round(randomInRange(0, 40 * chaos)), // 0-40ms max: keep reverb tight to transient
+        stereoWidth: Math.round(randomInRange(40, 90)), // 40-90%: moderate width for focused sound
       });
     }
     
@@ -612,9 +616,10 @@ export function RandomizeControls({
         delayFeedback: Math.round(mutateValue(currentParams.effects.delayFeedback, 0, 15)), // 0-15% max
         delayMix: Math.round(mutateValue(currentParams.effects.delayMix, 3, 20)), // 3-20% subtle mix
         reverbEnabled: currentParams.effects.reverbEnabled,
-        reverbSize: Math.round(mutateValue(currentParams.effects.reverbSize, 0, 100)),
-        reverbMix: Math.round(mutateValue(currentParams.effects.reverbMix, 0, 100)),
-        reverbDecay: Math.round(mutateValue(currentParams.effects.reverbDecay, 0.1, 10) * 10) / 10,
+        // One-shot reverb mutation: keep within tight ranges
+        reverbSize: Math.round(mutateValue(currentParams.effects.reverbSize, 10, 60)), // 10-60%: tight rooms
+        reverbMix: Math.round(mutateValue(currentParams.effects.reverbMix, 5, 35)), // 5-35%: preserve transient
+        reverbDecay: Math.round(mutateValue(currentParams.effects.reverbDecay, 0.2, 2.5) * 10) / 10, // 0.2-2.5s: short tails
         chorusEnabled: currentParams.effects.chorusEnabled,
         chorusRate: Math.round(mutateValue(currentParams.effects.chorusRate, 0.1, 10) * 10) / 10,
         chorusDepth: Math.round(mutateValue(currentParams.effects.chorusDepth, 0, 100)),
@@ -736,15 +741,15 @@ export function RandomizeControls({
       });
     }
     
-    // Mutate reverb settings (keep type, adjust other params)
+    // Mutate reverb settings with one-shot safe ranges (keep type)
     if (onReverbSettingsRandomize && reverbSettings) {
       onReverbSettingsRandomize({
         type: reverbSettings.type, // Keep current type
-        damping: Math.round(mutateValue(reverbSettings.damping, 10, 90)),
-        diffusion: Math.round(mutateValue(reverbSettings.diffusion, 30, 100)),
-        modulation: Math.round(mutateValue(reverbSettings.modulation, 0, 50)),
-        predelay: Math.round(mutateValue(reverbSettings.predelay, 0, 100)),
-        stereoWidth: Math.round(mutateValue(reverbSettings.stereoWidth, 40, 100)),
+        damping: Math.round(mutateValue(reverbSettings.damping, 40, 95)), // 40-95%: faster HF decay for clean tails
+        diffusion: Math.round(mutateValue(reverbSettings.diffusion, 45, 95)), // 45-95%: good density
+        modulation: Math.round(mutateValue(reverbSettings.modulation, 0, 35)), // 0-35%: subtle modulation
+        predelay: Math.round(mutateValue(reverbSettings.predelay, 0, 50)), // 0-50ms: tight to transient
+        stereoWidth: Math.round(mutateValue(reverbSettings.stereoWidth, 35, 95)), // 35-95%: moderate width
       });
     }
     
