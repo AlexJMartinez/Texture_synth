@@ -1488,24 +1488,34 @@ export default function Synthesizer() {
         oscNode.detune.value = osc.detune;
         frequencyParam = oscNode.frequency;
 
+        // FM Synthesis: Use modulation index scaling for consistent timbre across pitches
+        // fmDepth is now interpreted as modulation index (0-1000 maps to 0-10 index)
+        // Actual Hz deviation = index * modulatorFreq, creating consistent harmonic ratios
         if (osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise") {
           const modOsc = ctx.createOscillator();
           modOsc.type = osc.fmWaveform as OscillatorType;
-          modOsc.frequency.value = oscPitchHz * osc.fmRatio;
+          const modulatorFreq = oscPitchHz * osc.fmRatio;
+          modOsc.frequency.value = modulatorFreq;
           
           const modGain = ctx.createGain();
-          let fmDepthValue = osc.fmDepth;
+          // Convert depth (0-1000) to FM index (0-10), then multiply by modulator freq
+          // This gives frequency deviation in Hz that scales with pitch
+          const fmIndex = osc.fmDepth / 100; // 0-10 range
+          let fmDepthHz = fmIndex * modulatorFreq;
+          // Cap maximum deviation to prevent extreme distortion
+          fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 5);
           
           if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const baseDepth = Math.max(EPS, osc.fmDepth);
-            const peakDepth = baseDepth + (osc.indexEnvDepth * 50);
+            const baseDepth = Math.max(EPS, fmDepthHz);
+            const peakMultiplier = 1 + (osc.indexEnvDepth / 20); // Up to 3x peak
+            const peakDepth = baseDepth * peakMultiplier;
             triggerAHD(modGain.gain, now, {
               attack: 0.0005,
               hold: 0,
               decay: osc.indexEnvDecay / 1000
             }, peakDepth, { startFromCurrent: false });
           } else {
-            modGain.gain.value = fmDepthValue;
+            modGain.gain.value = fmDepthHz;
           }
           
           modOsc.connect(modGain);
@@ -1513,33 +1523,40 @@ export default function Synthesizer() {
           
           if (osc.fmFeedback > 0) {
             const feedbackGain = ctx.createGain();
-            feedbackGain.gain.value = osc.fmFeedback * osc.fmDepth * 0.5;
+            feedbackGain.gain.value = osc.fmFeedback * fmDepthHz * 0.3;
             modOsc.connect(feedbackGain);
             feedbackGain.connect(modOsc.frequency);
           }
           
           modOsc.start(now);
-          modOsc.stop(stopAt); // Fix 3: Stop after safety fade
+          modOsc.stop(stopAt);
         }
 
+        // PM (Linear FM): Uses carrier-relative scaling for pitch-stable modulation
+        // Useful for wobbly bass, vibrato effects, and subtle harmonic animation
+        // pmDepth is a percentage of carrier frequency (0-60 maps to 0-60% deviation)
         if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
           const pmModOsc = ctx.createOscillator();
           pmModOsc.type = osc.pmWaveform as OscillatorType;
-          pmModOsc.frequency.value = oscPitchHz * osc.pmRatio;
+          const pmModulatorFreq = oscPitchHz * osc.pmRatio;
+          pmModOsc.frequency.value = pmModulatorFreq;
           
           const pmModGain = ctx.createGain();
-          const pmIndex = osc.pmDepth * 100;
+          // PM uses percentage of carrier frequency for deviation
+          // This creates more dramatic pitch effects at low ratios (vibrato-like)
+          const pmDepthHz = (osc.pmDepth / 100) * oscPitchHz;
           
           if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const basePmDepth = Math.max(EPS, pmIndex);
-            const peakPmDepth = basePmDepth + (osc.indexEnvDepth * 100);
+            const basePmDepth = Math.max(EPS, pmDepthHz);
+            const peakMultiplier = 1 + (osc.indexEnvDepth / 15);
+            const peakPmDepth = basePmDepth * peakMultiplier;
             triggerAHD(pmModGain.gain, now, {
               attack: 0.0005,
               hold: 0,
               decay: osc.indexEnvDecay / 1000
             }, peakPmDepth, { startFromCurrent: false });
           } else {
-            pmModGain.gain.value = pmIndex;
+            pmModGain.gain.value = pmDepthHz;
           }
           
           pmModOsc.connect(pmModGain);
@@ -1547,13 +1564,13 @@ export default function Synthesizer() {
           
           if (osc.pmFeedback > 0) {
             const pmFeedbackGain = ctx.createGain();
-            pmFeedbackGain.gain.value = osc.pmFeedback * pmIndex * 0.3;
+            pmFeedbackGain.gain.value = osc.pmFeedback * pmDepthHz * 0.2;
             pmModOsc.connect(pmFeedbackGain);
             pmFeedbackGain.connect(pmModOsc.frequency);
           }
           
           pmModOsc.start(now);
-          pmModOsc.stop(stopAt); // Fix 3: Stop after safety fade
+          pmModOsc.stop(stopAt);
         }
 
         oscNode.connect(oscGain);
