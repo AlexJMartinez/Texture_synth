@@ -68,11 +68,12 @@ interface RandomizeControlsProps {
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
+  // One-shot safe ranges: fast attacks, moderate holds, reasonable decays
   return {
     enabled: Math.random() > 0.6,
-    attack: Math.round(randExp(0, 50 * chaos, 2.0)),
-    hold: Math.round(randExp(0, 100 * chaos, 2.0)),
-    decay: Math.round(randExp(50, 2000, 1.5)),
+    attack: Math.round(randExp(0, Math.min(30, 40 * chaos), 2.0)), // 0-30ms max: fast transients
+    hold: Math.round(randExp(0, Math.min(80, 100 * chaos), 2.0)), // 0-80ms max: keep it punchy
+    decay: Math.round(randExp(50, 2500, 1.5)), // 50-2500ms: good one-shot range
     curve: randomCurve(),
   };
 }
@@ -84,11 +85,12 @@ function mutateOscEnvelope(env: OscEnvelope, strength: number): OscEnvelope {
     return Math.max(min, Math.min(max, current + mutation));
   };
   
+  // One-shot safe mutation ranges
   return {
     enabled: env.enabled,
-    attack: Math.round(mutateValue(env.attack, 0, 500)),
-    hold: Math.round(mutateValue(env.hold, 0, 500)),
-    decay: Math.round(mutateValue(env.decay, 20, 5000)),
+    attack: Math.round(mutateValue(env.attack, 0, 80)), // 0-80ms: keep attacks fast
+    hold: Math.round(mutateValue(env.hold, 0, 120)), // 0-120ms: keep holds short
+    decay: Math.round(mutateValue(env.decay, 30, 3000)), // 30-3000ms: reasonable one-shot range
     curve: env.curve,
   };
 }
@@ -234,17 +236,22 @@ export function RandomizeControls({
   };
 
   const randomizeEnv = (current: Envelope, chaos: number, target: EnvelopeTarget, forceEnabled?: boolean): Envelope => {
-    // Amplitude envelope needs fast attack for percussive sounds
+    // One-shot safe envelope ranges - fast attacks, short holds, reasonable decays
     const isAmpEnv = target === "amplitude";
-    const maxAttack = isAmpEnv ? 30 : 500 * chaos; // Max 30ms for amp, otherwise chaos-scaled
-    const minDecay = isAmpEnv ? 100 : 50; // Minimum decay for amp envelope
+    const isPitchEnv = target === "pitch";
+    
+    // Amp: ultra-fast attack for transient; Filter/Pitch: slightly longer but still one-shot friendly
+    const maxAttack = isAmpEnv ? 20 : Math.min(150, 200 * chaos); // Amp: 0-20ms, others: 0-150ms max
+    const maxHold = isAmpEnv ? 40 : Math.min(100, 150 * chaos); // Amp: 0-40ms, others: 0-100ms max
+    const minDecay = isAmpEnv ? 80 : 40; // Minimum decay
+    const maxDecay = isPitchEnv ? 1500 : 2500; // Pitch shorter for snappy 808 drops, others reasonable
     const envAmount = isAmpEnv ? 100 : Math.round(randomInRange(20, 100)); // Always 100% for amp
     
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
       attack: Math.round(randomInRange(0, maxAttack)),
-      hold: Math.round(randomInRange(0, isAmpEnv ? 50 : 300 * chaos)),
-      decay: Math.round(randomInRange(minDecay, 2000)),
+      hold: Math.round(randomInRange(0, maxHold)),
+      decay: Math.round(randomInRange(minDecay, maxDecay)),
       curve: Math.random() > 0.5 ? current.curve : randomCurve(),
       target: target,
       amount: envAmount,
@@ -543,15 +550,25 @@ export function RandomizeControls({
       indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
     });
 
-    const mutateEnv = (env: Envelope): Envelope => ({
-      enabled: env.enabled,
-      attack: Math.round(mutateValue(env.attack, 0, 2000)),
-      hold: Math.round(mutateValue(env.hold, 0, 2000)),
-      decay: Math.round(mutateValue(env.decay, 0, 5000)),
-      curve: env.curve,
-      target: env.target,
-      amount: Math.round(mutateValue(env.amount, -100, 100)),
-    });
+    // One-shot safe envelope mutation ranges
+    const mutateEnv = (env: Envelope): Envelope => {
+      const isAmpEnv = env.target === "amplitude";
+      const isPitchEnv = env.target === "pitch";
+      // Amp: very fast attack; others: moderate but still one-shot friendly
+      const maxAttack = isAmpEnv ? 50 : 200; // Amp: 0-50ms, others: 0-200ms
+      const maxHold = isAmpEnv ? 80 : 150; // Amp: 0-80ms, others: 0-150ms
+      const maxDecay = isPitchEnv ? 2000 : 3000; // Pitch: 50-2000ms, others: 50-3000ms
+      
+      return {
+        enabled: env.enabled,
+        attack: Math.round(mutateValue(env.attack, 0, maxAttack)),
+        hold: Math.round(mutateValue(env.hold, 0, maxHold)),
+        decay: Math.round(mutateValue(env.decay, 50, maxDecay)),
+        curve: env.curve,
+        target: env.target,
+        amount: Math.round(mutateValue(env.amount, -100, 100)),
+      };
+    };
 
     const params: SynthParameters = {
       oscillators: {
