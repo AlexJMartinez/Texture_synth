@@ -12,6 +12,7 @@ import {
   type AdvancedWaveshaperSettings,
   type LowEndSettings,
   type OscPhaseSettings,
+  type AdvancedSpectralSettings,
   loadAdvancedFMSettings, 
   saveAdvancedFMSettings,
   loadAdvancedGranularSettings,
@@ -24,15 +25,19 @@ import {
   saveLowEndSettings,
   loadOscPhaseSettings,
   saveOscPhaseSettings,
+  loadAdvancedSpectralSettings,
+  saveAdvancedSpectralSettings,
   randomizeAdvancedFilterSettings,
   randomizeAdvancedWaveshaperSettings,
   randomizeLowEndSettings,
+  randomizeAdvancedSpectralSettings,
   defaultOscAdvancedFMSettings,
   defaultAdvancedGranularSettings,
   defaultAdvancedFilterSettings,
   defaultAdvancedWaveshaperSettings,
   defaultLowEndSettings,
-  defaultOscPhaseSettings
+  defaultOscPhaseSettings,
+  defaultAdvancedSpectralSettings
 } from "@/lib/advancedSynthSettings";
 import { OutputPanel } from "@/components/synth/OutputPanel";
 import { PresetPanel } from "@/components/synth/PresetPanel";
@@ -424,6 +429,7 @@ export default function Synthesizer() {
   const [advancedWaveshaperSettings, setAdvancedWaveshaperSettings] = useState<AdvancedWaveshaperSettings>(loadAdvancedWaveshaperSettings);
   const [lowEndSettings, setLowEndSettings] = useState<LowEndSettings>(loadLowEndSettings);
   const [phaseSettings, setPhaseSettings] = useState<OscPhaseSettings>(loadOscPhaseSettings);
+  const [advancedSpectralSettings, setAdvancedSpectralSettings] = useState<AdvancedSpectralSettings>(loadAdvancedSpectralSettings);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -731,7 +737,7 @@ export default function Synthesizer() {
     }
   }, []);
 
-  // Spectral bin scrambling using FFT
+  // Spectral bin scrambling using FFT with advanced effects
   const applySpectralScrambling = useCallback((
     buffer: AudioBuffer, 
     fftSize: number, 
@@ -741,7 +747,9 @@ export default function Synthesizer() {
     mix: number,
     gateThreshold: number,
     stretch: number,
-    binDensity: number
+    binDensity: number,
+    spectralSettings: AdvancedSpectralSettings,
+    fundamentalHz: number = 110
   ): void => {
     // Check if any processing is needed
     const hasScramble = scrambleAmount > 0;
@@ -749,8 +757,11 @@ export default function Synthesizer() {
     const hasGate = gateThreshold < 0;
     const hasStretch = Math.abs(stretch - 1.0) > 0.01;
     const hasDensity = binDensity < 100;
+    const hasTilt = spectralSettings.tilt.enabled;
+    const hasBlur = spectralSettings.blur.enabled;
+    const hasHarmonicResynth = spectralSettings.harmonicResynth.enabled;
     
-    if (!hasScramble && !hasShift && !freeze && !hasGate && !hasStretch && !hasDensity) return;
+    if (!hasScramble && !hasShift && !freeze && !hasGate && !hasStretch && !hasDensity && !hasTilt && !hasBlur && !hasHarmonicResynth) return;
     
     // Validate and clamp to power-of-two (256, 512, 1024, 2048)
     const validSizes = [256, 512, 1024, 2048];
@@ -935,6 +946,157 @@ export default function Synthesizer() {
           if (hasDensity && !activeBins[numBins - 1]) nyqReal = 0;
           scrambledReal[numBins] = nyqReal;
           scrambledImag[numBins] = 0;
+        }
+        
+        // === SPECTRAL TILT ===
+        // Apply frequency-dependent gain: negative tilts boost bass, positive tilts boost treble
+        if (hasTilt) {
+          const tiltAmount = spectralSettings.tilt.amount / 100; // -1 to 1
+          const tiltDb = tiltAmount * 12; // Max ±12dB tilt
+          
+          // Calculate envelope position for dynamic tilt
+          let envelopeMod = 0;
+          if (spectralSettings.tilt.envelopeFollow) {
+            // Use frame position as a proxy for envelope (0 at start, 1 at end)
+            const envelopePos = frame / numFrames;
+            envelopeMod = (spectralSettings.tilt.envelopeAmount / 100) * envelopePos;
+          }
+          
+          const effectiveTilt = tiltDb + envelopeMod * 12;
+          
+          for (let k = 1; k < numBins; k++) {
+            // Normalized frequency position (0 = DC, 1 = Nyquist)
+            const freqPos = k / numBins;
+            // Linear tilt in dB across frequency spectrum
+            const tiltGainDb = effectiveTilt * (freqPos - 0.5) * 2; // Center at midpoint
+            const tiltGain = Math.pow(10, tiltGainDb / 20);
+            
+            scrambledReal[k] *= tiltGain;
+            scrambledImag[k] *= tiltGain;
+            // Mirror for negative frequencies
+            if (k > 0 && k < numBins) {
+              scrambledReal[fftSize - k] *= tiltGain;
+              scrambledImag[fftSize - k] *= tiltGain;
+            }
+          }
+        }
+        
+        // === SPECTRAL BLUR ===
+        // Average neighboring frequency bins to create smeared/washy textures
+        if (hasBlur) {
+          const blurAmount = Math.floor((spectralSettings.blur.amount / 100) * 10) + 1; // 1-11 bins
+          const direction = spectralSettings.blur.direction / 100; // -1 to 1
+          const asymmetric = spectralSettings.blur.asymmetric;
+          
+          // Create temp arrays for blurred result
+          const blurredReal = new Float32Array(numBins);
+          const blurredImag = new Float32Array(numBins);
+          
+          for (let k = 0; k < numBins; k++) {
+            let sumReal = 0, sumImag = 0, count = 0;
+            
+            // Determine blur range based on asymmetry and direction
+            let blurStart = -blurAmount;
+            let blurEnd = blurAmount;
+            if (asymmetric) {
+              if (direction > 0) {
+                blurStart = 0; // Only blur upward (higher frequencies)
+                blurEnd = Math.floor(blurAmount * (1 + direction));
+              } else {
+                blurStart = Math.floor(blurAmount * (1 + direction));
+                blurEnd = 0; // Only blur downward (lower frequencies)
+              }
+            }
+            
+            for (let j = blurStart; j <= blurEnd; j++) {
+              const srcK = k + j;
+              if (srcK >= 0 && srcK < numBins) {
+                const weight = 1 - Math.abs(j) / (blurAmount + 1); // Triangle window
+                sumReal += scrambledReal[srcK] * weight;
+                sumImag += scrambledImag[srcK] * weight;
+                count += weight;
+              }
+            }
+            
+            if (count > 0) {
+              blurredReal[k] = sumReal / count;
+              blurredImag[k] = sumImag / count;
+            }
+          }
+          
+          // Copy blurred result back and maintain symmetry
+          for (let k = 0; k < numBins; k++) {
+            scrambledReal[k] = blurredReal[k];
+            scrambledImag[k] = blurredImag[k];
+            if (k > 0 && k < numBins) {
+              scrambledReal[fftSize - k] = blurredReal[k];
+              scrambledImag[fftSize - k] = -blurredImag[k];
+            }
+          }
+        }
+        
+        // === HARMONIC RESYNTHESIS ===
+        // Boost/attenuate based on harmonic relationship to fundamental
+        if (hasHarmonicResynth) {
+          const { harmonicsMode, harmonicSpread, harmonicBoost, inharmonicCut, harmonicDecay } = spectralSettings.harmonicResynth;
+          const fundFreq = spectralSettings.harmonicResynth.fundamentalDetect ? fundamentalHz : spectralSettings.harmonicResynth.manualFundamental;
+          const binWidth = buffer.sampleRate / fftSize;
+          const fundBin = fundFreq / binWidth;
+          const spreadBins = (harmonicSpread / 100) * 3; // Tolerance in bins
+          
+          // Check if a bin is harmonic based on mode
+          const isHarmonic = (binIdx: number, harmNum: number): boolean => {
+            switch (harmonicsMode) {
+              case "odd": return harmNum % 2 === 1;
+              case "even": return harmNum % 2 === 0 && harmNum > 0;
+              case "prime": {
+                if (harmNum < 2) return false;
+                for (let i = 2; i <= Math.sqrt(harmNum); i++) {
+                  if (harmNum % i === 0) return false;
+                }
+                return true;
+              }
+              case "all":
+              default: return true;
+            }
+          };
+          
+          for (let k = 1; k < numBins; k++) {
+            // Find closest harmonic
+            let closestHarmonic = 0;
+            let minDist = Infinity;
+            
+            for (let h = 1; h <= 32; h++) { // Check up to 32nd harmonic
+              const harmonicBin = fundBin * h;
+              if (harmonicBin >= numBins) break;
+              const dist = Math.abs(k - harmonicBin);
+              if (dist < minDist) {
+                minDist = dist;
+                closestHarmonic = h;
+              }
+            }
+            
+            // Determine gain based on whether this is a harmonic
+            let gainDb = 0;
+            if (minDist <= spreadBins && isHarmonic(k, closestHarmonic)) {
+              // This bin is on or near a harmonic - boost it
+              const proximity = 1 - (minDist / (spreadBins + 0.01));
+              // Apply harmonic decay (higher harmonics get less boost)
+              const decayFactor = 1 - (harmonicDecay / 100) * (closestHarmonic / 16);
+              gainDb = harmonicBoost * proximity * Math.max(0.1, decayFactor);
+            } else {
+              // Not a harmonic - cut it
+              gainDb = inharmonicCut;
+            }
+            
+            const gain = Math.pow(10, gainDb / 20);
+            scrambledReal[k] *= gain;
+            scrambledImag[k] *= gain;
+            if (k > 0 && k < numBins) {
+              scrambledReal[fftSize - k] *= gain;
+              scrambledImag[fftSize - k] *= gain;
+            }
+          }
         }
         
         // Inverse FFT
@@ -2582,7 +2744,9 @@ export default function Synthesizer() {
           params.spectralScrambler.mix,
           params.spectralScrambler.gateThreshold,
           params.spectralScrambler.stretch,
-          params.spectralScrambler.binDensity
+          params.spectralScrambler.binDensity,
+          advancedSpectralSettings,
+          pitchToHz(params.oscillators.osc1.pitch) // Use osc1 pitch as fundamental for harmonic resynthesis
         );
       }
       // Apply additional safety fadeout to prevent any remaining pops
