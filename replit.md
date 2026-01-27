@@ -15,20 +15,22 @@ The UI features a clean, professional audio design with a tabbed organization sy
 
 Core architectural decisions include:
 - **Multi-Oscillator Architecture**: Three main oscillators with sine, triangle, sawtooth, and square waveforms, featuring per-oscillator pitch, detune, drift, level, and FM/PM/AM synthesis capabilities.
+  - **Advanced FM Synthesis**: 2-operator FM per oscillator with algorithm routing (series/parallel/feedback/mixed), operator 2 controls (ratio, detune, depth, waveform, feedback), and fine-tuning for both operators. Settings stored in localStorage.
 - **Per-Oscillator Envelopes**: Independent AHD (Attack/Hold/Decay) envelopes for each oscillator, allowing individual amplitude shaping before mixing to master. Stored in localStorage separately from presets. Each oscillator's ENV section has a toggle to enable and A/H/D knobs for timing control.
 - **Click Layer**: A dedicated transient generator with ultra-fast noise, various noise types, filter options, and sample rate reduction.
 - **Sub Oscillator**: A separate layer for low-end, offering sine and triangle waveforms with dedicated envelopes and filtering.
 - **Advanced Synthesis Engines**: Selectable Modal, Additive, and Granular synthesis engines for diverse sound generation.
   - **Modal Synthesis**: Physical modeling with modeCount (1-4 resonant modes), inharmonicity (0-100% quadratic detuning), exciterType (noise burst/sharp impulse/soft mallet/pitched pluck), plus per-mode ratio, decay, and level controls.
   - **Additive Synthesis**: Harmonic stacking with partialCount (1-8 active harmonics), randomness (0-100% pitch and level variation), spread, decay slope, and per-partial level/detune controls.
-  - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click).
+  - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click). Advanced controls include envelope shapes (hanning/gaussian/triangle/trapezoid/rectangular), position jitter, overlap control, reverse grain probability, stereo spread, and freeze mode.
 - **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
   - **Amp Envelope**: Extended ranges matching contemporary synths - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for fine control at fast times and long pad tails.
   - **Filter Envelope**: Extended ranges - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for sweeping filter movements.
   - **Pitch Envelope**: Standard ranges - Attack 0-2s, Hold 0-2s, Decay 0-10s.
   - **Pitch Envelope**: Uses semitone-based modulation (-48 to +48 st) for authentic 808-style pitch drops with exponential curve option.
 - **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
-- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, and Chorus.
+- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, Algorithmic Reverb, and Chorus.
+  - **Algorithmic Reverb**: Three reverb types (Hall/Plate/Room) with type-specific presets for size and decay, plus advanced controls for damping, diffusion, and modulation. Settings stored in localStorage.
   - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).
   - **Enhanced Convolver**: Kilohearts-style convolution reverb with custom IR loading plus advanced processing: pre-delay (0-500ms), size/decay (10-100% with exponential curve), lo/hi cut filters (20Hz-20kHz with frequency clamping), reverse toggle, and time-stretch (0.5x-2x with linear interpolation). Settings stored in localStorage separately from presets.
 - **Modulation System**: Phaseplant-style modulator rack at the bottom of the UI.
