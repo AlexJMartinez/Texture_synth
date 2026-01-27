@@ -24,6 +24,8 @@ export function triggerAHD(
   const A = clampMin(ahd.attack, minT);
   const H = Math.max(0, ahd.hold);
   const D = clampMin(ahd.decay, minT);
+  // Ensure peak is always positive to prevent "value should be positive" error
+  const safePeak = Math.max(EPS, peak);
 
   const startFromCurrent = opts?.startFromCurrent ?? true;
 
@@ -38,10 +40,11 @@ export function triggerAHD(
   const start = startFromCurrent ? Math.max(EPS, param.value) : EPS;
   param.setValueAtTime(start, t0);
 
-  param.setTargetAtTime(Math.max(EPS, peak), t0, A / 5);
+  // Use safePeak which is already ensured to be positive
+  param.setTargetAtTime(safePeak, t0, A / 5);
 
   const tA = t0 + A;
-  param.setValueAtTime(Math.max(EPS, peak), tA);
+  param.setValueAtTime(safePeak, tA);
 
   const tH = tA + H;
   param.setTargetAtTime(EPS, tH, D / 5);
@@ -55,6 +58,10 @@ export function stopWithFade(
   t0: number,
   fadeTime = 0.002
 ) {
+  // Ensure fadeTime is always positive to prevent "value should be positive" error
+  const safeFadeTime = Math.max(0.0005, fadeTime);
+  const timeConstant = Math.max(0.0001, safeFadeTime / 5);
+  
   const anyParam = param as any;
   if (typeof anyParam.cancelAndHoldAtTime === "function") {
     anyParam.cancelAndHoldAtTime(t0);
@@ -63,8 +70,8 @@ export function stopWithFade(
     param.setValueAtTime(Math.max(EPS, param.value), t0);
   }
   
-  param.setTargetAtTime(EPS, t0, fadeTime / 5);
-  return t0 + fadeTime;
+  param.setTargetAtTime(EPS, t0, timeConstant);
+  return t0 + safeFadeTime;
 }
 
 export { EPS };
