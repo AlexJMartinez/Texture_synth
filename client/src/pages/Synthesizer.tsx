@@ -2239,7 +2239,8 @@ export default function Synthesizer() {
       
       // Apply phase offset via start time delay
       // For bass/sub frequencies, phase alignment is critical for weight and punch
-      const oscStartTime = now + phaseSeconds;
+      // Ensure start time is never negative (phase offset could be negative)
+      const oscStartTime = Math.max(now, now + phaseSeconds);
       sourceNode.start(oscStartTime);
       sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
       if (sourcesCollector) {
@@ -2410,7 +2411,8 @@ export default function Synthesizer() {
       }, 1.0, { startFromCurrent: false });
       
       // Apply phase offset for sub bass alignment
-      const subStartTime = now + subPhaseSeconds;
+      // Ensure start time is never negative (phase offset could be negative)
+      const subStartTime = Math.max(now, now + subPhaseSeconds);
       subOsc.start(subStartTime);
       subOsc.stop(stopAt + 0.03);
       if (sourcesCollector) {
@@ -2725,10 +2727,29 @@ export default function Synthesizer() {
     const durationInSeconds = Math.max(0.1, totalDuration / 1000);
     
     // Fix 5: Render once with OfflineAudioContext (same render for preview and export)
-    const buffer = await Tone.Offline(async (offlineCtx) => {
-      const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-      await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings);
-    }, durationInSeconds);
+    let buffer;
+    try {
+      buffer = await Tone.Offline(async (offlineCtx) => {
+        const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings);
+      }, durationInSeconds);
+    } catch (err) {
+      console.error("Tone.Offline error:", err);
+      console.error("Duration:", durationInSeconds, "TotalDuration:", totalDuration);
+      console.error("Params:", JSON.stringify({
+        ampEnv: params.envelopes.env3,
+        filterEnv: params.envelopes.env1,
+        pitchEnv: params.envelopes.env2,
+        compressor: params.mastering.compressorEnabled ? {
+          attack: params.mastering.compressorAttack,
+          release: params.mastering.compressorRelease
+        } : null,
+        limiter: params.effects.limiterEnabled ? {
+          release: params.effects.limiterRelease
+        } : null
+      }, null, 2));
+      throw err;
+    }
     
     // Convert Tone.ToneAudioBuffer to AudioBuffer
     const renderedBuffer = buffer.get() as AudioBuffer;
