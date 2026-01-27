@@ -201,6 +201,187 @@ export const formantFrequencies: Record<FormantVowel, { f1: number; f2: number; 
   U: { f1: 300, f2: 870, f3: 2250 },
 };
 
+// ============ OSCILLATOR PHASE SETTINGS ============
+
+export interface OscPhaseSettings {
+  osc1Phase: number; // 0-360 degrees
+  osc2Phase: number;
+  osc3Phase: number;
+  subPhase: number;
+}
+
+export const defaultOscPhaseSettings: OscPhaseSettings = {
+  osc1Phase: 0,
+  osc2Phase: 0,
+  osc3Phase: 0,
+  subPhase: 0,
+};
+
+// ============ SUB BASS ENHANCEMENT SETTINGS ============
+
+export interface SubHarmonicSettings {
+  enabled: boolean;
+  octaveDown1: number; // 0-100 mix for 1 octave down
+  octaveDown2: number; // 0-100 mix for 2 octaves down
+  filterFreq: number; // 20-200 Hz lowpass on sub harmonics
+  drive: number; // 0-100 soft saturation on sub harmonics
+}
+
+export interface BassExciterSettings {
+  enabled: boolean;
+  frequency: number; // 40-150 Hz - center frequency for harmonic generation
+  harmonics: number; // 0-100 amount of 2nd/3rd harmonic generation
+  subOctave: number; // 0-100 psychoacoustic sub-octave synthesis
+  presence: number; // 0-100 high-frequency "edge" for bass presence
+  mix: number; // 0-100 wet/dry
+}
+
+export interface SubEQSettings {
+  enabled: boolean;
+  lowShelfFreq: number; // 30-120 Hz
+  lowShelfGain: number; // -12 to +12 dB
+  lowShelfQ: number; // 0.3-2.0 resonance
+  subBoostFreq: number; // 20-80 Hz - narrow sub boost
+  subBoostGain: number; // 0-12 dB
+  subBoostQ: number; // 1-8 narrow to wide
+}
+
+export interface LowEndSettings {
+  dcFilterEnabled: boolean; // Highpass at ~5Hz to remove DC offset
+  dcFilterFreq: number; // 3-20 Hz
+  
+  monoSumEnabled: boolean; // Collapse low frequencies to mono
+  monoSumFreq: number; // 80-300 Hz crossover frequency
+  monoSumWidth: number; // 0-100% transition width (gradual vs sharp)
+  
+  subHarmonic: SubHarmonicSettings;
+  bassExciter: BassExciterSettings;
+  subEQ: SubEQSettings;
+}
+
+export const defaultLowEndSettings: LowEndSettings = {
+  dcFilterEnabled: true,
+  dcFilterFreq: 5,
+  
+  monoSumEnabled: false,
+  monoSumFreq: 120,
+  monoSumWidth: 50,
+  
+  subHarmonic: {
+    enabled: false,
+    octaveDown1: 30,
+    octaveDown2: 15,
+    filterFreq: 80,
+    drive: 20,
+  },
+  
+  bassExciter: {
+    enabled: false,
+    frequency: 80,
+    harmonics: 40,
+    subOctave: 25,
+    presence: 30,
+    mix: 50,
+  },
+  
+  subEQ: {
+    enabled: false,
+    lowShelfFreq: 60,
+    lowShelfGain: 3,
+    lowShelfQ: 0.7,
+    subBoostFreq: 45,
+    subBoostGain: 4,
+    subBoostQ: 3,
+  },
+};
+
+// LocalStorage keys for phase and low-end settings
+const PHASE_SETTINGS_KEY = "synth-osc-phase-settings";
+const LOW_END_SETTINGS_KEY = "synth-low-end-settings";
+
+// Phase settings persistence
+export function loadOscPhaseSettings(): OscPhaseSettings {
+  try {
+    const stored = localStorage.getItem(PHASE_SETTINGS_KEY);
+    if (stored) {
+      return { ...defaultOscPhaseSettings, ...JSON.parse(stored) };
+    }
+  } catch {
+    // Fall through to default
+  }
+  return { ...defaultOscPhaseSettings };
+}
+
+export function saveOscPhaseSettings(settings: OscPhaseSettings) {
+  localStorage.setItem(PHASE_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// Low-end settings persistence
+export function loadLowEndSettings(): LowEndSettings {
+  try {
+    const stored = localStorage.getItem(LOW_END_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        ...defaultLowEndSettings,
+        ...parsed,
+        subHarmonic: { ...defaultLowEndSettings.subHarmonic, ...parsed.subHarmonic },
+        bassExciter: { ...defaultLowEndSettings.bassExciter, ...parsed.bassExciter },
+        subEQ: { ...defaultLowEndSettings.subEQ, ...parsed.subEQ },
+      };
+    }
+  } catch {
+    // Fall through to default
+  }
+  return { ...defaultLowEndSettings };
+}
+
+export function saveLowEndSettings(settings: LowEndSettings) {
+  localStorage.setItem(LOW_END_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// Randomization for low-end settings
+export function randomizeLowEndSettings(chaosLevel: number = 50): Partial<LowEndSettings> {
+  const chaos = chaosLevel / 100;
+  const maybeEnable = (base: number) => Math.random() < base * chaos;
+  
+  return {
+    dcFilterEnabled: true, // Always keep DC filter on for safety
+    dcFilterFreq: 3 + Math.floor(Math.random() * 7), // 3-10 Hz
+    
+    monoSumEnabled: maybeEnable(0.4),
+    monoSumFreq: 80 + Math.floor(Math.random() * 100), // 80-180 Hz
+    monoSumWidth: 30 + Math.floor(Math.random() * 50),
+    
+    subHarmonic: {
+      enabled: maybeEnable(0.35),
+      octaveDown1: 15 + Math.floor(Math.random() * 45 * chaos),
+      octaveDown2: 5 + Math.floor(Math.random() * 30 * chaos),
+      filterFreq: 40 + Math.floor(Math.random() * 80),
+      drive: Math.floor(Math.random() * 40 * chaos),
+    },
+    
+    bassExciter: {
+      enabled: maybeEnable(0.3),
+      frequency: 50 + Math.floor(Math.random() * 80),
+      harmonics: 20 + Math.floor(Math.random() * 50 * chaos),
+      subOctave: 10 + Math.floor(Math.random() * 40 * chaos),
+      presence: 15 + Math.floor(Math.random() * 40 * chaos),
+      mix: 30 + Math.floor(Math.random() * 40),
+    },
+    
+    subEQ: {
+      enabled: maybeEnable(0.4),
+      lowShelfFreq: 40 + Math.floor(Math.random() * 60),
+      lowShelfGain: -3 + Math.floor(Math.random() * 9),
+      lowShelfQ: 0.5 + Math.random() * 1.0,
+      subBoostFreq: 30 + Math.floor(Math.random() * 40),
+      subBoostGain: Math.floor(Math.random() * 8 * chaos),
+      subBoostQ: 2 + Math.floor(Math.random() * 4),
+    },
+  };
+}
+
 // ============ ADVANCED WAVESHAPER SETTINGS ============
 
 export type WaveshaperBandCurve = "softclip" | "hardclip" | "foldback" | "sinefold" | "chebyshev" | "asymmetric" | "tube" | "rectifier" | "sinecrush";

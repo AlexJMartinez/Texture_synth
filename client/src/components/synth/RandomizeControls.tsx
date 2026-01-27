@@ -16,12 +16,17 @@ import type {
   AdvancedFMSettings,
   AdvancedFilterSettings,
   AdvancedWaveshaperSettings,
+  LowEndSettings,
+  OscPhaseSettings,
   FMAlgorithm,
   GrainEnvelopeShape 
 } from "@/lib/advancedSynthSettings";
 import { 
   randomizeAdvancedFilterSettings, 
-  randomizeAdvancedWaveshaperSettings 
+  randomizeAdvancedWaveshaperSettings,
+  randomizeLowEndSettings,
+  defaultLowEndSettings,
+  defaultOscPhaseSettings
 } from "@/lib/advancedSynthSettings";
 
 function randomRatioPreset(): ModRatioPreset {
@@ -65,6 +70,10 @@ interface RandomizeControlsProps {
   onAdvancedFilterSettingsRandomize?: (settings: AdvancedFilterSettings) => void;
   advancedWaveshaperSettings?: AdvancedWaveshaperSettings;
   onAdvancedWaveshaperSettingsRandomize?: (settings: AdvancedWaveshaperSettings) => void;
+  lowEndSettings?: LowEndSettings;
+  onLowEndSettingsRandomize?: (settings: LowEndSettings) => void;
+  phaseSettings?: OscPhaseSettings;
+  onPhaseSettingsRandomize?: (settings: OscPhaseSettings) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -197,7 +206,11 @@ export function RandomizeControls({
   advancedFilterSettings,
   onAdvancedFilterSettingsRandomize,
   advancedWaveshaperSettings,
-  onAdvancedWaveshaperSettingsRandomize
+  onAdvancedWaveshaperSettingsRandomize,
+  lowEndSettings,
+  onLowEndSettingsRandomize,
+  phaseSettings,
+  onPhaseSettingsRandomize
 }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
@@ -501,6 +514,34 @@ export function RandomizeControls({
         ...advancedWaveshaperSettings, 
         ...randomWaveshaper,
         multiband: { ...advancedWaveshaperSettings.multiband, ...randomWaveshaper.multiband }
+      });
+    }
+    
+    // Randomize low-end settings (sub-harmonic generator, bass exciter, sub EQ, mono sum, DC filter)
+    if (onLowEndSettingsRandomize) {
+      const randomLowEnd = randomizeLowEndSettings(chaosAmount);
+      onLowEndSettingsRandomize({
+        ...defaultLowEndSettings,
+        ...randomLowEnd,
+        subHarmonic: { ...defaultLowEndSettings.subHarmonic, ...randomLowEnd.subHarmonic },
+        bassExciter: { ...defaultLowEndSettings.bassExciter, ...randomLowEnd.bassExciter },
+        subEQ: { ...defaultLowEndSettings.subEQ, ...randomLowEnd.subEQ },
+      });
+    }
+    
+    // Randomize phase settings (0-360° for each oscillator, focused on constructive alignment)
+    if (onPhaseSettingsRandomize) {
+      // For heavy sub bass, often we want phases aligned (0°) or inverted (180°)
+      // But allow some random variation too
+      const randomPhaseAlignment = () => {
+        const alignments = [0, 0, 0, 90, 180, 180, 270]; // Bias toward 0° and 180°
+        return alignments[Math.floor(Math.random() * alignments.length)] + Math.round(randomInRange(-15, 15) * chaos);
+      };
+      onPhaseSettingsRandomize({
+        osc1Phase: 0, // Keep osc1 at 0 as reference
+        osc2Phase: Math.round(randomPhaseAlignment()) % 360,
+        osc3Phase: Math.round(randomPhaseAlignment()) % 360,
+        subPhase: Math.round(randomPhaseAlignment()) % 360,
       });
     }
   };
@@ -833,6 +874,54 @@ export function RandomizeControls({
           midDrive: Math.round(mutateValue(advancedWaveshaperSettings.multiband.midDrive, 10, 80)),
           highDrive: Math.round(mutateValue(advancedWaveshaperSettings.multiband.highDrive, 10, 80)),
         },
+      });
+    }
+    
+    // Mutate low-end settings
+    if (onLowEndSettingsRandomize && lowEndSettings) {
+      onLowEndSettingsRandomize({
+        ...lowEndSettings,
+        dcFilterFreq: Math.round(mutateValue(lowEndSettings.dcFilterFreq, 3, 15)),
+        monoSumFreq: Math.round(mutateValue(lowEndSettings.monoSumFreq, 80, 200)),
+        monoSumWidth: Math.round(mutateValue(lowEndSettings.monoSumWidth, 20, 80)),
+        subHarmonic: {
+          ...lowEndSettings.subHarmonic,
+          octaveDown1: Math.round(mutateValue(lowEndSettings.subHarmonic.octaveDown1, 5, 60)),
+          octaveDown2: Math.round(mutateValue(lowEndSettings.subHarmonic.octaveDown2, 0, 40)),
+          filterFreq: Math.round(mutateValue(lowEndSettings.subHarmonic.filterFreq, 30, 120)),
+          drive: Math.round(mutateValue(lowEndSettings.subHarmonic.drive, 0, 50)),
+        },
+        bassExciter: {
+          ...lowEndSettings.bassExciter,
+          frequency: Math.round(mutateValue(lowEndSettings.bassExciter.frequency, 50, 120)),
+          harmonics: Math.round(mutateValue(lowEndSettings.bassExciter.harmonics, 20, 70)),
+          subOctave: Math.round(mutateValue(lowEndSettings.bassExciter.subOctave, 10, 50)),
+          presence: Math.round(mutateValue(lowEndSettings.bassExciter.presence, 10, 50)),
+          mix: Math.round(mutateValue(lowEndSettings.bassExciter.mix, 25, 70)),
+        },
+        subEQ: {
+          ...lowEndSettings.subEQ,
+          lowShelfFreq: Math.round(mutateValue(lowEndSettings.subEQ.lowShelfFreq, 40, 100)),
+          lowShelfGain: Math.round(mutateValue(lowEndSettings.subEQ.lowShelfGain, -6, 8) * 2) / 2,
+          lowShelfQ: Math.round(mutateValue(lowEndSettings.subEQ.lowShelfQ, 0.4, 1.5) * 10) / 10,
+          subBoostFreq: Math.round(mutateValue(lowEndSettings.subEQ.subBoostFreq, 30, 70)),
+          subBoostGain: Math.round(mutateValue(lowEndSettings.subEQ.subBoostGain, 0, 10) * 2) / 2,
+          subBoostQ: Math.round(mutateValue(lowEndSettings.subEQ.subBoostQ, 1.5, 6) * 2) / 2,
+        },
+      });
+    }
+    
+    // Mutate phase settings (small adjustments for fine-tuning)
+    if (onPhaseSettingsRandomize && phaseSettings) {
+      const mutatePhase = (current: number) => {
+        const mutation = Math.round((Math.random() - 0.5) * 30 * strength);
+        return ((current + mutation) % 360 + 360) % 360;
+      };
+      onPhaseSettingsRandomize({
+        osc1Phase: phaseSettings.osc1Phase, // Keep osc1 stable as reference
+        osc2Phase: mutatePhase(phaseSettings.osc2Phase),
+        osc3Phase: mutatePhase(phaseSettings.osc3Phase),
+        subPhase: mutatePhase(phaseSettings.subPhase),
       });
     }
   };

@@ -10,6 +10,8 @@ import {
   type AdvancedGranularSettings,
   type AdvancedFilterSettings,
   type AdvancedWaveshaperSettings,
+  type LowEndSettings,
+  type OscPhaseSettings,
   loadAdvancedFMSettings, 
   saveAdvancedFMSettings,
   loadAdvancedGranularSettings,
@@ -18,12 +20,19 @@ import {
   saveAdvancedFilterSettings,
   loadAdvancedWaveshaperSettings,
   saveAdvancedWaveshaperSettings,
+  loadLowEndSettings,
+  saveLowEndSettings,
+  loadOscPhaseSettings,
+  saveOscPhaseSettings,
   randomizeAdvancedFilterSettings,
   randomizeAdvancedWaveshaperSettings,
+  randomizeLowEndSettings,
   defaultOscAdvancedFMSettings,
   defaultAdvancedGranularSettings,
   defaultAdvancedFilterSettings,
-  defaultAdvancedWaveshaperSettings
+  defaultAdvancedWaveshaperSettings,
+  defaultLowEndSettings,
+  defaultOscPhaseSettings
 } from "@/lib/advancedSynthSettings";
 import { OutputPanel } from "@/components/synth/OutputPanel";
 import { PresetPanel } from "@/components/synth/PresetPanel";
@@ -37,6 +46,7 @@ import { ClickLayerPanel } from "@/components/synth/ClickLayerPanel";
 import { SubOscillatorPanel } from "@/components/synth/SubOscillatorPanel";
 import { SaturationChainPanel } from "@/components/synth/SaturationChainPanel";
 import { MasteringPanel } from "@/components/synth/MasteringPanel";
+import { LowEndPanel } from "@/components/synth/LowEndPanel";
 import { SpectralScramblerPanel } from "@/components/synth/SpectralScramblerPanel";
 import { CollapsiblePanel } from "@/components/synth/CollapsiblePanel";
 import { Knob } from "@/components/synth/Knob";
@@ -412,6 +422,8 @@ export default function Synthesizer() {
   const [advancedGranularSettings, setAdvancedGranularSettings] = useState<AdvancedGranularSettings>(loadAdvancedGranularSettings);
   const [advancedFilterSettings, setAdvancedFilterSettings] = useState<AdvancedFilterSettings>(loadAdvancedFilterSettings);
   const [advancedWaveshaperSettings, setAdvancedWaveshaperSettings] = useState<AdvancedWaveshaperSettings>(loadAdvancedWaveshaperSettings);
+  const [lowEndSettings, setLowEndSettings] = useState<LowEndSettings>(loadLowEndSettings);
+  const [phaseSettings, setPhaseSettings] = useState<OscPhaseSettings>(loadOscPhaseSettings);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -1597,6 +1609,236 @@ export default function Synthesizer() {
       outputNode = limiter;
     }
     
+    // ============ LOW END PROCESSING SECTION ============
+    // Signal chain: Sub EQ -> Bass Exciter -> Sub-Harmonic -> DC Filter -> Mono Sum
+    
+    // Sub EQ: Low shelf and narrow sub boost
+    if (lowEndSettings.subEQ.enabled) {
+      const lowShelf = ctx.createBiquadFilter();
+      lowShelf.type = "lowshelf";
+      lowShelf.frequency.value = lowEndSettings.subEQ.lowShelfFreq;
+      lowShelf.gain.value = lowEndSettings.subEQ.lowShelfGain;
+      lowShelf.Q.value = lowEndSettings.subEQ.lowShelfQ;
+      
+      const subBoost = ctx.createBiquadFilter();
+      subBoost.type = "peaking";
+      subBoost.frequency.value = lowEndSettings.subEQ.subBoostFreq;
+      subBoost.gain.value = lowEndSettings.subEQ.subBoostGain;
+      subBoost.Q.value = lowEndSettings.subEQ.subBoostQ;
+      
+      outputNode.connect(lowShelf);
+      lowShelf.connect(subBoost);
+      outputNode = subBoost;
+    }
+    
+    // Bass Exciter: Generate harmonics to make sub feel heavier on smaller speakers
+    if (lowEndSettings.bassExciter.enabled) {
+      const exciterMixer = ctx.createGain();
+      exciterMixer.gain.value = 1;
+      
+      // Isolate bass frequencies
+      const bassIsolator = ctx.createBiquadFilter();
+      bassIsolator.type = "lowpass";
+      bassIsolator.frequency.value = lowEndSettings.bassExciter.frequency * 2;
+      bassIsolator.Q.value = 0.5;
+      
+      // Generate harmonics through soft saturation
+      const harmonicShaper = ctx.createWaveShaper();
+      const harmonicAmount = lowEndSettings.bassExciter.harmonics / 100;
+      const harmonicCurve = new Float32Array(1024);
+      for (let i = 0; i < harmonicCurve.length; i++) {
+        const x = (i * 2) / harmonicCurve.length - 1;
+        // Add 2nd and 3rd harmonics through asymmetric waveshaping
+        harmonicCurve[i] = Math.tanh(x * (1 + harmonicAmount * 3)) + 
+                          harmonicAmount * 0.3 * x * x * Math.sign(x);
+      }
+      harmonicShaper.curve = harmonicCurve;
+      harmonicShaper.oversample = "2x";
+      
+      // High frequency "edge" for bass presence
+      const presenceFilter = ctx.createBiquadFilter();
+      presenceFilter.type = "highshelf";
+      presenceFilter.frequency.value = 800;
+      presenceFilter.gain.value = (lowEndSettings.bassExciter.presence / 100) * 6;
+      
+      // Wet/dry mix
+      const dryGain = ctx.createGain();
+      const wetGain = ctx.createGain();
+      const mix = lowEndSettings.bassExciter.mix / 100;
+      dryGain.gain.value = 1 - mix * 0.5; // Keep some dry signal
+      wetGain.gain.value = mix;
+      
+      outputNode.connect(dryGain);
+      dryGain.connect(exciterMixer);
+      
+      outputNode.connect(bassIsolator);
+      bassIsolator.connect(harmonicShaper);
+      harmonicShaper.connect(presenceFilter);
+      presenceFilter.connect(wetGain);
+      wetGain.connect(exciterMixer);
+      
+      outputNode = exciterMixer;
+    }
+    
+    // Sub-Harmonic Generator: Add octaves below for weight
+    if (lowEndSettings.subHarmonic.enabled) {
+      const subHarmMixer = ctx.createGain();
+      subHarmMixer.gain.value = 1;
+      
+      // Pass through original signal
+      outputNode.connect(subHarmMixer);
+      
+      // Extract low frequencies for sub-harmonic generation
+      const subIsolator = ctx.createBiquadFilter();
+      subIsolator.type = "lowpass";
+      subIsolator.frequency.value = lowEndSettings.subHarmonic.filterFreq;
+      subIsolator.Q.value = 0.7;
+      
+      // Create sub-harmonics through frequency division simulation
+      // Using waveshaping to create subharmonic content
+      if (lowEndSettings.subHarmonic.octaveDown1 > 0) {
+        const oct1Shaper = ctx.createWaveShaper();
+        const oct1Curve = new Float32Array(2048);
+        for (let i = 0; i < oct1Curve.length; i++) {
+          const x = (i * 2) / oct1Curve.length - 1;
+          // Full-wave rectification creates octave up, then filter it creates apparent octave down
+          oct1Curve[i] = Math.abs(x) * 2 - 1;
+        }
+        oct1Shaper.curve = oct1Curve;
+        oct1Shaper.oversample = "2x";
+        
+        const oct1Filter = ctx.createBiquadFilter();
+        oct1Filter.type = "lowpass";
+        oct1Filter.frequency.value = lowEndSettings.subHarmonic.filterFreq * 0.5;
+        oct1Filter.Q.value = 1;
+        
+        const oct1Gain = ctx.createGain();
+        oct1Gain.gain.value = lowEndSettings.subHarmonic.octaveDown1 / 100;
+        
+        outputNode.connect(subIsolator);
+        subIsolator.connect(oct1Shaper);
+        oct1Shaper.connect(oct1Filter);
+        oct1Filter.connect(oct1Gain);
+        oct1Gain.connect(subHarmMixer);
+      }
+      
+      // Second octave down (even lower)
+      if (lowEndSettings.subHarmonic.octaveDown2 > 0) {
+        const oct2Shaper = ctx.createWaveShaper();
+        const oct2Curve = new Float32Array(2048);
+        for (let i = 0; i < oct2Curve.length; i++) {
+          const x = (i * 2) / oct2Curve.length - 1;
+          // Double rectification for lower octave simulation
+          oct2Curve[i] = Math.abs(Math.abs(x) * 2 - 1);
+        }
+        oct2Shaper.curve = oct2Curve;
+        oct2Shaper.oversample = "2x";
+        
+        const oct2Filter = ctx.createBiquadFilter();
+        oct2Filter.type = "lowpass";
+        oct2Filter.frequency.value = lowEndSettings.subHarmonic.filterFreq * 0.25;
+        oct2Filter.Q.value = 1.2;
+        
+        const oct2Gain = ctx.createGain();
+        oct2Gain.gain.value = lowEndSettings.subHarmonic.octaveDown2 / 100;
+        
+        const subIso2 = ctx.createBiquadFilter();
+        subIso2.type = "lowpass";
+        subIso2.frequency.value = lowEndSettings.subHarmonic.filterFreq;
+        subIso2.Q.value = 0.7;
+        
+        outputNode.connect(subIso2);
+        subIso2.connect(oct2Shaper);
+        oct2Shaper.connect(oct2Filter);
+        oct2Filter.connect(oct2Gain);
+        oct2Gain.connect(subHarmMixer);
+      }
+      
+      // Optional drive on sub harmonics
+      if (lowEndSettings.subHarmonic.drive > 0) {
+        const subDrive = ctx.createWaveShaper();
+        const driveAmount = lowEndSettings.subHarmonic.drive / 100;
+        const driveCurve = new Float32Array(512);
+        for (let i = 0; i < driveCurve.length; i++) {
+          const x = (i * 2) / driveCurve.length - 1;
+          driveCurve[i] = Math.tanh(x * (1 + driveAmount * 3));
+        }
+        subDrive.curve = driveCurve;
+        subDrive.oversample = "2x";
+        
+        subHarmMixer.connect(subDrive);
+        outputNode = subDrive;
+      } else {
+        outputNode = subHarmMixer;
+      }
+    }
+    
+    // DC Filter: Remove subsonic rumble and DC offset
+    if (lowEndSettings.dcFilterEnabled) {
+      const dcFilter = ctx.createBiquadFilter();
+      dcFilter.type = "highpass";
+      dcFilter.frequency.value = lowEndSettings.dcFilterFreq;
+      dcFilter.Q.value = 0.5; // Gentle slope
+      
+      outputNode.connect(dcFilter);
+      outputNode = dcFilter;
+    }
+    
+    // Low-End Mono Sum: Collapse low frequencies to mono for tighter bass
+    if (lowEndSettings.monoSumEnabled) {
+      const monoSummer = ctx.createGain();
+      monoSummer.gain.value = 1;
+      
+      // Split into bands
+      const lowSplitter = ctx.createBiquadFilter();
+      lowSplitter.type = "lowpass";
+      lowSplitter.frequency.value = lowEndSettings.monoSumFreq;
+      lowSplitter.Q.value = 0.5;
+      
+      const highSplitter = ctx.createBiquadFilter();
+      highSplitter.type = "highpass";
+      highSplitter.frequency.value = lowEndSettings.monoSumFreq;
+      highSplitter.Q.value = 0.5;
+      
+      // Low band: sum to mono (L+R)/2
+      const splitter = ctx.createChannelSplitter(2);
+      const monoMerger = ctx.createChannelMerger(2);
+      const monoGain = ctx.createGain();
+      monoGain.gain.value = 0.5;
+      
+      outputNode.connect(lowSplitter);
+      lowSplitter.connect(splitter);
+      
+      // Sum both channels
+      const leftGain = ctx.createGain();
+      leftGain.gain.value = 0.5;
+      const rightGain = ctx.createGain();
+      rightGain.gain.value = 0.5;
+      
+      splitter.connect(leftGain, 0);
+      splitter.connect(rightGain, 1);
+      
+      const monoSum = ctx.createGain();
+      monoSum.gain.value = 1;
+      leftGain.connect(monoSum);
+      rightGain.connect(monoSum);
+      
+      // Route mono sum to both channels
+      monoSum.connect(monoMerger, 0, 0);
+      monoSum.connect(monoMerger, 0, 1);
+      
+      // High band: pass through untouched
+      outputNode.connect(highSplitter);
+      
+      // Combine bands
+      const bandMerger = ctx.createGain();
+      bandMerger.gain.value = 1;
+      monoMerger.connect(bandMerger);
+      highSplitter.connect(bandMerger);
+      
+      outputNode = bandMerger;
+    }
+    
     // Always-on safety limiter to prevent clipping in exports
     // This ensures exported audio matches browser playback (which has built-in protection)
     const safetyLimiter = ctx.createDynamicsCompressor();
@@ -1624,6 +1866,11 @@ export default function Synthesizer() {
       const oscGain = ctx.createGain();
       oscGain.gain.value = osc.level / 100;
       const oscPitchHz = pitchToHz(osc.pitch);
+      
+      // Get phase offset for this oscillator (in degrees -> radians -> time offset)
+      const phaseKey = `${key}Phase` as keyof OscPhaseSettings;
+      const phaseDegrees = phaseSettings[phaseKey] || 0;
+      const phaseSeconds = (phaseDegrees / 360) / oscPitchHz; // Time offset for phase
       
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
@@ -1825,7 +2072,10 @@ export default function Synthesizer() {
         finalGain.connect(masterGain);
       }
       
-      sourceNode.start(now);
+      // Apply phase offset via start time delay
+      // For bass/sub frequencies, phase alignment is critical for weight and punch
+      const oscStartTime = now + phaseSeconds;
+      sourceNode.start(oscStartTime);
       sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
       if (sourcesCollector) {
         sourcesCollector.push(sourceNode);
@@ -1913,6 +2163,10 @@ export default function Synthesizer() {
       const baseFreq = pitchToHz(params.oscillators.osc1.pitch);
       const subFreq = baseFreq * Math.pow(2, sub.octave);
       
+      // Sub oscillator phase alignment
+      const subPhaseDegrees = phaseSettings.subPhase || 0;
+      const subPhaseSeconds = (subPhaseDegrees / 360) / subFreq;
+      
       const subOsc = ctx.createOscillator();
       subOsc.type = sub.waveform;
       
@@ -1990,7 +2244,9 @@ export default function Synthesizer() {
         decay: subDecay
       }, 1.0, { startFromCurrent: false });
       
-      subOsc.start(now);
+      // Apply phase offset for sub bass alignment
+      const subStartTime = now + subPhaseSeconds;
+      subOsc.start(subStartTime);
       subOsc.stop(stopAt + 0.03);
       if (sourcesCollector) {
         sourcesCollector.push(subOsc);
@@ -2224,7 +2480,7 @@ export default function Synthesizer() {
     }, volume, { startFromCurrent: false });
 
     return { masterGain, safetyFadeGain };
-  }, [createImpulseResponse]);
+  }, [createImpulseResponse, lowEndSettings, phaseSettings]);
 
   const getTotalDuration = useCallback((params: SynthParameters, perOscEnvelopes?: OscEnvelopes): number => {
     const ampEnv = params.envelopes.env3;
@@ -2558,6 +2814,16 @@ export default function Synthesizer() {
                 setAdvancedWaveshaperSettings(settings);
                 saveAdvancedWaveshaperSettings(settings);
               }}
+              lowEndSettings={lowEndSettings}
+              onLowEndSettingsRandomize={(settings) => {
+                setLowEndSettings(settings);
+                saveLowEndSettings(settings);
+              }}
+              phaseSettings={phaseSettings}
+              onPhaseSettingsRandomize={(settings) => {
+                setPhaseSettings(settings);
+                saveOscPhaseSettings(settings);
+              }}
             />
           </div>
           {/* Waveform full-width on mobile only */}
@@ -2786,6 +3052,18 @@ export default function Synthesizer() {
               <MasteringPanel
                 mastering={params.mastering}
                 onChange={(mastering) => setParams({ ...params, mastering })}
+              />
+              <LowEndPanel
+                lowEndSettings={lowEndSettings}
+                phaseSettings={phaseSettings}
+                onLowEndChange={(settings) => {
+                  setLowEndSettings(settings);
+                  saveLowEndSettings(settings);
+                }}
+                onPhaseChange={(settings) => {
+                  setPhaseSettings(settings);
+                  saveOscPhaseSettings(settings);
+                }}
               />
               <OutputPanel
                 output={params.output}
