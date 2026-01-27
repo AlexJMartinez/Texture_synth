@@ -21,6 +21,7 @@ interface KnobProps {
   defaultValue?: number;
   modulationPath?: string;
   modulations?: ModulationIndicator[];
+  disabled?: boolean;
   "data-testid"?: string;
 }
 
@@ -39,6 +40,7 @@ export function Knob({
   defaultValue,
   modulationPath,
   modulations: externalModulations,
+  disabled = false,
   "data-testid": testId,
 }: KnobProps) {
   // Get modulations from context if a path is provided, or use external modulations
@@ -213,14 +215,14 @@ export function Knob({
 
   return (
     <div 
-      className="flex flex-col items-center gap-0.5 flex-1 min-w-0" 
+      className={`flex flex-col items-center gap-0.5 flex-1 min-w-0 ${disabled ? 'opacity-40 pointer-events-none' : ''}`}
       data-testid={testId || `knob-${label.toLowerCase().replace(/\s/g, '-')}`}
-      onMouseEnter={() => setIsHovering(true)}
+      onMouseEnter={() => !disabled && setIsHovering(true)}
       onMouseLeave={() => setIsHovering(false)}
     >
       <div className="relative">
         {/* Modulation indicator ring - positioned around the knob */}
-        {hasModulations && primaryModColor && (
+        {hasModulations && primaryModColor && !disabled && (
           <div 
             className="absolute -inset-1 rounded-full animate-pulse pointer-events-none"
             style={{
@@ -232,17 +234,17 @@ export function Knob({
         )}
         <div
           ref={knobRef}
-          className={`relative ${sizeClasses[size]} rounded-full cursor-pointer select-none transition-transform ${isDragging ? 'scale-105' : ''}`}
+          className={`relative ${sizeClasses[size]} rounded-full select-none transition-transform ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'} ${isDragging && !disabled ? 'scale-105' : ''}`}
           style={{
             background: 'linear-gradient(145deg, hsl(var(--card)), hsl(var(--muted)))',
-            boxShadow: isDragging 
+            boxShadow: isDragging && !disabled
               ? `inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 0 15px hsl(var(--${accentColor})/0.4)`
               : 'inset 2px 2px 6px rgba(0,0,0,0.3), inset -1px -1px 3px rgba(255,255,255,0.05), 0 4px 8px rgba(0,0,0,0.4)',
           }}
-          onMouseDown={handleMouseDown}
-          onTouchStart={handleTouchStart}
-          onDoubleClick={handleDoubleClick}
-          onWheel={handleWheel}
+          onMouseDown={disabled ? undefined : handleMouseDown}
+          onTouchStart={disabled ? undefined : handleTouchStart}
+          onDoubleClick={disabled ? undefined : handleDoubleClick}
+          onWheel={disabled ? undefined : handleWheel}
         >
         <div
           className="absolute inset-0 flex items-center justify-center"

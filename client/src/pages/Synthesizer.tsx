@@ -2988,6 +2988,12 @@ export default function Synthesizer() {
                 setPhaseSettings(settings);
                 saveOscPhaseSettings(settings);
               }}
+              advancedSpectralSettings={advancedSpectralSettings}
+              onAdvancedSpectralSettingsRandomize={(settings) => {
+                const newSettings = { ...advancedSpectralSettings, ...settings };
+                setAdvancedSpectralSettings(newSettings);
+                saveAdvancedSpectralSettings(newSettings);
+              }}
             />
           </div>
           {/* Waveform full-width on mobile only */}
@@ -3186,6 +3192,12 @@ export default function Synthesizer() {
               <SpectralScramblerPanel
                 spectralScrambler={params.spectralScrambler}
                 onChange={(update) => setParams({ ...params, spectralScrambler: { ...params.spectralScrambler, ...update } })}
+                advancedSettings={advancedSpectralSettings}
+                onAdvancedChange={(update) => {
+                  const newSettings = { ...advancedSpectralSettings, ...update };
+                  setAdvancedSpectralSettings(newSettings);
+                  saveAdvancedSpectralSettings(newSettings);
+                }}
               />
             </div>
           </TabsContent>

@@ -18,6 +18,7 @@ import type {
   AdvancedWaveshaperSettings,
   LowEndSettings,
   OscPhaseSettings,
+  AdvancedSpectralSettings,
   FMAlgorithm,
   GrainEnvelopeShape 
 } from "@/lib/advancedSynthSettings";
@@ -25,6 +26,7 @@ import {
   randomizeAdvancedFilterSettings, 
   randomizeAdvancedWaveshaperSettings,
   randomizeLowEndSettings,
+  randomizeAdvancedSpectralSettings,
   defaultLowEndSettings,
   defaultOscPhaseSettings
 } from "@/lib/advancedSynthSettings";
@@ -74,6 +76,8 @@ interface RandomizeControlsProps {
   onLowEndSettingsRandomize?: (settings: LowEndSettings) => void;
   phaseSettings?: OscPhaseSettings;
   onPhaseSettingsRandomize?: (settings: OscPhaseSettings) => void;
+  advancedSpectralSettings?: AdvancedSpectralSettings;
+  onAdvancedSpectralSettingsRandomize?: (settings: Partial<AdvancedSpectralSettings>) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -210,7 +214,9 @@ export function RandomizeControls({
   lowEndSettings,
   onLowEndSettingsRandomize,
   phaseSettings,
-  onPhaseSettingsRandomize
+  onPhaseSettingsRandomize,
+  advancedSpectralSettings,
+  onAdvancedSpectralSettingsRandomize
 }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
@@ -543,6 +549,11 @@ export function RandomizeControls({
         osc3Phase: Math.round(randomPhaseAlignment()) % 360,
         subPhase: Math.round(randomPhaseAlignment()) % 360,
       });
+    }
+    
+    // Randomize advanced spectral settings
+    if (onAdvancedSpectralSettingsRandomize) {
+      onAdvancedSpectralSettingsRandomize(randomizeAdvancedSpectralSettings(chaosAmount));
     }
   };
 
@@ -922,6 +933,34 @@ export function RandomizeControls({
         osc2Phase: mutatePhase(phaseSettings.osc2Phase),
         osc3Phase: mutatePhase(phaseSettings.osc3Phase),
         subPhase: mutatePhase(phaseSettings.subPhase),
+      });
+    }
+    
+    // Mutate advanced spectral settings
+    if (onAdvancedSpectralSettingsRandomize && advancedSpectralSettings) {
+      const mutateSpectralValue = (current: number, min: number, max: number) => {
+        const mutation = (Math.random() - 0.5) * 2 * strength * (max - min);
+        return Math.round(Math.max(min, Math.min(max, current + mutation)));
+      };
+      
+      onAdvancedSpectralSettingsRandomize({
+        tilt: {
+          ...advancedSpectralSettings.tilt,
+          amount: mutateSpectralValue(advancedSpectralSettings.tilt.amount, -100, 100),
+          envelopeAmount: mutateSpectralValue(advancedSpectralSettings.tilt.envelopeAmount, -100, 100),
+        },
+        blur: {
+          ...advancedSpectralSettings.blur,
+          amount: mutateSpectralValue(advancedSpectralSettings.blur.amount, 0, 100),
+          direction: mutateSpectralValue(advancedSpectralSettings.blur.direction, -100, 100),
+        },
+        harmonicResynth: {
+          ...advancedSpectralSettings.harmonicResynth,
+          harmonicSpread: mutateSpectralValue(advancedSpectralSettings.harmonicResynth.harmonicSpread, 0, 100),
+          harmonicBoost: Math.round(mutateValue(advancedSpectralSettings.harmonicResynth.harmonicBoost, 0, 24) * 2) / 2,
+          inharmonicCut: Math.round(mutateValue(advancedSpectralSettings.harmonicResynth.inharmonicCut, -48, 0) * 2) / 2,
+          harmonicDecay: mutateSpectralValue(advancedSpectralSettings.harmonicResynth.harmonicDecay, 0, 100),
+        },
       });
     }
   };
