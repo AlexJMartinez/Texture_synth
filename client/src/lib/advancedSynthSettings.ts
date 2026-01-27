@@ -573,3 +573,124 @@ export function randomizeAdvancedWaveshaperSettings(chaosLevel: number = 50): Pa
     foldbackIterations: 1 + Math.floor(Math.random() * 3),
   };
 }
+
+// ============ ADVANCED SPECTRAL EFFECTS ============
+
+// Spectral Tilt - shift energy from low to high frequencies (or vice versa)
+export interface SpectralTiltSettings {
+  enabled: boolean;
+  amount: number; // -100 to 100 (-100 = bass emphasis, +100 = treble emphasis)
+  envelopeFollow: boolean; // tilt changes over time based on amplitude envelope
+  envelopeAmount: number; // how much the envelope affects tilt (-100 to 100)
+}
+
+// Spectral Blur - smear frequency bins over time for washy textures
+export interface SpectralBlurSettings {
+  enabled: boolean;
+  amount: number; // 0-100 (how many neighboring bins to average)
+  timeSmear: number; // 0-100 (how much bins smear over time)
+  asymmetric: boolean; // blur more upward or downward
+  direction: number; // -100 to 100 (negative = downward smear, positive = upward)
+}
+
+// Harmonic Resynthesis - selectively boost/attenuate harmonics
+export interface HarmonicResynthSettings {
+  enabled: boolean;
+  fundamentalDetect: boolean; // auto-detect fundamental from oscillator pitch
+  manualFundamental: number; // Hz (20-500) used if fundamentalDetect is false
+  harmonicsMode: "odd" | "even" | "all" | "prime"; // which harmonics to emphasize
+  harmonicSpread: number; // 0-100 (tolerance for harmonic detection)
+  harmonicBoost: number; // -24 to 24 dB (boost/cut for harmonics)
+  inharmonicCut: number; // -48 to 0 dB (how much to cut non-harmonic content)
+  harmonicDecay: number; // 0-100 (higher harmonics decay faster)
+}
+
+export interface AdvancedSpectralSettings {
+  tilt: SpectralTiltSettings;
+  blur: SpectralBlurSettings;
+  harmonicResynth: HarmonicResynthSettings;
+}
+
+export const defaultAdvancedSpectralSettings: AdvancedSpectralSettings = {
+  tilt: {
+    enabled: false,
+    amount: 0,
+    envelopeFollow: false,
+    envelopeAmount: 0,
+  },
+  blur: {
+    enabled: false,
+    amount: 20,
+    timeSmear: 30,
+    asymmetric: false,
+    direction: 0,
+  },
+  harmonicResynth: {
+    enabled: false,
+    fundamentalDetect: true,
+    manualFundamental: 110,
+    harmonicsMode: "all",
+    harmonicSpread: 10,
+    harmonicBoost: 6,
+    inharmonicCut: -12,
+    harmonicDecay: 30,
+  },
+};
+
+// LocalStorage key for spectral settings
+const SPECTRAL_SETTINGS_KEY = "synth-advanced-spectral-settings";
+
+// Spectral settings persistence
+export function loadAdvancedSpectralSettings(): AdvancedSpectralSettings {
+  try {
+    const stored = localStorage.getItem(SPECTRAL_SETTINGS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        tilt: { ...defaultAdvancedSpectralSettings.tilt, ...parsed.tilt },
+        blur: { ...defaultAdvancedSpectralSettings.blur, ...parsed.blur },
+        harmonicResynth: { ...defaultAdvancedSpectralSettings.harmonicResynth, ...parsed.harmonicResynth },
+      };
+    }
+  } catch {
+    // Fall through to default
+  }
+  return { ...defaultAdvancedSpectralSettings };
+}
+
+export function saveAdvancedSpectralSettings(settings: AdvancedSpectralSettings) {
+  localStorage.setItem(SPECTRAL_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// Randomization for spectral effects
+export function randomizeAdvancedSpectralSettings(chaosLevel: number = 50): Partial<AdvancedSpectralSettings> {
+  const chaos = chaosLevel / 100;
+  const maybeEnable = (base: number) => Math.random() < base * chaos;
+  const harmonicModes: ("odd" | "even" | "all" | "prime")[] = ["odd", "even", "all", "prime"];
+  
+  return {
+    tilt: {
+      enabled: maybeEnable(0.35),
+      amount: Math.floor(-60 + Math.random() * 120 * chaos), // -60 to +60
+      envelopeFollow: maybeEnable(0.4),
+      envelopeAmount: Math.floor(-40 + Math.random() * 80 * chaos),
+    },
+    blur: {
+      enabled: maybeEnable(0.3),
+      amount: 5 + Math.floor(Math.random() * 50 * chaos),
+      timeSmear: 10 + Math.floor(Math.random() * 60 * chaos),
+      asymmetric: maybeEnable(0.3),
+      direction: Math.floor(-50 + Math.random() * 100 * chaos),
+    },
+    harmonicResynth: {
+      enabled: maybeEnable(0.25),
+      fundamentalDetect: true,
+      manualFundamental: 55 + Math.floor(Math.random() * 200),
+      harmonicsMode: harmonicModes[Math.floor(Math.random() * harmonicModes.length)],
+      harmonicSpread: 5 + Math.floor(Math.random() * 30),
+      harmonicBoost: Math.floor(-6 + Math.random() * 18 * chaos),
+      inharmonicCut: Math.floor(-36 + Math.random() * 24 * chaos),
+      harmonicDecay: 10 + Math.floor(Math.random() * 60 * chaos),
+    },
+  };
+}
