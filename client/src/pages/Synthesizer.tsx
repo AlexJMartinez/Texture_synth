@@ -31,6 +31,7 @@ import { SpectralScramblerPanel } from "@/components/synth/SpectralScramblerPane
 import { CollapsiblePanel } from "@/components/synth/CollapsiblePanel";
 import { Knob } from "@/components/synth/Knob";
 import { ModulatorRack } from "@/components/synth/ModulatorRack";
+import { KeySelector, KeyState, keyToFrequency, frequencyToNearestKey } from "@/components/synth/KeySelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock } from "lucide-react";
 import { 
@@ -398,6 +399,13 @@ export default function Synthesizer() {
   const [reverbSettings, setReverbSettings] = useState<ReverbSettings>(loadReverbSettings);
   const [advancedFMSettings, setAdvancedFMSettings] = useState<OscAdvancedFMSettings>(loadAdvancedFMSettings);
   const [advancedGranularSettings, setAdvancedGranularSettings] = useState<AdvancedGranularSettings>(loadAdvancedGranularSettings);
+  
+  // Key selector state - derive initial key from OSC 1's pitch
+  const [currentKey, setCurrentKey] = useState<KeyState>(() => {
+    const osc1Hz = pitchToHz(defaultSynthParameters.oscillators.osc1.pitch);
+    return frequencyToNearestKey(osc1Hz);
+  });
+  
   const customIRBufferRef = useRef<AudioBuffer | null>(null);
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
@@ -411,6 +419,56 @@ export default function Synthesizer() {
   const handleIRLoaded = useCallback((buffer: AudioBuffer) => {
     customIRBufferRef.current = buffer;
   }, []);
+
+  // Handle key change: update OSC 1 to new key, preserve OSC 2/3 relative offsets
+  const handleKeyChange = useCallback((newKey: KeyState) => {
+    setCurrentKey(newKey);
+    
+    const newOsc1Hz = keyToFrequency(newKey.note, newKey.octave);
+    const currentOsc1Hz = pitchToHz(params.oscillators.osc1.pitch);
+    const currentOsc2Hz = pitchToHz(params.oscillators.osc2.pitch);
+    const currentOsc3Hz = pitchToHz(params.oscillators.osc3.pitch);
+    
+    // Calculate semitone offsets relative to OSC 1
+    const osc2OffsetSt = 12 * Math.log2(currentOsc2Hz / currentOsc1Hz);
+    const osc3OffsetSt = 12 * Math.log2(currentOsc3Hz / currentOsc1Hz);
+    
+    // Calculate new frequencies for OSC 2/3 maintaining their relative offsets
+    const newOsc2Hz = newOsc1Hz * Math.pow(2, osc2OffsetSt / 12);
+    const newOsc3Hz = newOsc1Hz * Math.pow(2, osc3OffsetSt / 12);
+    
+    // Helper to update pitch while preserving mode
+    const updatePitchToHz = (currentPitch: typeof params.oscillators.osc1.pitch, newHz: number) => {
+      const baseHz = typeof currentPitch === 'object' ? (currentPitch.baseHz ?? 440) : 440;
+      const mode = typeof currentPitch === 'object' ? (currentPitch.mode ?? 'hz') : 'hz';
+      const newSt = 12 * Math.log2(newHz / baseHz);
+      return {
+        mode,
+        baseHz,
+        st: newSt,
+        cents: 0, // Reset cents on key change
+      };
+    };
+    
+    setParams(prev => ({
+      ...prev,
+      oscillators: {
+        ...prev.oscillators,
+        osc1: {
+          ...prev.oscillators.osc1,
+          pitch: updatePitchToHz(prev.oscillators.osc1.pitch, newOsc1Hz),
+        },
+        osc2: {
+          ...prev.oscillators.osc2,
+          pitch: updatePitchToHz(prev.oscillators.osc2.pitch, newOsc2Hz),
+        },
+        osc3: {
+          ...prev.oscillators.osc3,
+          pitch: updatePitchToHz(prev.oscillators.osc3.pitch, newOsc3Hz),
+        },
+      },
+    }));
+  }, [params.oscillators]);
 
   // Fix 6: Accept seeded random function for deterministic impulse response generation
   const createImpulseResponse = useCallback((
@@ -2285,6 +2343,7 @@ export default function Synthesizer() {
           {/* Controls row */}
           <div className="flex items-center gap-3">
             <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
+            <KeySelector value={currentKey} onChange={handleKeyChange} />
             {/* Waveform inline on desktop */}
             <WaveformDisplay3D 
               audioBuffer={audioBuffer} 
