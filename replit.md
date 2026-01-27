@@ -28,7 +28,13 @@ Core architectural decisions include:
   - **Filter Envelope**: Extended ranges - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for sweeping filter movements.
   - **Pitch Envelope**: Standard ranges - Attack 0-2s, Hold 0-2s, Decay 0-10s.
   - **Pitch Envelope**: Uses semitone-based modulation (-48 to +48 st) for authentic 808-style pitch drops with exponential curve option.
-- **Advanced Filters**: Nine filter types including standard, advanced, and comb filters.
+- **Advanced Filters**: Nine filter types including standard, advanced, and comb filters. Enhanced with:
+  - **Filter Drive/Saturation**: Pre or post-filter saturation with soft/hard/tube/tape modes.
+  - **Dual Filter Mode**: Series or parallel routing of two independent filters with morph control.
+  - **Formant Filter**: Vowel-based filtering (A, E, I, O, U) with resonant peak shaping.
+  - **Filter FM**: Modulate cutoff frequency from oscillators or LFO with configurable depth.
+  - **Keytracking**: Scale filter cutoff based on pitch (-100% to +100%).
+  - **Self-Oscillation**: Enable filter resonance to produce tones at high Q.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, Algorithmic Reverb, and Chorus.
   - **Algorithmic Reverb**: Three reverb types (Hall/Plate/Room) with enhanced impulse response generation featuring:
     - Type-specific early reflections (8/6/4 reflections for hall/plate/room)
@@ -46,7 +52,12 @@ Core architectural decisions include:
   - **Random/S&H**: Sample-and-hold random modulation with rate and smoothing controls.
   - **Macro**: Manual control knobs assignable to multiple parameters.
   - **Modulation Routing**: Assign any modulator to 75+ parameters with depth control, including filter, oscillators, effects, spectral scrambler, mastering, and envelope amounts. Visual feedback shows colored rings on modulated knobs matching modulator colors (LFO=blue, Envelope=orange, Random=purple, Macro=green).
-- **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling.
+- **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling. Enhanced with:
+  - **Asymmetric Shaping**: Apply different curves to positive and negative signal with DC offset control.
+  - **Multi-Band Waveshaping**: 3-band split (low/mid/high) with independent curves and drive per band.
+  - **Dynamic Shaping**: Envelope-follower driven distortion with sensitivity, attack, and release controls.
+  - **Chebyshev Polynomials**: Order 2-7 for harmonic-rich distortion.
+  - **Foldback Iterations**: 1-5 iterations for aggressive wavefold saturation.
 - **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing and Hermitian symmetry for real-valued output. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, spectral gating (-60dB to 0dB threshold for tearing/crackle effects), spectral stretch/squeeze (0.5x-2.0x for moving frequencies up/down), bin density control (5%-100% for sparse/broken sounds), and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet. DC and Nyquist bins are preserved unshifted but apply gating/density for signal integrity.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
 - **Mastering Section**: Includes a Soft-Knee Compressor, HF Exciter, and Stereo Widener.

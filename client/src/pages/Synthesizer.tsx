@@ -8,12 +8,22 @@ import { EffectsPanel, ReverbSettings, loadReverbSettings, saveReverbSettings, d
 import { 
   type OscAdvancedFMSettings, 
   type AdvancedGranularSettings,
+  type AdvancedFilterSettings,
+  type AdvancedWaveshaperSettings,
   loadAdvancedFMSettings, 
   saveAdvancedFMSettings,
   loadAdvancedGranularSettings,
   saveAdvancedGranularSettings,
+  loadAdvancedFilterSettings,
+  saveAdvancedFilterSettings,
+  loadAdvancedWaveshaperSettings,
+  saveAdvancedWaveshaperSettings,
+  randomizeAdvancedFilterSettings,
+  randomizeAdvancedWaveshaperSettings,
   defaultOscAdvancedFMSettings,
-  defaultAdvancedGranularSettings
+  defaultAdvancedGranularSettings,
+  defaultAdvancedFilterSettings,
+  defaultAdvancedWaveshaperSettings
 } from "@/lib/advancedSynthSettings";
 import { OutputPanel } from "@/components/synth/OutputPanel";
 import { PresetPanel } from "@/components/synth/PresetPanel";
@@ -400,6 +410,8 @@ export default function Synthesizer() {
   const [reverbSettings, setReverbSettings] = useState<ReverbSettings>(loadReverbSettings);
   const [advancedFMSettings, setAdvancedFMSettings] = useState<OscAdvancedFMSettings>(loadAdvancedFMSettings);
   const [advancedGranularSettings, setAdvancedGranularSettings] = useState<AdvancedGranularSettings>(loadAdvancedGranularSettings);
+  const [advancedFilterSettings, setAdvancedFilterSettings] = useState<AdvancedFilterSettings>(loadAdvancedFilterSettings);
+  const [advancedWaveshaperSettings, setAdvancedWaveshaperSettings] = useState<AdvancedWaveshaperSettings>(loadAdvancedWaveshaperSettings);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -2536,6 +2548,16 @@ export default function Synthesizer() {
                 setAdvancedGranularSettings(settings);
                 saveAdvancedGranularSettings(settings);
               }}
+              advancedFilterSettings={advancedFilterSettings}
+              onAdvancedFilterSettingsRandomize={(settings) => {
+                setAdvancedFilterSettings(settings);
+                saveAdvancedFilterSettings(settings);
+              }}
+              advancedWaveshaperSettings={advancedWaveshaperSettings}
+              onAdvancedWaveshaperSettingsRandomize={(settings) => {
+                setAdvancedWaveshaperSettings(settings);
+                saveAdvancedWaveshaperSettings(settings);
+              }}
             />
           </div>
           {/* Waveform full-width on mobile only */}
@@ -2652,6 +2674,11 @@ export default function Synthesizer() {
               <FilterPanel
                 filter={params.filter}
                 onChange={(filter) => setParams({ ...params, filter })}
+                advancedFilterSettings={advancedFilterSettings}
+                onAdvancedChange={(settings) => {
+                  setAdvancedFilterSettings(settings);
+                  saveAdvancedFilterSettings(settings);
+                }}
               />
 
               {/* Modulator Rack */}
@@ -2713,6 +2740,11 @@ export default function Synthesizer() {
               <WaveshaperPanel
                 waveshaper={params.waveshaper}
                 onChange={(waveshaper) => setParams({ ...params, waveshaper })}
+                advancedSettings={advancedWaveshaperSettings}
+                onAdvancedChange={(settings) => {
+                  setAdvancedWaveshaperSettings(settings);
+                  saveAdvancedWaveshaperSettings(settings);
+                }}
               />
               <ConvolverPanel
                 convolver={params.convolver}

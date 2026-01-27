@@ -164,6 +164,30 @@ const MODULATION_TARGETS: ModulationTarget[] = [
   // Envelopes
   { path: "envelopes.pitch.amount", label: "Pitch Env Amt", category: "Envelopes" },
   { path: "envelopes.filter.amount", label: "Filter Env Amt", category: "Envelopes" },
+  
+  // Advanced Filter
+  { path: "filter.driveAmount", label: "Filter Drive", category: "Filter" },
+  { path: "filter.filter2Frequency", label: "Filter 2 Freq", category: "Filter" },
+  { path: "filter.filter2Resonance", label: "Filter 2 Res", category: "Filter" },
+  { path: "filter.dualMix", label: "Dual Mix", category: "Filter" },
+  { path: "filter.formantMix", label: "Formant Mix", category: "Filter" },
+  { path: "filter.fmDepth", label: "Filter FM", category: "Filter" },
+  { path: "filter.keytrackAmount", label: "Keytrack Amt", category: "Filter" },
+  
+  // Advanced Waveshaper
+  { path: "waveshaper.positiveAmount", label: "WS +Amt", category: "Shaping" },
+  { path: "waveshaper.negativeAmount", label: "WS -Amt", category: "Shaping" },
+  { path: "waveshaper.dcOffset", label: "WS DC", category: "Shaping" },
+  { path: "waveshaper.dynamicSensitivity", label: "WS Dynamic", category: "Shaping" },
+  { path: "waveshaper.chebyshevOrder", label: "WS ChebOrd", category: "Shaping" },
+  { path: "waveshaper.foldbackIterations", label: "WS FoldItr", category: "Shaping" },
+  { path: "waveshaper.preFilterFreq", label: "WS PreFilt", category: "Shaping" },
+  { path: "waveshaper.postFilterFreq", label: "WS PostFilt", category: "Shaping" },
+  { path: "waveshaper.multiband.lowCrossover", label: "WS Lo Cross", category: "Shaping" },
+  { path: "waveshaper.multiband.highCrossover", label: "WS Hi Cross", category: "Shaping" },
+  { path: "waveshaper.multiband.lowDrive", label: "WS Lo Drive", category: "Shaping" },
+  { path: "waveshaper.multiband.midDrive", label: "WS Mid Drive", category: "Shaping" },
+  { path: "waveshaper.multiband.highDrive", label: "WS Hi Drive", category: "Shaping" },
 ];
 
 function generateId(): string {

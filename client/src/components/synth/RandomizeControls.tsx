@@ -14,8 +14,14 @@ import type {
   OscAdvancedFMSettings, 
   AdvancedGranularSettings, 
   AdvancedFMSettings,
+  AdvancedFilterSettings,
+  AdvancedWaveshaperSettings,
   FMAlgorithm,
   GrainEnvelopeShape 
+} from "@/lib/advancedSynthSettings";
+import { 
+  randomizeAdvancedFilterSettings, 
+  randomizeAdvancedWaveshaperSettings 
 } from "@/lib/advancedSynthSettings";
 
 function randomRatioPreset(): ModRatioPreset {
@@ -55,6 +61,10 @@ interface RandomizeControlsProps {
   onAdvancedFMSettingsRandomize?: (settings: OscAdvancedFMSettings) => void;
   advancedGranularSettings?: AdvancedGranularSettings;
   onAdvancedGranularSettingsRandomize?: (settings: AdvancedGranularSettings) => void;
+  advancedFilterSettings?: AdvancedFilterSettings;
+  onAdvancedFilterSettingsRandomize?: (settings: AdvancedFilterSettings) => void;
+  advancedWaveshaperSettings?: AdvancedWaveshaperSettings;
+  onAdvancedWaveshaperSettingsRandomize?: (settings: AdvancedWaveshaperSettings) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -181,7 +191,11 @@ export function RandomizeControls({
   advancedFMSettings,
   onAdvancedFMSettingsRandomize,
   advancedGranularSettings,
-  onAdvancedGranularSettingsRandomize
+  onAdvancedGranularSettingsRandomize,
+  advancedFilterSettings,
+  onAdvancedFilterSettingsRandomize,
+  advancedWaveshaperSettings,
+  onAdvancedWaveshaperSettingsRandomize
 }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
 
@@ -415,7 +429,7 @@ export function RandomizeControls({
       });
     }
     
-    // Randomize reverb settings (type, damping, diffusion, modulation)
+    // Randomize reverb settings (type, damping, diffusion, modulation, predelay, stereoWidth)
     if (onReverbSettingsRandomize) {
       const reverbTypes: ReverbType[] = ["hall", "plate", "room"];
       onReverbSettingsRandomize({
@@ -423,6 +437,8 @@ export function RandomizeControls({
         damping: Math.round(randomInRange(20, 80)),
         diffusion: Math.round(randomInRange(40, 95)),
         modulation: Math.round(randomInRange(5, 40)),
+        predelay: Math.round(randomInRange(0, 80 * chaos)),
+        stereoWidth: Math.round(randomInRange(50, 100)),
       });
     }
     
@@ -458,6 +474,22 @@ export function RandomizeControls({
         reverseProbability: Math.round(randExp(0, 30 * chaos, 2.0)), // Bias toward low reverse probability
         stereoSpread: Math.round(randomInRange(10, 70)),
         freeze: false, // Never randomize to freeze mode
+      });
+    }
+    
+    // Randomize advanced filter settings
+    if (onAdvancedFilterSettingsRandomize && advancedFilterSettings) {
+      const randomFilter = randomizeAdvancedFilterSettings(chaosAmount);
+      onAdvancedFilterSettingsRandomize({ ...advancedFilterSettings, ...randomFilter });
+    }
+    
+    // Randomize advanced waveshaper settings
+    if (onAdvancedWaveshaperSettingsRandomize && advancedWaveshaperSettings) {
+      const randomWaveshaper = randomizeAdvancedWaveshaperSettings(chaosAmount);
+      onAdvancedWaveshaperSettingsRandomize({ 
+        ...advancedWaveshaperSettings, 
+        ...randomWaveshaper,
+        multiband: { ...advancedWaveshaperSettings.multiband, ...randomWaveshaper.multiband }
       });
     }
   };
@@ -711,6 +743,8 @@ export function RandomizeControls({
         damping: Math.round(mutateValue(reverbSettings.damping, 10, 90)),
         diffusion: Math.round(mutateValue(reverbSettings.diffusion, 30, 100)),
         modulation: Math.round(mutateValue(reverbSettings.modulation, 0, 50)),
+        predelay: Math.round(mutateValue(reverbSettings.predelay, 0, 100)),
+        stereoWidth: Math.round(mutateValue(reverbSettings.stereoWidth, 40, 100)),
       });
     }
     
@@ -744,6 +778,39 @@ export function RandomizeControls({
         reverseProbability: Math.round(mutateValue(advancedGranularSettings.reverseProbability, 0, 40)),
         stereoSpread: Math.round(mutateValue(advancedGranularSettings.stereoSpread, 0, 100)),
         freeze: advancedGranularSettings.freeze, // Keep freeze state
+      });
+    }
+    
+    // Mutate advanced filter settings (subtle changes)
+    if (onAdvancedFilterSettingsRandomize && advancedFilterSettings) {
+      onAdvancedFilterSettingsRandomize({
+        ...advancedFilterSettings,
+        driveAmount: Math.round(mutateValue(advancedFilterSettings.driveAmount, 0, 100)),
+        filter2Frequency: Math.round(mutateValue(advancedFilterSettings.filter2Frequency, 100, 10000, true)),
+        filter2Resonance: Math.round(mutateValue(advancedFilterSettings.filter2Resonance, 0, 25) * 10) / 10,
+        dualMix: Math.round(mutateValue(advancedFilterSettings.dualMix, 20, 80)),
+        formantMix: Math.round(mutateValue(advancedFilterSettings.formantMix, 20, 80)),
+        fmDepth: Math.round(mutateValue(advancedFilterSettings.fmDepth, 0, 80)),
+        keytrackAmount: Math.round(mutateValue(advancedFilterSettings.keytrackAmount, -80, 80)),
+      });
+    }
+    
+    // Mutate advanced waveshaper settings (subtle changes)
+    if (onAdvancedWaveshaperSettingsRandomize && advancedWaveshaperSettings) {
+      onAdvancedWaveshaperSettingsRandomize({
+        ...advancedWaveshaperSettings,
+        positiveAmount: Math.round(mutateValue(advancedWaveshaperSettings.positiveAmount, 20, 90)),
+        negativeAmount: Math.round(mutateValue(advancedWaveshaperSettings.negativeAmount, 20, 90)),
+        dcOffset: Math.round(mutateValue(advancedWaveshaperSettings.dcOffset, -30, 30)),
+        dynamicSensitivity: Math.round(mutateValue(advancedWaveshaperSettings.dynamicSensitivity, 20, 80)),
+        chebyshevOrder: Math.round(mutateValue(advancedWaveshaperSettings.chebyshevOrder, 2, 7)),
+        foldbackIterations: Math.round(mutateValue(advancedWaveshaperSettings.foldbackIterations, 1, 4)),
+        multiband: {
+          ...advancedWaveshaperSettings.multiband,
+          lowDrive: Math.round(mutateValue(advancedWaveshaperSettings.multiband.lowDrive, 10, 80)),
+          midDrive: Math.round(mutateValue(advancedWaveshaperSettings.multiband.midDrive, 10, 80)),
+          highDrive: Math.round(mutateValue(advancedWaveshaperSettings.multiband.highDrive, 10, 80)),
+        },
       });
     }
   };
