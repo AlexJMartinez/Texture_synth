@@ -1680,8 +1680,9 @@ export default function Synthesizer() {
       comp.threshold.value = params.mastering.compressorThreshold;
       comp.knee.value = params.mastering.compressorKnee;
       comp.ratio.value = params.mastering.compressorRatio;
-      comp.attack.value = params.mastering.compressorAttack / 1000;
-      comp.release.value = params.mastering.compressorRelease / 1000;
+      // DynamicsCompressor attack/release must be positive (>0)
+      comp.attack.value = Math.max(0.001, params.mastering.compressorAttack / 1000);
+      comp.release.value = Math.max(0.001, params.mastering.compressorRelease / 1000);
       
       const makeup = ctx.createGain();
       makeup.gain.value = Math.pow(10, params.mastering.compressorMakeup / 20);
@@ -1766,7 +1767,8 @@ export default function Synthesizer() {
       limiter.knee.value = 0;
       limiter.ratio.value = 20;
       limiter.attack.value = 0.001;
-      limiter.release.value = params.effects.limiterRelease / 1000;
+      // DynamicsCompressor release must be positive (>0)
+      limiter.release.value = Math.max(0.001, params.effects.limiterRelease / 1000);
       
       outputNode.connect(limiter);
       outputNode = limiter;
