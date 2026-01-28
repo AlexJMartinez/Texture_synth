@@ -23,7 +23,12 @@ export async function registerRoutes(
   // Create a new preset
   app.post("/api/presets", async (req, res) => {
     try {
-      const parsed = insertPresetSchema.safeParse(req.body);
+      // Ensure createdAt is set
+      const body = {
+        ...req.body,
+        createdAt: req.body.createdAt || Date.now(),
+      };
+      const parsed = insertPresetSchema.safeParse(body);
       if (!parsed.success) {
         return res.status(400).json({ error: "Invalid preset data", details: parsed.error });
       }

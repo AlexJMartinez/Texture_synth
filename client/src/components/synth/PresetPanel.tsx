@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
-import type { Preset, SynthParameters } from "@shared/schema";
+import type { Preset, SynthParameters, DbPreset } from "@shared/schema";
 import { factoryPresets } from "@shared/schema";
-import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw, Download } from "lucide-react";
+import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw, Download, RefreshCw } from "lucide-react";
 import type { FullSynthSettings, FullPreset } from "@/lib/fullPreset";
 import { FULL_PRESET_VERSION } from "@/lib/fullPreset";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface PresetPanelProps {
   currentSettings: FullSynthSettings;
@@ -30,43 +33,39 @@ function isValidFullPreset(preset: unknown): preset is FullPreset {
 }
 
 export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps) {
-  // Load full presets (v3 format) - also migrate v2 presets if found
-  const [presets, setPresets] = useState<FullPreset[]>(() => {
-    // Try v3 format first
-    const storedV3 = localStorage.getItem("synth-presets-v3");
-    if (storedV3) {
-      try {
-        const parsed = JSON.parse(storedV3) as FullPreset[];
-        return parsed.filter(p => isValidFullPreset(p));
-      } catch {
-        // Fall through
-      }
-    }
-    
-    // Migrate v2 presets if they exist
-    const storedV2 = localStorage.getItem("synth-presets-v2");
-    if (storedV2) {
-      try {
-        const parsedV2 = JSON.parse(storedV2) as Preset[];
-        const migrated: FullPreset[] = parsedV2
-          .filter(p => isValidV2Preset(p.parameters))
-          .map(p => ({
-            id: p.id,
-            name: p.name,
-            settings: { params: p.parameters },
-            createdAt: p.createdAt,
-            version: FULL_PRESET_VERSION,
-          }));
-        // Save migrated presets to v3 format
-        if (migrated.length > 0) {
-          localStorage.setItem("synth-presets-v3", JSON.stringify(migrated));
-        }
-        return migrated;
-      } catch {
-        return [];
-      }
-    }
-    return [];
+  const { toast } = useToast();
+
+  // Fetch presets from the database
+  const { data: dbPresets = [], isLoading, refetch } = useQuery<DbPreset[]>({
+    queryKey: ["/api/presets"],
+  });
+
+  // Save preset mutation
+  const savePresetMutation = useMutation({
+    mutationFn: async (preset: { name: string; settings: unknown; createdAt: number }) => {
+      return apiRequest("POST", "/api/presets", preset);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/presets"] });
+      toast({ title: "Preset saved", description: "Your preset is now available globally" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to save preset", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Delete preset mutation
+  const deletePresetMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return apiRequest("DELETE", `/api/presets/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/presets"] });
+      toast({ title: "Preset deleted" });
+    },
+    onError: (error) => {
+      toast({ title: "Failed to delete preset", description: error.message, variant: "destructive" });
+    },
   });
 
   const [hiddenFactoryPresets, setHiddenFactoryPresets] = useState<string[]>(() => {
@@ -84,31 +83,25 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
   useEffect(() => {
     localStorage.removeItem("synth-presets");
   }, []);
+
   const [newPresetName, setNewPresetName] = useState("");
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
   const savePreset = () => {
     if (!newPresetName.trim()) return;
 
-    const preset: FullPreset = {
-      id: crypto.randomUUID(),
+    savePresetMutation.mutate({
       name: newPresetName.trim(),
       settings: currentSettings,
       createdAt: Date.now(),
-      version: FULL_PRESET_VERSION,
-    };
-
-    const updated = [...presets, preset];
-    setPresets(updated);
-    localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
+    });
+    
     setNewPresetName("");
     setSaveDialogOpen(false);
   };
 
-  const deletePreset = (id: string) => {
-    const updated = presets.filter((p) => p.id !== id);
-    setPresets(updated);
-    localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
+  const deletePreset = (id: number) => {
+    deletePresetMutation.mutate(id);
   };
 
   const hideFactoryPreset = (id: string) => {
@@ -123,7 +116,13 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
   };
 
   const exportPresets = () => {
-    const blob = new Blob([JSON.stringify(presets, null, 2)], { type: "application/json" });
+    const exportData = dbPresets.map(p => ({
+      name: p.name,
+      settings: p.settings,
+      createdAt: p.createdAt,
+      version: FULL_PRESET_VERSION,
+    }));
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -132,36 +131,32 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
     URL.revokeObjectURL(url);
   };
 
-  const importPresets = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const importPresets = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
         const imported = JSON.parse(reader.result as string);
-        // Handle both v2 and v3 formats
-        let validImported: FullPreset[] = [];
         if (Array.isArray(imported)) {
           for (const item of imported) {
             if (isValidFullPreset(item)) {
-              validImported.push(item);
+              await savePresetMutation.mutateAsync({
+                name: (item as FullPreset).name,
+                settings: (item as FullPreset).settings,
+                createdAt: (item as FullPreset).createdAt || Date.now(),
+              });
             } else if (isValidV2Preset((item as Preset).parameters)) {
-              // Migrate v2 preset
               const v2 = item as Preset;
-              validImported.push({
-                id: v2.id,
+              await savePresetMutation.mutateAsync({
                 name: v2.name,
                 settings: { params: v2.parameters },
-                createdAt: v2.createdAt,
-                version: FULL_PRESET_VERSION,
+                createdAt: v2.createdAt || Date.now(),
               });
             }
           }
         }
-        const updated = [...presets, ...validImported];
-        setPresets(updated);
-        localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
       } catch (err) {
         console.error("Failed to import presets:", err);
       }
@@ -181,6 +176,14 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
 
   const visibleFactoryPresets = fullFactoryPresets.filter(p => !hiddenFactoryPresets.includes(p.id));
 
+  // Convert DB presets to FullPreset format for loading
+  const userPresets = dbPresets.map(p => ({
+    id: p.id,
+    name: p.name,
+    settings: p.settings as FullSynthSettings,
+    createdAt: p.createdAt,
+  }));
+
   return (
     <Card className="synth-panel" data-testid="panel-presets">
       <CardHeader className="pb-1 pt-2 px-2">
@@ -188,8 +191,20 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
           <div className="flex items-center gap-1">
             <Music className="w-3 h-3 text-primary" />
             Presets
+            {isLoading && <RefreshCw className="w-2.5 h-2.5 animate-spin text-muted-foreground" />}
           </div>
           <div className="flex gap-1">
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              className="h-7 w-7"
+              onClick={() => refetch()}
+              title="Refresh presets"
+              data-testid="button-refresh-presets"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </Button>
+
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="icon" variant="ghost" className="h-7 w-7" data-testid="button-save-preset">
@@ -213,9 +228,13 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
                   <DialogClose asChild>
                     <Button variant="secondary">Cancel</Button>
                   </DialogClose>
-                  <Button onClick={savePreset} disabled={!newPresetName.trim()} data-testid="button-confirm-save">
+                  <Button 
+                    onClick={savePreset} 
+                    disabled={!newPresetName.trim() || savePresetMutation.isPending} 
+                    data-testid="button-confirm-save"
+                  >
                     <Plus className="w-4 h-4 mr-2" />
-                    Save Preset
+                    {savePresetMutation.isPending ? "Saving..." : "Save Preset"}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -236,7 +255,7 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
               />
             </Button>
 
-            {presets.length > 0 && (
+            {userPresets.length > 0 && (
               <Button 
                 size="icon" 
                 variant="ghost" 
@@ -301,11 +320,11 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
               </div>
             </div>
 
-            {presets.length > 0 && (
+            {userPresets.length > 0 && (
               <div>
-                <h4 className="text-[10px] font-medium text-muted-foreground mb-1 px-1">User</h4>
+                <h4 className="text-[10px] font-medium text-muted-foreground mb-1 px-1">Shared</h4>
                 <div className="space-y-0.5">
-                  {presets.map((preset) => (
+                  {userPresets.map((preset) => (
                     <div
                       key={preset.id}
                       className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50"
@@ -323,11 +342,12 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
                       </button>
                       <button
                         type="button"
-                        className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20"
+                        className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20 disabled:opacity-30"
                         onClick={(e) => {
                           e.stopPropagation();
                           deletePreset(preset.id);
                         }}
+                        disabled={deletePresetMutation.isPending}
                         data-testid={`button-delete-${preset.id}`}
                       >
                         <Trash2 className="w-3 h-3 text-destructive" />
