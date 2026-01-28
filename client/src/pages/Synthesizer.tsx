@@ -69,6 +69,7 @@ import {
 } from "@shared/schema";
 import { pitchToHz } from "@/lib/pitchUtils";
 import { triggerAHD, stopWithFade, EPS } from "@/lib/envelopeAHD";
+import type { FullSynthSettings } from "@/lib/fullPreset";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
 
@@ -500,6 +501,63 @@ export default function Synthesizer() {
       },
     }));
   }, [params.oscillators]);
+
+  // Handle loading a full preset with all settings
+  const handleLoadPreset = useCallback((settings: FullSynthSettings) => {
+    // Always set the main params
+    setParams(settings.params);
+    
+    // Set optional advanced settings if present in preset
+    if (settings.oscEnvelopes) {
+      setOscEnvelopes(settings.oscEnvelopes);
+    }
+    if (settings.convolverSettings) {
+      setConvolverSettings(settings.convolverSettings);
+    }
+    if (settings.reverbSettings) {
+      setReverbSettings(settings.reverbSettings);
+    }
+    if (settings.advancedFMSettings) {
+      setAdvancedFMSettings(settings.advancedFMSettings);
+    }
+    if (settings.advancedGranularSettings) {
+      setAdvancedGranularSettings(settings.advancedGranularSettings);
+    }
+    if (settings.advancedFilterSettings) {
+      setAdvancedFilterSettings(settings.advancedFilterSettings);
+    }
+    if (settings.advancedWaveshaperSettings) {
+      setAdvancedWaveshaperSettings(settings.advancedWaveshaperSettings);
+    }
+    if (settings.lowEndSettings) {
+      setLowEndSettings(settings.lowEndSettings);
+    }
+    if (settings.phaseSettings) {
+      setPhaseSettings(settings.phaseSettings);
+    }
+    if (settings.advancedSpectralSettings) {
+      setAdvancedSpectralSettings(settings.advancedSpectralSettings);
+    }
+    
+    // Update key selector based on new OSC 1 pitch
+    const newOsc1Hz = pitchToHz(settings.params.oscillators.osc1.pitch);
+    setCurrentKey(frequencyToNearestKey(newOsc1Hz));
+  }, []);
+
+  // Gather all current settings for preset saving
+  const currentFullSettings: FullSynthSettings = {
+    params,
+    oscEnvelopes,
+    convolverSettings,
+    reverbSettings,
+    advancedFMSettings,
+    advancedGranularSettings,
+    advancedFilterSettings,
+    advancedWaveshaperSettings,
+    lowEndSettings,
+    phaseSettings,
+    advancedSpectralSettings,
+  };
 
   // Enhanced algorithmic reverb impulse response generator
   const createImpulseResponse = useCallback((
@@ -3277,8 +3335,8 @@ export default function Synthesizer() {
           <TabsContent value="export" className="flex-1 overflow-y-auto mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <PresetPanel
-                currentParams={params}
-                onLoadPreset={setParams}
+                currentSettings={currentFullSettings}
+                onLoadPreset={handleLoadPreset}
               />
               <ExportPanel
                 settings={exportSettings}

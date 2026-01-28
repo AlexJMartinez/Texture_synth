@@ -7,10 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import type { Preset, SynthParameters } from "@shared/schema";
 import { factoryPresets } from "@shared/schema";
 import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw } from "lucide-react";
+import type { FullSynthSettings, FullPreset } from "@/lib/fullPreset";
+import { FULL_PRESET_VERSION } from "@/lib/fullPreset";
 
 interface PresetPanelProps {
-  currentParams: SynthParameters;
-  onLoadPreset: (params: SynthParameters) => void;
+  currentSettings: FullSynthSettings;
+  onLoadPreset: (settings: FullSynthSettings) => void;
 }
 
 function isValidV2Preset(params: unknown): params is SynthParameters {
@@ -19,13 +21,47 @@ function isValidV2Preset(params: unknown): params is SynthParameters {
   return 'oscillators' in p && 'envelopes' in p && typeof p.oscillators === 'object';
 }
 
-export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
-  const [presets, setPresets] = useState<Preset[]>(() => {
-    const stored = localStorage.getItem("synth-presets-v2");
-    if (stored) {
+function isValidFullPreset(preset: unknown): preset is FullPreset {
+  if (!preset || typeof preset !== 'object') return false;
+  const p = preset as Record<string, unknown>;
+  if (!('settings' in p) || !p.settings || typeof p.settings !== 'object') return false;
+  const s = p.settings as Record<string, unknown>;
+  return 'params' in s && isValidV2Preset(s.params);
+}
+
+export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps) {
+  // Load full presets (v3 format) - also migrate v2 presets if found
+  const [presets, setPresets] = useState<FullPreset[]>(() => {
+    // Try v3 format first
+    const storedV3 = localStorage.getItem("synth-presets-v3");
+    if (storedV3) {
       try {
-        const parsed = JSON.parse(stored) as Preset[];
-        return parsed.filter(p => isValidV2Preset(p.parameters));
+        const parsed = JSON.parse(storedV3) as FullPreset[];
+        return parsed.filter(p => isValidFullPreset(p));
+      } catch {
+        // Fall through
+      }
+    }
+    
+    // Migrate v2 presets if they exist
+    const storedV2 = localStorage.getItem("synth-presets-v2");
+    if (storedV2) {
+      try {
+        const parsedV2 = JSON.parse(storedV2) as Preset[];
+        const migrated: FullPreset[] = parsedV2
+          .filter(p => isValidV2Preset(p.parameters))
+          .map(p => ({
+            id: p.id,
+            name: p.name,
+            settings: { params: p.parameters },
+            createdAt: p.createdAt,
+            version: FULL_PRESET_VERSION,
+          }));
+        // Save migrated presets to v3 format
+        if (migrated.length > 0) {
+          localStorage.setItem("synth-presets-v3", JSON.stringify(migrated));
+        }
+        return migrated;
       } catch {
         return [];
       }
@@ -54,16 +90,17 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
   const savePreset = () => {
     if (!newPresetName.trim()) return;
 
-    const preset: Preset = {
+    const preset: FullPreset = {
       id: crypto.randomUUID(),
       name: newPresetName.trim(),
-      parameters: currentParams,
+      settings: currentSettings,
       createdAt: Date.now(),
+      version: FULL_PRESET_VERSION,
     };
 
     const updated = [...presets, preset];
     setPresets(updated);
-    localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
+    localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
     setNewPresetName("");
     setSaveDialogOpen(false);
   };
@@ -71,7 +108,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
   const deletePreset = (id: string) => {
     const updated = presets.filter((p) => p.id !== id);
     setPresets(updated);
-    localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
+    localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
   };
 
   const hideFactoryPreset = (id: string) => {
@@ -102,11 +139,29 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const imported = JSON.parse(reader.result as string) as Preset[];
-        const validImported = imported.filter(p => isValidV2Preset(p.parameters));
+        const imported = JSON.parse(reader.result as string);
+        // Handle both v2 and v3 formats
+        let validImported: FullPreset[] = [];
+        if (Array.isArray(imported)) {
+          for (const item of imported) {
+            if (isValidFullPreset(item)) {
+              validImported.push(item);
+            } else if (isValidV2Preset((item as Preset).parameters)) {
+              // Migrate v2 preset
+              const v2 = item as Preset;
+              validImported.push({
+                id: v2.id,
+                name: v2.name,
+                settings: { params: v2.parameters },
+                createdAt: v2.createdAt,
+                version: FULL_PRESET_VERSION,
+              });
+            }
+          }
+        }
         const updated = [...presets, ...validImported];
         setPresets(updated);
-        localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
+        localStorage.setItem("synth-presets-v3", JSON.stringify(updated));
       } catch (err) {
         console.error("Failed to import presets:", err);
       }
@@ -115,10 +170,13 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
     e.target.value = "";
   };
 
-  const fullFactoryPresets: Preset[] = factoryPresets.map((p, i) => ({
-    ...p,
+  // Factory presets only have params, not full settings
+  const fullFactoryPresets: FullPreset[] = factoryPresets.map((p, i) => ({
     id: `factory-${i}`,
+    name: p.name,
+    settings: { params: p.parameters },
     createdAt: 0,
+    version: FULL_PRESET_VERSION,
   }));
 
   const visibleFactoryPresets = fullFactoryPresets.filter(p => !hiddenFactoryPresets.includes(p.id));
@@ -220,7 +278,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        onLoadPreset(preset.parameters);
+                        onLoadPreset(preset.settings);
                       }}
                       className="flex-1 text-left"
                       data-testid={`preset-factory-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
@@ -256,7 +314,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onLoadPreset(preset.parameters);
+                          onLoadPreset(preset.settings);
                         }}
                         className="flex-1 text-left"
                         data-testid={`preset-user-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
