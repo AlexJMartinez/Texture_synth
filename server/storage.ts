@@ -1,38 +1,54 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { users, presets, type User, type InsertUser, type DbPreset, type InsertPreset } from "@shared/schema";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
+  // User operations
+  getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  // Preset operations
+  getAllPresets(): Promise<DbPreset[]>;
+  getPreset(id: number): Promise<DbPreset | undefined>;
+  createPreset(preset: InsertPreset): Promise<DbPreset>;
+  deletePreset(id: number): Promise<boolean>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+export class DatabaseStorage implements IStorage {
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
+  }
+
+  async getAllPresets(): Promise<DbPreset[]> {
+    return db.select().from(presets).orderBy(desc(presets.createdAt));
+  }
+
+  async getPreset(id: number): Promise<DbPreset | undefined> {
+    const [preset] = await db.select().from(presets).where(eq(presets.id, id));
+    return preset || undefined;
+  }
+
+  async createPreset(preset: InsertPreset): Promise<DbPreset> {
+    const [created] = await db.insert(presets).values(preset).returning();
+    return created;
+  }
+
+  async deletePreset(id: number): Promise<boolean> {
+    const result = await db.delete(presets).where(eq(presets.id, id)).returning();
+    return result.length > 0;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

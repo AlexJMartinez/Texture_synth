@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, text, serial, jsonb, bigint } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 export const WaveformType = z.enum(["sine", "triangle", "sawtooth", "square", "noise"]);
 export type WaveformType = z.infer<typeof WaveformType>;
@@ -1694,3 +1696,25 @@ export const factoryPresets: Omit<Preset, "id" | "createdAt">[] = [
     },
   },
 ];
+
+// Database tables for Drizzle ORM
+export const presets = pgTable("presets", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  settings: jsonb("settings").notNull(),
+  createdAt: bigint("created_at", { mode: "number" }).notNull(),
+});
+
+export const insertPresetSchema = createInsertSchema(presets).omit({ id: true });
+export type InsertPreset = z.infer<typeof insertPresetSchema>;
+export type DbPreset = typeof presets.$inferSelect;
+
+// Users table (for potential future use)
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
