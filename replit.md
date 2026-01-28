@@ -9,7 +9,7 @@ Ask before making major changes.
 Do not make changes to the folder `shared`.
 
 ## System Architecture
-The application is built using React with TypeScript and Vite for the frontend, styled with Tailwind CSS and shadcn/ui components. Tone.js is utilized for audio context management, leveraging the Web Audio API for synthesis. State management relies on React hooks with localStorage for presets and custom impulse responses.
+The application is built using React with TypeScript and Vite for the frontend, styled with Tailwind CSS and shadcn/ui components. Tone.js is utilized for audio context management, leveraging the Web Audio API for synthesis. State management relies on React hooks with localStorage for local settings, while user presets are stored in PostgreSQL for global sharing across all users and devices.
 
 The UI features a clean, professional audio design with a tabbed organization system: Sound, Layers, FX, Master, and Export. It employs a soft green color palette inspired by Felt Instruments, with a dark background, primary soft sage green, and accent mint green hues. Visualizations include a 3D terrain waveform display with a purple to cyan gradient that animates in response to audio data. Controls are compact knobs with double-click/double-tap functionality to reset values.
 
@@ -66,7 +66,7 @@ Core architectural decisions include:
 - **Real-time Playback & Offline Rendering**: Tone.js for live preview and Tone.Offline for WAV export.
 - **Canonical Pitch Model**: Internal pitch representation uses `PitchState {mode, baseHz, st, cents}` for flexible display and consistent audio generation.
 - **Audio Retriggering**: Gain ramps and scheduled stops prevent audio pops/clicks.
-- **Preset Management**: Factory presets and user presets with save/load/delete functionality, stored in localStorage.
+- **Preset Management**: Factory presets (built-in) and shared user presets with save/load/delete functionality. User presets are stored in PostgreSQL database for global sharing across all users and devices. Factory presets can be hidden locally (stored in localStorage). Features import/export for backup.
 - **Randomization**: Features full randomization with chaos control slider (10-100%) and gentle mutation. Includes audibility safeguards to prevent silent outputs.
 
 ## External Dependencies
