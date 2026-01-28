@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import type { Preset, SynthParameters } from "@shared/schema";
 import { factoryPresets } from "@shared/schema";
-import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw } from "lucide-react";
+import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw, Download } from "lucide-react";
 import type { FullSynthSettings, FullPreset } from "@/lib/fullPreset";
 import { FULL_PRESET_VERSION } from "@/lib/fullPreset";
 
@@ -244,7 +244,7 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
                 onClick={exportPresets}
                 data-testid="button-export-presets"
               >
-                <Save className="w-3.5 h-3.5" />
+                <Download className="w-3.5 h-3.5" />
               </Button>
             )}
           </div>
