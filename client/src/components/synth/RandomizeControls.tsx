@@ -219,6 +219,7 @@ export function RandomizeControls({
   onAdvancedSpectralSettingsRandomize
 }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
+  const [variationAmount, setVariationAmount] = useState(15); // 5-50% range for subtle to moderate variations
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
     const fmPreset = randomRatioPreset();
@@ -558,8 +559,8 @@ export function RandomizeControls({
   };
 
   const mutate = () => {
-    const chaos = chaosAmount / 100;
-    const strength = 0.2 * chaos;
+    // Use variationAmount directly (5-50% maps to 0.05-0.50 strength)
+    const strength = variationAmount / 100;
 
     const mutateValue = (current: number, min: number, max: number, log = false): number => {
       const range = log ? Math.log(max) - Math.log(min) : max - min;
@@ -970,38 +971,56 @@ export function RandomizeControls({
   };
 
   return (
-    <div className="flex items-center gap-1" data-testid="randomize-controls">
-      <Button
-        onClick={randomizeAll}
-        variant="secondary"
-        size="sm"
-        className="h-6 text-[10px] px-2"
-        data-testid="button-randomize"
-      >
-        <Dices className="w-3 h-3 mr-1" />
-        Rand
-      </Button>
-      <Button
-        onClick={mutate}
-        variant="secondary"
-        size="sm"
-        className="h-6 text-[10px] px-2"
-        data-testid="button-mutate"
-      >
-        <Shuffle className="w-3 h-3 mr-1" />
-        Mutate
-      </Button>
-      <div className="flex items-center gap-1 px-1">
-        <span className="text-[9px] text-muted-foreground whitespace-nowrap">{chaosAmount}%</span>
-        <Slider
-          value={[chaosAmount]}
-          onValueChange={([v]) => setChaosAmount(v)}
-          min={10}
-          max={100}
-          step={5}
-          className="w-12"
-          data-testid="slider-chaos"
-        />
+    <div className="flex items-center gap-1 flex-wrap" data-testid="randomize-controls">
+      <div className="flex items-center gap-1">
+        <Button
+          onClick={randomizeAll}
+          variant="secondary"
+          size="sm"
+          className="h-6 text-[10px] px-2"
+          data-testid="button-randomize"
+        >
+          <Dices className="w-3 h-3 mr-1" />
+          Rand
+        </Button>
+        <div className="flex items-center gap-1 px-1">
+          <span className="text-[9px] text-muted-foreground whitespace-nowrap">Chaos</span>
+          <Slider
+            value={[chaosAmount]}
+            onValueChange={([v]) => setChaosAmount(v)}
+            min={10}
+            max={100}
+            step={5}
+            className="w-10"
+            data-testid="slider-chaos"
+          />
+          <span className="text-[9px] text-muted-foreground w-6">{chaosAmount}%</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-1">
+        <Button
+          onClick={mutate}
+          variant="secondary"
+          size="sm"
+          className="h-6 text-[10px] px-2"
+          data-testid="button-mutate"
+        >
+          <Shuffle className="w-3 h-3 mr-1" />
+          Mutate
+        </Button>
+        <div className="flex items-center gap-1 px-1">
+          <span className="text-[9px] text-muted-foreground whitespace-nowrap">Vary</span>
+          <Slider
+            value={[variationAmount]}
+            onValueChange={([v]) => setVariationAmount(v)}
+            min={5}
+            max={50}
+            step={5}
+            className="w-10"
+            data-testid="slider-variation"
+          />
+          <span className="text-[9px] text-muted-foreground w-6">{variationAmount}%</span>
+        </div>
       </div>
       <Button
         onClick={reset}
