@@ -6,7 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import type { Preset, SynthParameters } from "@shared/schema";
 import { factoryPresets } from "@shared/schema";
-import { Save, FolderOpen, Trash2, Plus, Music } from "lucide-react";
+import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw } from "lucide-react";
 
 interface PresetPanelProps {
   currentParams: SynthParameters;
@@ -26,6 +26,18 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
       try {
         const parsed = JSON.parse(stored) as Preset[];
         return parsed.filter(p => isValidV2Preset(p.parameters));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  });
+
+  const [hiddenFactoryPresets, setHiddenFactoryPresets] = useState<string[]>(() => {
+    const stored = localStorage.getItem("synth-hidden-factory-presets");
+    if (stored) {
+      try {
+        return JSON.parse(stored) as string[];
       } catch {
         return [];
       }
@@ -60,6 +72,17 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
     const updated = presets.filter((p) => p.id !== id);
     setPresets(updated);
     localStorage.setItem("synth-presets-v2", JSON.stringify(updated));
+  };
+
+  const hideFactoryPreset = (id: string) => {
+    const updated = [...hiddenFactoryPresets, id];
+    setHiddenFactoryPresets(updated);
+    localStorage.setItem("synth-hidden-factory-presets", JSON.stringify(updated));
+  };
+
+  const restoreFactoryPresets = () => {
+    setHiddenFactoryPresets([]);
+    localStorage.removeItem("synth-hidden-factory-presets");
   };
 
   const exportPresets = () => {
@@ -97,6 +120,8 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
     id: `factory-${i}`,
     createdAt: 0,
   }));
+
+  const visibleFactoryPresets = fullFactoryPresets.filter(p => !hiddenFactoryPresets.includes(p.id));
 
   return (
     <Card className="synth-panel" data-testid="panel-presets">
@@ -171,21 +196,49 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
         <ScrollArea className="h-[180px] px-2 pb-2">
           <div className="space-y-2">
             <div>
-              <h4 className="text-[10px] font-medium text-muted-foreground mb-1 px-1">Factory</h4>
-              <div className="space-y-0.5">
-                {fullFactoryPresets.map((preset) => (
+              <div className="flex items-center justify-between mb-1 px-1">
+                <h4 className="text-[10px] font-medium text-muted-foreground">Factory</h4>
+                {hiddenFactoryPresets.length > 0 && (
                   <button
                     type="button"
-                    key={preset.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onLoadPreset(preset.parameters);
-                    }}
-                    className="w-full text-left px-2 py-1 rounded text-[10px] hover-elevate active-elevate-2 bg-muted/30 border border-border/50 transition-colors"
-                    data-testid={`preset-factory-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
+                    onClick={restoreFactoryPresets}
+                    className="text-[9px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
+                    data-testid="button-restore-factory-presets"
                   >
-                    {preset.name}
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    Restore
                   </button>
+                )}
+              </div>
+              <div className="space-y-0.5">
+                {visibleFactoryPresets.map((preset) => (
+                  <div
+                    key={preset.id}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onLoadPreset(preset.parameters);
+                      }}
+                      className="flex-1 text-left"
+                      data-testid={`preset-factory-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
+                    >
+                      {preset.name}
+                    </button>
+                    <button
+                      type="button"
+                      className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 hover:bg-destructive/20 transition-opacity"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hideFactoryPreset(preset.id);
+                      }}
+                      data-testid={`button-hide-${preset.id}`}
+                    >
+                      <Trash2 className="w-3 h-3 text-destructive" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -197,7 +250,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                   {presets.map((preset) => (
                     <div
                       key={preset.id}
-                      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50 group"
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50"
                     >
                       <button
                         type="button"
@@ -212,7 +265,7 @@ export function PresetPanel({ currentParams, onLoadPreset }: PresetPanelProps) {
                       </button>
                       <button
                         type="button"
-                        className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/20"
+                        className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20"
                         onClick={(e) => {
                           e.stopPropagation();
                           deletePreset(preset.id);
