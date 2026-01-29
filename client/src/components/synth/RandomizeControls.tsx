@@ -224,8 +224,13 @@ export function RandomizeControls({
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
     const fmPreset = randomRatioPreset();
     const pmPreset = randomRatioPreset();
-    // Force enabled oscillators should have higher minimum level
     const minLevel = forceEnabled ? 60 : 30;
+    
+    const fmEnabled = Math.random() > 0.7;
+    const indexEnvWanted = Math.random() > 0.5;
+    const fmEnabledFinal = fmEnabled || indexEnvWanted;
+    const indexEnvEnabled = indexEnvWanted;
+    
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
       waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
@@ -233,7 +238,7 @@ export function RandomizeControls({
       detune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
       drift: Math.round(randomInRange(0, 50 * chaos)),
       level: Math.round(randomInRange(minLevel, 100)),
-      fmEnabled: Math.random() > 0.7,
+      fmEnabled: fmEnabledFinal,
       fmRatio: fmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(fmPreset),
       fmRatioPreset: fmPreset,
       fmDepth: Math.round(randomInRange(50, 500 * chaos)),
@@ -249,7 +254,7 @@ export function RandomizeControls({
       pmDepth: Math.round(randomInRange(1, 30 * chaos)),
       pmWaveform: randomWaveform(),
       pmFeedback: Math.random() > 0.7 ? Math.round(randomInRange(0, 0.4 * chaos) * 100) / 100 : 0,
-      indexEnvEnabled: Math.random() > 0.5,
+      indexEnvEnabled,
       indexEnvDecay: Math.round(randomInRange(5, 50 * chaos + 10)),
       indexEnvDepth: Math.round(randomInRange(5, 40 * chaos)),
     };
@@ -281,6 +286,9 @@ export function RandomizeControls({
   const randomizeAll = () => {
     const chaos = chaosAmount / 100;
     
+    const filterEnvelope = randomizeEnv(currentParams.envelopes.env2, chaos, "filter");
+    const filterEnvEnabled = filterEnvelope.enabled && filterEnvelope.amount !== 0;
+    
     const params: SynthParameters = {
       oscillators: {
         osc1: randomizeOsc(currentParams.oscillators.osc1, chaos, true),
@@ -289,11 +297,11 @@ export function RandomizeControls({
       },
       envelopes: {
         env1: randomizeEnv(currentParams.envelopes.env1, chaos, "amplitude", true),
-        env2: randomizeEnv(currentParams.envelopes.env2, chaos, "filter"),
+        env2: filterEnvelope,
         env3: randomizeEnv(currentParams.envelopes.env3, chaos, "pitch"),
       },
       filter: {
-        enabled: Math.random() > 0.3,
+        enabled: filterEnvEnabled || Math.random() > 0.3,
         frequency: Math.round(randomInRange(200, 8000, true)),
         resonance: Math.round(randomInRange(0, 15) * 10) / 10,
         type: randomFilterType(),
@@ -575,33 +583,38 @@ export function RandomizeControls({
       return Math.max(min, Math.min(max, current + mutation * (max - min)));
     };
 
-    const mutateOsc = (osc: Oscillator): Oscillator => ({
-      enabled: osc.enabled,
-      waveform: Math.random() > 0.9 ? randomWaveform() : osc.waveform,
-      pitch: mutatePitchState(osc.pitch, strength),
-      detune: Math.round(mutateValue(osc.detune, -100, 100)),
-      drift: Math.round(mutateValue(osc.drift, 0, 100)),
-      level: Math.round(mutateValue(osc.level, 0, 100)),
-      fmEnabled: osc.fmEnabled,
-      fmRatio: Math.round(mutateValue(osc.fmRatio, 0.25, 16) * 4) / 4,
-      fmRatioPreset: osc.fmRatioPreset,
-      fmDepth: Math.round(mutateValue(osc.fmDepth, 0, 1000)),
-      fmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.fmWaveform,
-      fmFeedback: Math.round(mutateValue(osc.fmFeedback, 0, 1) * 100) / 100,
-      amEnabled: osc.amEnabled,
-      amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
-      amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
-      amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
-      pmEnabled: osc.pmEnabled,
-      pmRatio: Math.round(mutateValue(osc.pmRatio, 0.25, 16) * 4) / 4,
-      pmRatioPreset: osc.pmRatioPreset,
-      pmDepth: Math.round(mutateValue(osc.pmDepth, 0, 60)),
-      pmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.pmWaveform,
-      pmFeedback: Math.round(mutateValue(osc.pmFeedback, 0, 1) * 100) / 100,
-      indexEnvEnabled: osc.indexEnvEnabled,
-      indexEnvDecay: Math.round(mutateValue(osc.indexEnvDecay, 2, 100)),
-      indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
-    });
+    const mutateOsc = (osc: Oscillator): Oscillator => {
+      const indexEnvEnabled = osc.indexEnvEnabled;
+      const fmEnabled = osc.fmEnabled || indexEnvEnabled;
+      
+      return {
+        enabled: osc.enabled,
+        waveform: Math.random() > 0.9 ? randomWaveform() : osc.waveform,
+        pitch: mutatePitchState(osc.pitch, strength),
+        detune: Math.round(mutateValue(osc.detune, -100, 100)),
+        drift: Math.round(mutateValue(osc.drift, 0, 100)),
+        level: Math.round(mutateValue(osc.level, 0, 100)),
+        fmEnabled,
+        fmRatio: Math.round(mutateValue(osc.fmRatio, 0.25, 16) * 4) / 4,
+        fmRatioPreset: osc.fmRatioPreset,
+        fmDepth: Math.round(mutateValue(osc.fmDepth, 0, 1000)),
+        fmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.fmWaveform,
+        fmFeedback: Math.round(mutateValue(osc.fmFeedback, 0, 1) * 100) / 100,
+        amEnabled: osc.amEnabled,
+        amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
+        amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
+        amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
+        pmEnabled: osc.pmEnabled,
+        pmRatio: Math.round(mutateValue(osc.pmRatio, 0.25, 16) * 4) / 4,
+        pmRatioPreset: osc.pmRatioPreset,
+        pmDepth: Math.round(mutateValue(osc.pmDepth, 0, 60)),
+        pmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.pmWaveform,
+        pmFeedback: Math.round(mutateValue(osc.pmFeedback, 0, 1) * 100) / 100,
+        indexEnvEnabled,
+        indexEnvDecay: Math.round(mutateValue(osc.indexEnvDecay, 2, 100)),
+        indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
+      };
+    };
 
     // One-shot safe envelope mutation ranges
     const mutateEnv = (env: Envelope): Envelope => {
@@ -623,6 +636,11 @@ export function RandomizeControls({
       };
     };
 
+    const mutatedEnv1 = mutateEnv(currentParams.envelopes.env1);
+    const mutatedEnv2 = mutateEnv(currentParams.envelopes.env2);
+    const mutatedEnv3 = mutateEnv(currentParams.envelopes.env3);
+    const filterEnvEnabled = mutatedEnv2.enabled && mutatedEnv2.amount !== 0;
+    
     const params: SynthParameters = {
       oscillators: {
         osc1: mutateOsc(currentParams.oscillators.osc1),
@@ -630,12 +648,12 @@ export function RandomizeControls({
         osc3: mutateOsc(currentParams.oscillators.osc3),
       },
       envelopes: {
-        env1: mutateEnv(currentParams.envelopes.env1),
-        env2: mutateEnv(currentParams.envelopes.env2),
-        env3: mutateEnv(currentParams.envelopes.env3),
+        env1: mutatedEnv1,
+        env2: mutatedEnv2,
+        env3: mutatedEnv3,
       },
       filter: {
-        enabled: currentParams.filter.enabled,
+        enabled: currentParams.filter.enabled || filterEnvEnabled,
         frequency: Math.round(mutateValue(currentParams.filter.frequency, 20, 20000, true)),
         resonance: Math.round(mutateValue(currentParams.filter.resonance, 0, 30) * 10) / 10,
         type: currentParams.filter.type,
