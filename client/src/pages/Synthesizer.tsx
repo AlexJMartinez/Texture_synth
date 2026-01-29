@@ -59,7 +59,8 @@ import { ModulatorRack } from "@/components/synth/ModulatorRack";
 import { ModulationProvider } from "@/contexts/ModulationContext";
 import { KeySelector, KeyState, keyToFrequency, frequencyToNearestKey } from "@/components/synth/KeySelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Clock, Undo2, Redo2 } from "lucide-react";
 import { 
   type SynthParameters, 
   type ExportSettings,
@@ -78,6 +79,78 @@ import {
   defaultAllOscWavetableSettings,
   randomizeWavetableSettings,
 } from "@/lib/wavetableSettings";
+import {
+  type OscUnisonSettings,
+  type UnisonSettings,
+  loadUnisonSettings,
+  saveUnisonSettings,
+  defaultOscUnisonSettings,
+  randomizeUnisonSettings,
+} from "@/lib/unisonSettings";
+import {
+  type RingModSettings,
+  loadRingModSettings,
+  saveRingModSettings,
+  defaultRingModSettings,
+  randomizeRingModSettings,
+} from "@/lib/ringModSettings";
+import { RingModPanel } from "@/components/synth/RingModPanel";
+import { SampleLayerPanel } from "@/components/synth/SampleLayerPanel";
+import {
+  type SampleLayerSettings,
+  loadSampleLayerSettings,
+  saveSampleLayerSettings,
+  defaultSampleLayerSettings,
+  randomizeSampleLayerSettings,
+} from "@/lib/sampleLayerSettings";
+import { MultibandCompPanel } from "@/components/synth/MultibandCompPanel";
+import {
+  type MultibandCompSettings,
+  loadMultibandCompSettings,
+  saveMultibandCompSettings,
+  defaultMultibandCompSettings,
+  randomizeMultibandCompSettings,
+} from "@/lib/multibandCompSettings";
+import { PhaserFlangerPanel } from "@/components/synth/PhaserFlangerPanel";
+import {
+  type PhaserFlangerSettings,
+  loadPhaserFlangerSettings,
+  savePhaserFlangerSettings,
+  defaultPhaserFlangerSettings,
+  randomizePhaserFlangerSettings,
+} from "@/lib/phaserFlangerSettings";
+import { ParametricEQPanel } from "@/components/synth/ParametricEQPanel";
+import {
+  type ParametricEQSettings,
+  loadParametricEQSettings,
+  saveParametricEQSettings,
+  defaultParametricEQSettings,
+  randomizeParametricEQSettings,
+} from "@/lib/eqSettings";
+import { RoundRobinPanel } from "@/components/synth/RoundRobinPanel";
+import {
+  type RoundRobinSettings,
+  loadRoundRobinSettings,
+  saveRoundRobinSettings,
+  defaultRoundRobinSettings,
+  generateAllVariations,
+} from "@/lib/roundRobinExport";
+import { ParallelProcessingPanel } from "@/components/synth/ParallelProcessingPanel";
+import {
+  type ParallelProcessingSettings,
+  loadParallelProcessingSettings,
+  saveParallelProcessingSettings,
+  defaultParallelProcessingSettings,
+  randomizeParallelProcessingSettings,
+} from "@/lib/parallelProcessingSettings";
+import { MIDIInputPanel } from "@/components/synth/MIDIInputPanel";
+import {
+  type MIDIInputSettings,
+  loadMIDISettings,
+  saveMIDISettings,
+  defaultMIDISettings,
+} from "@/lib/midiInput";
+import { UndoHistory } from "@/lib/undoHistory";
 import {
   createUnisonWavetableOscillators,
   getPeriodicWaveAtPosition,
@@ -450,6 +523,15 @@ export default function Synthesizer() {
   const [wavetableSettings, setWavetableSettings] = useState<AllOscWavetableSettings>(loadWavetableSettings);
   const [wavetableEditorOpen, setWavetableEditorOpen] = useState(false);
   const [wavetableEditorOsc, setWavetableEditorOsc] = useState<1 | 2 | 3>(1);
+  const [unisonSettings, setUnisonSettings] = useState<OscUnisonSettings>(loadUnisonSettings);
+  const [ringModSettings, setRingModSettings] = useState<RingModSettings>(loadRingModSettings);
+  const [sampleLayerSettings, setSampleLayerSettings] = useState<SampleLayerSettings>(loadSampleLayerSettings);
+  const [multibandCompSettings, setMultibandCompSettings] = useState<MultibandCompSettings>(loadMultibandCompSettings);
+  const [phaserFlangerSettings, setPhaserFlangerSettings] = useState<PhaserFlangerSettings>(loadPhaserFlangerSettings);
+  const [parametricEQSettings, setParametricEQSettings] = useState<ParametricEQSettings>(loadParametricEQSettings);
+  const [roundRobinSettings, setRoundRobinSettings] = useState<RoundRobinSettings>(loadRoundRobinSettings);
+  const [parallelProcessingSettings, setParallelProcessingSettings] = useState<ParallelProcessingSettings>(loadParallelProcessingSettings);
+  const [midiSettings, setMidiSettings] = useState<MIDIInputSettings>(loadMIDISettings);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -461,6 +543,46 @@ export default function Synthesizer() {
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Undo/Redo history for parameters
+  const undoHistoryRef = useRef(new UndoHistory<SynthParameters>(50));
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const isUndoRedoRef = useRef(false);
+  
+  // Push to history when params change (but not from undo/redo)
+  useEffect(() => {
+    if (!isUndoRedoRef.current) {
+      undoHistoryRef.current.push(params);
+      setCanUndo(undoHistoryRef.current.canUndo());
+      setCanRedo(undoHistoryRef.current.canRedo());
+    }
+    isUndoRedoRef.current = false;
+  }, [params]);
+  
+  const handleUndo = useCallback(() => {
+    const prevState = undoHistoryRef.current.undo();
+    if (prevState) {
+      isUndoRedoRef.current = true;
+      setParams(prevState);
+      setCanUndo(undoHistoryRef.current.canUndo());
+      setCanRedo(undoHistoryRef.current.canRedo());
+    }
+  }, []);
+  
+  const handleRedo = useCallback(() => {
+    const nextState = undoHistoryRef.current.redo();
+    if (nextState) {
+      isUndoRedoRef.current = true;
+      setParams(nextState);
+      setCanUndo(undoHistoryRef.current.canUndo());
+      setCanRedo(undoHistoryRef.current.canRedo());
+    }
+  }, []);
+  
+  // Refs for keyboard shortcuts (to avoid stale closures)
+  const handleTriggerRef = useRef<() => void>(() => {});
+  const handleExportRef = useRef<() => void>(() => {});
 
   // Persist osc envelopes to localStorage
   useEffect(() => {
@@ -1316,7 +1438,8 @@ export default function Synthesizer() {
     perOscEnvelopes?: OscEnvelopes,
     convSettings?: ConvolverSettings,
     revSettings?: ReverbSettings,
-    wtSettingsToUse?: AllOscWavetableSettings
+    wtSettingsToUse?: AllOscWavetableSettings,
+    unisonSettingsToUse?: OscUnisonSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -2121,9 +2244,9 @@ export default function Synthesizer() {
     safetyFadeGain.connect(ctx.destination);
 
     const oscConfigs = [
-      { osc: params.oscillators.osc1, key: "osc1" },
-      { osc: params.oscillators.osc2, key: "osc2" },
-      { osc: params.oscillators.osc3, key: "osc3" },
+      { osc: params.oscillators.osc1, key: "osc1" as const },
+      { osc: params.oscillators.osc2, key: "osc2" as const },
+      { osc: params.oscillators.osc3, key: "osc3" as const },
     ];
 
     for (const { osc, key } of oscConfigs) {
@@ -2137,6 +2260,11 @@ export default function Synthesizer() {
       const phaseKey = `${key}Phase` as keyof OscPhaseSettings;
       const phaseDegrees = phaseSettings[phaseKey] || 0;
       const phaseSeconds = (phaseDegrees / 360) / oscPitchHz; // Time offset for phase
+      
+      // Get unison settings for this oscillator
+      const unisonKey = key as keyof OscUnisonSettings;
+      const unisonSettingsForOsc = unisonSettingsToUse?.[unisonKey];
+      const unisonEnabled = unisonSettingsForOsc?.enabled && unisonSettingsForOsc.voices > 1;
       
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
@@ -2201,99 +2329,155 @@ export default function Synthesizer() {
           sourceNode = oscNode;
         }
       } else {
-        const oscNode = ctx.createOscillator();
-        oscNode.type = osc.waveform as OscillatorType;
-        oscNode.frequency.value = oscPitchHz;
-        oscNode.detune.value = osc.detune;
-        frequencyParam = oscNode.frequency;
-
-        // FM Synthesis: Use modulation index scaling for consistent timbre across pitches
-        // fmDepth is now interpreted as modulation index (0-1000 maps to 0-10 index)
-        // Actual Hz deviation = index * modulatorFreq, creating consistent harmonic ratios
-        if (osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise") {
-          const modOsc = ctx.createOscillator();
-          modOsc.type = osc.fmWaveform as OscillatorType;
-          const modulatorFreq = oscPitchHz * osc.fmRatio;
-          modOsc.frequency.value = modulatorFreq;
+        // Unison mode: create multiple detuned oscillators with stereo spread
+        const voiceCount = unisonEnabled ? unisonSettingsForOsc!.voices : 1;
+        const unisonDetune = unisonEnabled ? unisonSettingsForOsc!.detune : 0;
+        const unisonSpread = unisonEnabled ? unisonSettingsForOsc!.spread / 100 : 0;
+        const unisonBlend = unisonEnabled ? unisonSettingsForOsc!.blend / 100 : 1;
+        
+        // Create a merge node for all unison voices
+        const unisonMerge = ctx.createGain();
+        unisonMerge.gain.value = 1 / Math.sqrt(voiceCount); // Normalize volume
+        
+        let primaryOsc: OscillatorNode | null = null;
+        
+        for (let v = 0; v < voiceCount; v++) {
+          const oscNode = ctx.createOscillator();
+          oscNode.type = osc.waveform as OscillatorType;
+          oscNode.frequency.value = oscPitchHz;
           
-          const modGain = ctx.createGain();
-          // Convert depth (0-1000) to FM index (0-10), then multiply by modulator freq
-          // This gives frequency deviation in Hz that scales with pitch
-          const fmIndex = osc.fmDepth / 100; // 0-10 range
-          let fmDepthHz = fmIndex * modulatorFreq;
-          // Cap maximum deviation to prevent extreme distortion
-          fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 5);
+          // Calculate voice-specific detune: spread evenly from -detune to +detune
+          let voiceDetune = osc.detune;
+          if (voiceCount > 1) {
+            const detuneOffset = unisonDetune * ((v / (voiceCount - 1)) * 2 - 1);
+            voiceDetune += detuneOffset;
+          }
+          oscNode.detune.value = voiceDetune;
           
-          if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const baseDepth = Math.max(EPS, fmDepthHz);
-            const peakMultiplier = 1 + (osc.indexEnvDepth / 20); // Up to 3x peak
-            const peakDepth = baseDepth * peakMultiplier;
-            triggerAHD(modGain.gain, now, {
-              attack: 0.0005,
-              hold: 0,
-              decay: osc.indexEnvDecay / 1000
-            }, peakDepth, { startFromCurrent: false });
-          } else {
-            modGain.gain.value = fmDepthHz;
+          // Calculate stereo pan position: spread evenly from -spread to +spread
+          let voicePan = 0;
+          if (voiceCount > 1 && unisonSpread > 0) {
+            voicePan = unisonSpread * ((v / (voiceCount - 1)) * 2 - 1);
           }
           
-          modOsc.connect(modGain);
-          modGain.connect(oscNode.frequency);
+          // Create panner for this voice
+          const voicePanner = ctx.createStereoPanner();
+          voicePanner.pan.value = voicePan;
           
-          if (osc.fmFeedback > 0) {
-            const feedbackGain = ctx.createGain();
-            feedbackGain.gain.value = osc.fmFeedback * fmDepthHz * 0.3;
-            modOsc.connect(feedbackGain);
-            feedbackGain.connect(modOsc.frequency);
+          // Apply blend (mix between center and spread)
+          const voiceGain = ctx.createGain();
+          voiceGain.gain.value = v === 0 ? 1 : unisonBlend; // First voice always at full
+          
+          oscNode.connect(voiceGain);
+          voiceGain.connect(voicePanner);
+          voicePanner.connect(unisonMerge);
+          
+          // Track first oscillator for frequency param and source node
+          if (v === 0) {
+            primaryOsc = oscNode;
+            frequencyParam = oscNode.frequency;
           }
           
-          modOsc.start(now);
-          modOsc.stop(stopAt);
+          oscNode.start(now + phaseSeconds);
+          oscNode.stop(stopAt);
+          
+          // Collect additional voices for cleanup
+          if (v > 0 && sourcesCollector) {
+            sourcesCollector.push(oscNode);
+          }
         }
+        
+        // Apply FM/PM modulation to primary oscillator only (affects perceived pitch)
+        if (primaryOsc) {
+          // FM Synthesis: Use modulation index scaling for consistent timbre across pitches
+          if (osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise") {
+            const modOsc = ctx.createOscillator();
+            modOsc.type = osc.fmWaveform as OscillatorType;
+            const modulatorFreq = oscPitchHz * osc.fmRatio;
+            modOsc.frequency.value = modulatorFreq;
+            
+            const modGain = ctx.createGain();
+            const fmIndex = osc.fmDepth / 100;
+            let fmDepthHz = fmIndex * modulatorFreq;
+            fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 5);
+            
+            if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
+              const baseDepth = Math.max(EPS, fmDepthHz);
+              const peakMultiplier = 1 + (osc.indexEnvDepth / 20);
+              const peakDepth = baseDepth * peakMultiplier;
+              triggerAHD(modGain.gain, now, {
+                attack: 0.0005,
+                hold: 0,
+                decay: osc.indexEnvDecay / 1000
+              }, peakDepth, { startFromCurrent: false });
+            } else {
+              modGain.gain.value = fmDepthHz;
+            }
+            
+            modOsc.connect(modGain);
+            modGain.connect(primaryOsc.frequency);
+            
+            if (osc.fmFeedback > 0) {
+              const feedbackGain = ctx.createGain();
+              feedbackGain.gain.value = osc.fmFeedback * fmDepthHz * 0.3;
+              modOsc.connect(feedbackGain);
+              feedbackGain.connect(modOsc.frequency);
+            }
+            
+            modOsc.start(now);
+            modOsc.stop(stopAt);
+          }
 
-        // PM (Linear FM): Uses carrier-relative scaling for pitch-stable modulation
-        // Useful for wobbly bass, vibrato effects, and subtle harmonic animation
-        // pmDepth is a percentage of carrier frequency (0-60 maps to 0-60% deviation)
-        if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
-          const pmModOsc = ctx.createOscillator();
-          pmModOsc.type = osc.pmWaveform as OscillatorType;
-          const pmModulatorFreq = oscPitchHz * osc.pmRatio;
-          pmModOsc.frequency.value = pmModulatorFreq;
-          
-          const pmModGain = ctx.createGain();
-          // PM uses percentage of carrier frequency for deviation
-          // This creates more dramatic pitch effects at low ratios (vibrato-like)
-          const pmDepthHz = (osc.pmDepth / 100) * oscPitchHz;
-          
-          if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-            const basePmDepth = Math.max(EPS, pmDepthHz);
-            const peakMultiplier = 1 + (osc.indexEnvDepth / 15);
-            const peakPmDepth = basePmDepth * peakMultiplier;
-            triggerAHD(pmModGain.gain, now, {
-              attack: 0.0005,
-              hold: 0,
-              decay: osc.indexEnvDecay / 1000
-            }, peakPmDepth, { startFromCurrent: false });
-          } else {
-            pmModGain.gain.value = pmDepthHz;
+          // PM (Linear FM): Uses carrier-relative scaling for pitch-stable modulation
+          if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
+            const pmModOsc = ctx.createOscillator();
+            pmModOsc.type = osc.pmWaveform as OscillatorType;
+            const pmModulatorFreq = oscPitchHz * osc.pmRatio;
+            pmModOsc.frequency.value = pmModulatorFreq;
+            
+            const pmModGain = ctx.createGain();
+            const pmDepthHz = (osc.pmDepth / 100) * oscPitchHz;
+            
+            if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
+              const basePmDepth = Math.max(EPS, pmDepthHz);
+              const peakMultiplier = 1 + (osc.indexEnvDepth / 15);
+              const peakPmDepth = basePmDepth * peakMultiplier;
+              triggerAHD(pmModGain.gain, now, {
+                attack: 0.0005,
+                hold: 0,
+                decay: osc.indexEnvDecay / 1000
+              }, peakPmDepth, { startFromCurrent: false });
+            } else {
+              pmModGain.gain.value = pmDepthHz;
+            }
+            
+            pmModOsc.connect(pmModGain);
+            pmModGain.connect(primaryOsc.frequency);
+            
+            if (osc.pmFeedback > 0) {
+              const pmFeedbackGain = ctx.createGain();
+              pmFeedbackGain.gain.value = osc.pmFeedback * pmDepthHz * 0.2;
+              pmModOsc.connect(pmFeedbackGain);
+              pmFeedbackGain.connect(pmModOsc.frequency);
+            }
+            
+            pmModOsc.start(now);
+            pmModOsc.stop(stopAt);
           }
           
-          pmModOsc.connect(pmModGain);
-          pmModGain.connect(oscNode.frequency);
-          
-          if (osc.pmFeedback > 0) {
-            const pmFeedbackGain = ctx.createGain();
-            pmFeedbackGain.gain.value = osc.pmFeedback * pmDepthHz * 0.2;
-            pmModOsc.connect(pmFeedbackGain);
-            pmFeedbackGain.connect(pmModOsc.frequency);
-          }
-          
-          pmModOsc.start(now);
-          pmModOsc.stop(stopAt);
+          sourceNode = primaryOsc;
+        } else {
+          // Fallback: create single oscillator if primary wasn't created
+          const oscNode = ctx.createOscillator();
+          oscNode.type = osc.waveform as OscillatorType;
+          oscNode.frequency.value = oscPitchHz;
+          oscNode.detune.value = osc.detune;
+          frequencyParam = oscNode.frequency;
+          oscNode.connect(oscGain);
+          sourceNode = oscNode;
         }
-
-        oscNode.connect(oscGain);
-        sourceNode = oscNode;
+        
+        unisonMerge.connect(oscGain);
       }
 
       let finalGain = oscGain;
@@ -2880,7 +3064,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings);
       }, durationInSeconds);
     } catch (err) {
       console.error("Tone.Offline error:", err);
@@ -3093,16 +3277,53 @@ export default function Synthesizer() {
     };
   }, [exportResult]);
 
+  // Update refs for keyboard shortcuts
+  useEffect(() => {
+    handleTriggerRef.current = handleTrigger;
+    handleExportRef.current = handleExport;
+  }, [handleTrigger, handleExport]);
+  
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if focus is in an input element
+      const target = e.target as HTMLElement;
+      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
+        return;
+      }
+      
+      // Spacebar: Play/Trigger
       if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
-        handleTrigger();
+        handleTriggerRef.current();
+        return;
+      }
+      
+      // Ctrl/Cmd + Z: Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+        return;
+      }
+      
+      // Ctrl/Cmd + Y or Ctrl/Cmd + Shift + Z: Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+        return;
+      }
+      
+      // E: Export (without modifiers)
+      if (e.key === "e" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        handleExportRef.current();
+        return;
       }
     };
+    
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleTrigger]);
+  }, [handleUndo, handleRedo]);
 
   return (
     <ModulationProvider modulators={params.modulators} routes={params.modulationRoutes}>
@@ -3113,6 +3334,28 @@ export default function Synthesizer() {
           {/* Controls row */}
           <div className="flex items-center gap-3">
             <TriggerButton onTrigger={handleTrigger} isPlaying={isPlaying} size="md" />
+            <div className="flex items-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                title="Undo (Ctrl+Z)"
+                data-testid="button-undo"
+              >
+                <Undo2 className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                title="Redo (Ctrl+Y)"
+                data-testid="button-redo"
+              >
+                <Redo2 className="h-4 w-4" />
+              </Button>
+            </div>
             <KeySelector value={currentKey} onChange={handleKeyChange} />
             {/* Waveform inline on desktop */}
             <WaveformDisplay3D 
@@ -3220,6 +3463,12 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(1); setWavetableEditorOpen(true); }}
+                      unisonSettings={unisonSettings.osc1}
+                      onUnisonChange={(settings) => {
+                        const newSettings = { ...unisonSettings, osc1: settings };
+                        setUnisonSettings(newSettings);
+                        saveUnisonSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -3243,6 +3492,12 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(2); setWavetableEditorOpen(true); }}
+                      unisonSettings={unisonSettings.osc2}
+                      onUnisonChange={(settings) => {
+                        const newSettings = { ...unisonSettings, osc2: settings };
+                        setUnisonSettings(newSettings);
+                        saveUnisonSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -3266,6 +3521,12 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(3); setWavetableEditorOpen(true); }}
+                      unisonSettings={unisonSettings.osc3}
+                      onUnisonChange={(settings) => {
+                        const newSettings = { ...unisonSettings, osc3: settings };
+                        setUnisonSettings(newSettings);
+                        saveUnisonSettings(newSettings);
+                      }}
                     />
                   </TabsContent>
                 </Tabs>
@@ -3334,6 +3595,20 @@ export default function Synthesizer() {
                 subOsc={params.subOsc}
                 onChange={(subOsc) => setParams({ ...params, subOsc })}
               />
+              <RingModPanel
+                settings={ringModSettings}
+                onChange={(settings) => {
+                  setRingModSettings(settings);
+                  saveRingModSettings(settings);
+                }}
+              />
+              <SampleLayerPanel
+                settings={sampleLayerSettings}
+                onChange={(settings) => {
+                  setSampleLayerSettings(settings);
+                  saveSampleLayerSettings(settings);
+                }}
+              />
               <div className="md:col-span-2">
                 <SynthEngineSelector
                   modal={params.modal}
@@ -3394,6 +3669,27 @@ export default function Synthesizer() {
                   saveAdvancedSpectralSettings(newSettings);
                 }}
               />
+              <PhaserFlangerPanel
+                settings={phaserFlangerSettings}
+                onChange={(settings) => {
+                  setPhaserFlangerSettings(settings);
+                  savePhaserFlangerSettings(settings);
+                }}
+              />
+              <ParametricEQPanel
+                settings={parametricEQSettings}
+                onChange={(settings) => {
+                  setParametricEQSettings(settings);
+                  saveParametricEQSettings(settings);
+                }}
+              />
+              <ParallelProcessingPanel
+                settings={parallelProcessingSettings}
+                onChange={(settings) => {
+                  setParallelProcessingSettings(settings);
+                  saveParallelProcessingSettings(settings);
+                }}
+              />
             </div>
           </TabsContent>
 
@@ -3440,6 +3736,13 @@ export default function Synthesizer() {
                 output={params.output}
                 onChange={(output) => setParams({ ...params, output })}
               />
+              <MultibandCompPanel
+                settings={multibandCompSettings}
+                onChange={(settings) => {
+                  setMultibandCompSettings(settings);
+                  saveMultibandCompSettings(settings);
+                }}
+              />
             </div>
           </TabsContent>
 
@@ -3457,6 +3760,21 @@ export default function Synthesizer() {
                 isExporting={isExporting}
                 exportResult={exportResult}
                 onClearResult={clearExportResult}
+              />
+              <RoundRobinPanel
+                settings={roundRobinSettings}
+                onChange={(settings) => {
+                  setRoundRobinSettings(settings);
+                  saveRoundRobinSettings(settings);
+                }}
+              />
+              <MIDIInputPanel
+                settings={midiSettings}
+                onChange={(settings) => {
+                  setMidiSettings(settings);
+                  saveMIDISettings(settings);
+                }}
+                onNoteOn={handleTrigger}
               />
             </div>
           </TabsContent>

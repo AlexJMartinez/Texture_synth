@@ -10,6 +10,7 @@ import { Waves } from "./WaveformIcons";
 import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2, Layers } from "lucide-react";
 import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
 import type { OscWavetableSettings } from "@/lib/wavetableSettings";
+import type { UnisonSettings } from "@/lib/unisonSettings";
 
 export interface OscEnvelope {
   enabled: boolean;
@@ -82,6 +83,8 @@ interface OscillatorPanelProps {
   onWavetableChange?: (settings: OscWavetableSettings) => void;
   onOpenWavetableEditor?: () => void;
   onImportWavetable?: () => void;
+  unisonSettings?: UnisonSettings;
+  onUnisonChange?: (settings: UnisonSettings) => void;
 }
 
 export function OscillatorPanel({ 
@@ -96,7 +99,9 @@ export function OscillatorPanel({
   wavetableSettings,
   onWavetableChange,
   onOpenWavetableEditor,
-  onImportWavetable
+  onImportWavetable,
+  unisonSettings,
+  onUnisonChange
 }: OscillatorPanelProps) {
   const pitch = normalizePitch(oscillator.pitch);
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
@@ -106,6 +111,7 @@ export function OscillatorPanel({
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
   const [oscEnvOpen, setOscEnvOpen] = useState(envelope?.enabled ?? false);
   const [wavetableOpen, setWavetableOpen] = useState(wavetableSettings?.enabled ?? false);
+  const [unisonOpen, setUnisonOpen] = useState(unisonSettings?.enabled ?? false);
 
   const updateEnvelope = <K extends keyof OscEnvelope>(key: K, value: OscEnvelope[K]) => {
     if (envelope && onEnvelopeChange) {
@@ -801,6 +807,75 @@ export function OscillatorPanel({
                     <SelectItem value="logarithmic">Log</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {unisonSettings && onUnisonChange && (
+          <div className={`rounded border border-border/50 transition-opacity ${!unisonSettings.enabled ? 'opacity-50 bg-muted/10' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
+            <div className="flex items-center justify-between px-1.5 py-0.5">
+              <button
+                type="button"
+                onClick={() => setUnisonOpen(!unisonOpen)}
+                className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                {unisonOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+                <Layers className="w-2.5 h-2.5 text-cyan-400" />
+                Unison
+              </button>
+              <Switch
+                checked={unisonSettings.enabled}
+                onCheckedChange={(v) => onUnisonChange({ ...unisonSettings, enabled: v })}
+                className="scale-50"
+                data-testid={`switch-unison-${index}`}
+              />
+            </div>
+            {unisonOpen && (
+              <div className="px-1.5 pb-1.5">
+                <div className="flex justify-center gap-1">
+                  <Knob
+                    value={unisonSettings.voices}
+                    min={1}
+                    max={8}
+                    step={1}
+                    label="Voices"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, voices: v })}
+                    accentColor="accent"
+                    size="xs"
+                  />
+                  <Knob
+                    value={unisonSettings.detune}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Detune"
+                    unit="ct"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, detune: v })}
+                    size="xs"
+                  />
+                  <Knob
+                    value={unisonSettings.spread}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Spread"
+                    unit="%"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, spread: v })}
+                    size="xs"
+                  />
+                  <Knob
+                    value={unisonSettings.blend}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Blend"
+                    unit="%"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, blend: v })}
+                    accentColor="primary"
+                    size="xs"
+                  />
+                </div>
               </div>
             )}
           </div>

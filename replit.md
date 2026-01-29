@@ -69,6 +69,19 @@ Core architectural decisions include:
 - **Preset Management**: Factory presets (built-in) and shared user presets with save/load/delete functionality. User presets are stored in PostgreSQL database for global sharing across all users and devices. Factory presets can be hidden locally (stored in localStorage). Features import/export for backup.
 - **Randomization**: Features full randomization with chaos control slider (10-100%) and gentle mutation. Includes audibility safeguards to prevent silent outputs.
 
+### Advanced Features (January 2026)
+- **Unison/Super Mode**: Per-oscillator voice stacking (1-8 voices) with detune spread (0-100 cents), stereo width (0-100%), and blend controls. Stored in localStorage. Audio implementation creates multiple oscillators with calculated detuning.
+- **Ring Modulation**: UI panel for oscillator multiplication with source selection (OSC 1/2/3), mix, and output level controls. Settings stored in localStorage. (Audio implementation pending - requires capturing oscillator outputs before mixing)
+- **Sample Layer**: Drag-and-drop audio import with pitch adjustment (-24 to +24 st), attack/decay envelopes, start/end position, reverse, and loop controls. Samples stored as base64 in localStorage.
+- **Multiband Compression**: 3-band compressor with adjustable crossover frequencies (Low X: 20-500Hz, High X: 2k-10kHz), per-band threshold/ratio/attack/release/gain, and mix control. Stored in localStorage.
+- **Phaser/Flanger Effects**: Modulation effects with rate, depth, feedback, and mix controls. Phaser includes stages (2/4/6/8/12). Flanger includes base delay time. Stored in localStorage.
+- **Parametric EQ**: 3-band EQ with low shelf, peaking (mid), and high shelf bands. Each band has frequency, gain (-15 to +15 dB), and Q controls. Stored in localStorage.
+- **Round-Robin Export**: Generate 2-8 subtle variations of the current sound for realistic round-robin playback. Configurable variation amount and parameter selection (pitch, envelope, filter, level).
+- **Parallel Processing**: Global dry/wet blend for effects chain with separate dry/wet gain controls (-12 to +12 dB). Stored in localStorage. (Audio routing pending - requires effects chain refactoring)
+- **MIDI Input**: Web MIDI API integration for triggering sounds. Features device selection, velocity sensitivity toggle, and note range filtering. Works in Chrome/Edge browsers.
+- **Undo/Redo System**: 50-state parameter history with keyboard shortcuts (Ctrl+Z/Cmd+Z for undo, Ctrl+Y/Cmd+Y or Ctrl+Shift+Z for redo). Tracks main synth parameters only (not localStorage settings which are intentional global preferences).
+- **Keyboard Shortcuts**: Spacebar (play/trigger), E (export), Ctrl+Z/Y (undo/redo). Disabled when focus is in input fields.
+
 ## External Dependencies
 - **React**: Frontend library.
 - **TypeScript**: Superset of JavaScript for type safety.
