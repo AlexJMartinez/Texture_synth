@@ -279,17 +279,19 @@ export function Knob({
             strokeDasharray={`${270 * 2.88} 360`}
             strokeLinecap="round"
           />
-          <circle
-            cx="50"
-            cy="50"
-            r="46"
-            fill="none"
-            stroke={`hsl(var(--${accentColor}))`}
-            strokeWidth="3"
-            strokeDasharray={`${normalizeValue(value) * 270 * 2.88} 360`}
-            strokeLinecap="round"
-            style={{ filter: `drop-shadow(0 0 3px hsl(var(--${accentColor})/0.5))` }}
-          />
+          {normalizeValue(value) > 0.01 && (
+            <circle
+              cx="50"
+              cy="50"
+              r="46"
+              fill="none"
+              stroke={`hsl(var(--${accentColor}))`}
+              strokeWidth="3"
+              strokeDasharray={`${normalizeValue(value) * 270 * 2.88} 360`}
+              strokeLinecap="round"
+              style={{ filter: `drop-shadow(0 0 3px hsl(var(--${accentColor})/0.5))` }}
+            />
+          )}
         </svg>
         </div>
       </div>
