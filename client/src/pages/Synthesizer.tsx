@@ -1900,8 +1900,10 @@ export default function Synthesizer() {
       
       const lfo1 = ctx.createOscillator();
       const lfo2 = ctx.createOscillator();
-      lfo1.frequency.value = params.effects.chorusRate;
-      lfo2.frequency.value = params.effects.chorusRate * 1.1;
+      // Ensure chorus rate is always positive (minimum 0.1 Hz)
+      const safeChorusRate = Math.max(0.1, params.effects.chorusRate);
+      lfo1.frequency.value = safeChorusRate;
+      lfo2.frequency.value = safeChorusRate * 1.1;
       
       const lfoGain1 = ctx.createGain();
       const lfoGain2 = ctx.createGain();
@@ -1914,11 +1916,14 @@ export default function Synthesizer() {
       lfo2.connect(lfoGain2);
       lfoGain2.connect(chorusDelay2.delayTime);
       
-      lfo1.start(now);
-      lfo2.start(now);
+      // Ensure start/stop times are always non-negative
+      const safeNow = Math.max(0, now);
+      const safeStopAt = Math.max(safeNow + 0.01, stopAt);
+      lfo1.start(safeNow);
+      lfo2.start(safeNow);
       // Fix 3: Stop nodes after safety fade completes
-      lfo1.stop(stopAt);
-      lfo2.stop(stopAt);
+      lfo1.stop(safeStopAt);
+      lfo2.stop(safeStopAt);
       
       const chorusWet = ctx.createGain();
       chorusWet.gain.value = params.effects.chorusMix / 100;
@@ -2475,11 +2480,13 @@ export default function Synthesizer() {
         // Wavetable oscillator mode (only for live AudioContext, not offline)
         const wavetable = getWavetableById(wtSettings.wavetableId);
         if (wavetable) {
+          // Ensure start time is never negative
+          const safeStartTime = Math.max(0, now + phaseSeconds);
           const wtResult = createUnisonWavetableOscillators(
             ctx as AudioContext,
             wtSettings,
             oscPitchHz,
-            now + phaseSeconds,
+            safeStartTime,
             stopAt
           );
           if (wtResult) {
@@ -2566,7 +2573,9 @@ export default function Synthesizer() {
             frequencyParam = oscNode.frequency;
           }
           
-          oscNode.start(now + phaseSeconds);
+          // Ensure start time is never negative (phase offset could be negative)
+          const oscStartTime = Math.max(0, now + phaseSeconds);
+          oscNode.start(oscStartTime);
           oscNode.stop(stopAt);
           
           // Collect additional voices for cleanup
