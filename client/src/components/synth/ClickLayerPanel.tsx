@@ -48,7 +48,7 @@ export function ClickLayerPanel({ clickLayer, onChange }: ClickLayerPanelProps) 
           <Knob
             value={clickLayer.decay}
             min={1}
-            max={10}
+            max={25}
             step={0.5}
             label="Decay"
             unit="ms"

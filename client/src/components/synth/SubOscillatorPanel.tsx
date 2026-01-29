@@ -95,13 +95,14 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           <Knob
             value={subOsc.decay}
             min={10}
-            max={2000}
+            max={10000}
             step={10}
             label="Decay"
             unit="ms"
             onChange={(v) => update("decay", v)}
             accentColor="accent"
             size="xs"
+            logarithmic
           />
           <Knob
             value={subOsc.drive ?? 0}
