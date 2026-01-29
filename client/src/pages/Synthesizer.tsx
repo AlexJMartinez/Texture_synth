@@ -70,6 +70,20 @@ import {
 import { pitchToHz } from "@/lib/pitchUtils";
 import { triggerAHD, stopWithFade, EPS } from "@/lib/envelopeAHD";
 import type { FullSynthSettings } from "@/lib/fullPreset";
+import {
+  type AllOscWavetableSettings,
+  type OscWavetableSettings,
+  loadWavetableSettings,
+  saveWavetableSettings,
+  defaultAllOscWavetableSettings,
+  randomizeWavetableSettings,
+} from "@/lib/wavetableSettings";
+import {
+  createUnisonWavetableOscillators,
+  getPeriodicWaveAtPosition,
+  initializeWavetableEngine,
+} from "@/lib/wavetableEngine";
+import { getWavetableById } from "@/lib/factoryWavetables";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
 
@@ -431,6 +445,8 @@ export default function Synthesizer() {
   const [lowEndSettings, setLowEndSettings] = useState<LowEndSettings>(loadLowEndSettings);
   const [phaseSettings, setPhaseSettings] = useState<OscPhaseSettings>(loadOscPhaseSettings);
   const [advancedSpectralSettings, setAdvancedSpectralSettings] = useState<AdvancedSpectralSettings>(loadAdvancedSpectralSettings);
+  const [wavetableSettings, setWavetableSettings] = useState<AllOscWavetableSettings>(loadWavetableSettings);
+  const [wavetableEditorOpen, setWavetableEditorOpen] = useState(false);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -1296,7 +1312,8 @@ export default function Synthesizer() {
     sourcesCollector?: AudioScheduledSourceNode[],
     perOscEnvelopes?: OscEnvelopes,
     convSettings?: ConvolverSettings,
-    revSettings?: ReverbSettings
+    revSettings?: ReverbSettings,
+    wtSettingsToUse?: AllOscWavetableSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -2098,6 +2115,10 @@ export default function Synthesizer() {
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
 
+      // Check if wavetable mode is enabled for this oscillator
+      const wtSettings = wtSettingsToUse?.[key as keyof AllOscWavetableSettings];
+      const useWavetable = wtSettings?.enabled && osc.waveform !== "noise";
+      
       if (osc.waveform === "noise") {
         const bufferSize = Math.ceil(ctx.sampleRate * durationSec);
         const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
@@ -2109,6 +2130,50 @@ export default function Synthesizer() {
         noiseSource.buffer = noiseBuffer;
         noiseSource.connect(oscGain);
         sourceNode = noiseSource;
+      } else if (useWavetable && ctx instanceof AudioContext) {
+        // Wavetable oscillator mode (only for live AudioContext, not offline)
+        const wavetable = getWavetableById(wtSettings.wavetableId);
+        if (wavetable) {
+          const wtResult = createUnisonWavetableOscillators(
+            ctx as AudioContext,
+            wtSettings,
+            oscPitchHz,
+            now + phaseSeconds,
+            stopAt
+          );
+          if (wtResult) {
+            // Apply detune to all voices
+            wtResult.oscillators.forEach(oscNode => {
+              oscNode.detune.value += osc.detune;
+            });
+            wtResult.outputGain.connect(oscGain);
+            frequencyParam = wtResult.oscillators[0]?.frequency || null;
+            sourceNode = wtResult.oscillators[0]; // Track first osc for stopping
+            
+            // Register all additional oscillators for cleanup (first is tracked via sourceNode)
+            if (sourcesCollector && wtResult.oscillators.length > 1) {
+              wtResult.oscillators.slice(1).forEach(o => sourcesCollector.push(o));
+            }
+          } else {
+            // Fallback to basic oscillator if wavetable fails
+            const oscNode = ctx.createOscillator();
+            oscNode.type = osc.waveform as OscillatorType;
+            oscNode.frequency.value = oscPitchHz;
+            oscNode.detune.value = osc.detune;
+            frequencyParam = oscNode.frequency;
+            oscNode.connect(oscGain);
+            sourceNode = oscNode;
+          }
+        } else {
+          // Fallback if wavetable not found
+          const oscNode = ctx.createOscillator();
+          oscNode.type = osc.waveform as OscillatorType;
+          oscNode.frequency.value = oscPitchHz;
+          oscNode.detune.value = osc.detune;
+          frequencyParam = oscNode.frequency;
+          oscNode.connect(oscGain);
+          sourceNode = oscNode;
+        }
       } else {
         const oscNode = ctx.createOscillator();
         oscNode.type = osc.waveform as OscillatorType;
@@ -2789,7 +2854,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings);
       }, durationInSeconds);
     } catch (err) {
       console.error("Tone.Offline error:", err);
@@ -3122,6 +3187,13 @@ export default function Synthesizer() {
                         setAdvancedFMSettings(newSettings);
                         saveAdvancedFMSettings(newSettings);
                       }}
+                      wavetableSettings={wavetableSettings.osc1}
+                      onWavetableChange={(settings) => {
+                        const newSettings = { ...wavetableSettings, osc1: settings };
+                        setWavetableSettings(newSettings);
+                        saveWavetableSettings(newSettings);
+                      }}
+                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -3138,6 +3210,13 @@ export default function Synthesizer() {
                         setAdvancedFMSettings(newSettings);
                         saveAdvancedFMSettings(newSettings);
                       }}
+                      wavetableSettings={wavetableSettings.osc2}
+                      onWavetableChange={(settings) => {
+                        const newSettings = { ...wavetableSettings, osc2: settings };
+                        setWavetableSettings(newSettings);
+                        saveWavetableSettings(newSettings);
+                      }}
+                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -3154,6 +3233,13 @@ export default function Synthesizer() {
                         setAdvancedFMSettings(newSettings);
                         saveAdvancedFMSettings(newSettings);
                       }}
+                      wavetableSettings={wavetableSettings.osc3}
+                      onWavetableChange={(settings) => {
+                        const newSettings = { ...wavetableSettings, osc3: settings };
+                        setWavetableSettings(newSettings);
+                        saveWavetableSettings(newSettings);
+                      }}
+                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
                     />
                   </TabsContent>
                 </Tabs>

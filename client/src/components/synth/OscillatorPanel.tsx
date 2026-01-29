@@ -4,10 +4,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
+import { WavetableSelector } from "./WavetableSelector";
 import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType, EnvelopeCurve } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
 import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2, Layers } from "lucide-react";
 import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
+import type { OscWavetableSettings } from "@/lib/wavetableSettings";
 
 export interface OscEnvelope {
   enabled: boolean;
@@ -76,9 +78,26 @@ interface OscillatorPanelProps {
   onEnvelopeChange?: (envelope: OscEnvelope) => void;
   advancedFM?: AdvancedFMSettings;
   onAdvancedFMChange?: (settings: AdvancedFMSettings) => void;
+  wavetableSettings?: OscWavetableSettings;
+  onWavetableChange?: (settings: OscWavetableSettings) => void;
+  onOpenWavetableEditor?: () => void;
+  onImportWavetable?: () => void;
 }
 
-export function OscillatorPanel({ oscillator, onChange, title, index, envelope, onEnvelopeChange, advancedFM, onAdvancedFMChange }: OscillatorPanelProps) {
+export function OscillatorPanel({ 
+  oscillator, 
+  onChange, 
+  title, 
+  index, 
+  envelope, 
+  onEnvelopeChange, 
+  advancedFM, 
+  onAdvancedFMChange,
+  wavetableSettings,
+  onWavetableChange,
+  onOpenWavetableEditor,
+  onImportWavetable
+}: OscillatorPanelProps) {
   const pitch = normalizePitch(oscillator.pitch);
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
   const [fmAdvancedOpen, setFmAdvancedOpen] = useState(false);
@@ -86,6 +105,7 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
   const [pmOpen, setPmOpen] = useState(oscillator.pmEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
   const [oscEnvOpen, setOscEnvOpen] = useState(envelope?.enabled ?? false);
+  const [wavetableOpen, setWavetableOpen] = useState(wavetableSettings?.enabled ?? false);
 
   const updateEnvelope = <K extends keyof OscEnvelope>(key: K, value: OscEnvelope[K]) => {
     if (envelope && onEnvelopeChange) {
@@ -165,6 +185,19 @@ export function OscillatorPanel({ oscillator, onChange, title, index, envelope, 
             <SelectItem value="noise">Noise</SelectItem>
           </SelectContent>
         </Select>
+
+        {wavetableSettings && onWavetableChange && (
+          <div className={`rounded border border-border/50 p-1.5 transition-opacity ${wavetableSettings.enabled ? 'bg-cyan-500/5 border-cyan-500/30' : 'opacity-60 bg-muted/10'}`}>
+            <WavetableSelector
+              settings={wavetableSettings}
+              onChange={onWavetableChange}
+              onOpenEditor={onOpenWavetableEditor}
+              onImport={onImportWavetable}
+              disabled={!oscillator.enabled}
+              oscIndex={index}
+            />
+          </div>
+        )}
 
         <div className="flex items-center gap-1 mb-1">
           <span className="text-[9px] text-muted-foreground">Pitch:</span>
