@@ -1357,6 +1357,9 @@ export default function Synthesizer() {
     
     let lastNode: AudioNode = combinedGain;
     
+    const filterEnv = params.envelopes.env1;
+    const shouldApplyFilterEnv = filterEnv.enabled && filterEnv.amount !== 0;
+    
     if (params.filter.enabled) {
       if (params.filter.type === "comb") {
         const delay = ctx.createDelay();
@@ -1383,25 +1386,45 @@ export default function Synthesizer() {
         masterGain.connect(filter);
         lastNode = filter;
         
-        const filterEnv = params.envelopes.env1;
-        if (filterEnv.enabled) {
+        if (shouldApplyFilterEnv) {
           const attackEnd = now + filterEnv.attack / 1000;
           const holdEnd = attackEnd + filterEnv.hold / 1000;
           const decayEnd = holdEnd + filterEnv.decay / 1000;
-          const modAmount = (filterEnv.amount / 100) * (params.filter.frequency * 2);
+          const baseFreq = params.filter.frequency;
+          const envAmount = filterEnv.amount / 100;
+          const modRange = envAmount > 0 
+            ? Math.min(20000, baseFreq * Math.pow(10, Math.abs(envAmount) * 2)) - baseFreq
+            : baseFreq - Math.max(20, baseFreq / Math.pow(10, Math.abs(envAmount) * 2));
+          const targetFreq = Math.max(20, Math.min(20000, baseFreq + modRange));
           
-          filter.frequency.setValueAtTime(params.filter.frequency, now);
-          filter.frequency.linearRampToValueAtTime(
-            Math.max(20, Math.min(20000, params.filter.frequency + modAmount)), 
-            attackEnd
-          );
-          filter.frequency.setValueAtTime(
-            Math.max(20, Math.min(20000, params.filter.frequency + modAmount)), 
-            holdEnd
-          );
-          filter.frequency.linearRampToValueAtTime(params.filter.frequency, decayEnd);
+          filter.frequency.setValueAtTime(baseFreq, now);
+          filter.frequency.exponentialRampToValueAtTime(targetFreq, attackEnd);
+          filter.frequency.setValueAtTime(targetFreq, holdEnd);
+          filter.frequency.exponentialRampToValueAtTime(baseFreq, decayEnd);
         }
       }
+    } else if (shouldApplyFilterEnv) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      const baseFreq = 2000;
+      filter.frequency.value = baseFreq;
+      filter.Q.value = 1;
+      combinedGain.connect(filter);
+      lastNode = filter;
+      
+      const attackEnd = now + filterEnv.attack / 1000;
+      const holdEnd = attackEnd + filterEnv.hold / 1000;
+      const decayEnd = holdEnd + filterEnv.decay / 1000;
+      const envAmount = filterEnv.amount / 100;
+      const modRange = envAmount > 0 
+        ? Math.min(20000, baseFreq * Math.pow(10, Math.abs(envAmount) * 2)) - baseFreq
+        : baseFreq - Math.max(20, baseFreq / Math.pow(10, Math.abs(envAmount) * 2));
+      const targetFreq = Math.max(20, Math.min(20000, baseFreq + modRange));
+      
+      filter.frequency.setValueAtTime(baseFreq, now);
+      filter.frequency.exponentialRampToValueAtTime(targetFreq, attackEnd);
+      filter.frequency.setValueAtTime(targetFreq, holdEnd);
+      filter.frequency.exponentialRampToValueAtTime(baseFreq, decayEnd);
     }
 
     if (params.waveshaper.enabled) {
@@ -2441,7 +2464,7 @@ export default function Synthesizer() {
       
       clickSource.connect(clickFilter);
       clickNode.connect(clickGain);
-      clickGain.connect(masterGain);
+      clickGain.connect(perOscBypassGain);
       
       clickSource.start(now);
       clickSource.stop(now + clickDecay + 0.01);
