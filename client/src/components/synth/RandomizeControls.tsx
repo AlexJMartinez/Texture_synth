@@ -136,7 +136,7 @@ function randomizeSubSafe(mutateFrom?: {
   pitchEnvBypass?: boolean;
 }): {
   enabled: boolean;
-  octave: -2 | -1 | 0;
+  octave: number;
   waveform: "sine" | "triangle";
   level: number;
   filterFreq: number;
@@ -151,7 +151,7 @@ function randomizeSubSafe(mutateFrom?: {
   const mix = (cur: number, next: number, amt: number) => cur + (next - cur) * amt;
   const amt = mutateFrom ? 0.35 : 1.0;
   
-  const octave = (Math.random() < 0.75 ? -1 : -2) as -1 | -2;
+  const octave = Math.random() < 0.75 ? -1 : -2;
   const waveform: "sine" | "triangle" = (["sine", "triangle"] as const)[Math.floor(Math.random() * 2)];
   const level = randExp(8, 35, 2.0);
   const lpHz = randExp(80, 160, 1.7);
@@ -161,7 +161,7 @@ function randomizeSubSafe(mutateFrom?: {
   
   return {
     enabled: mutateFrom?.enabled ?? true,
-    octave: mutateFrom?.octave != null ? (Math.random() < 0.9 ? (mutateFrom.octave as -2 | -1 | 0) : octave) : octave,
+    octave: mutateFrom?.octave != null ? (Math.random() < 0.9 ? mutateFrom.octave : octave) : octave,
     waveform: mutateFrom?.waveform ?? waveform,
     level: mutateFrom?.level != null ? Math.round(clamp(mix(mutateFrom.level, level, amt), 4, 50)) : Math.round(level),
     filterFreq: mutateFrom?.filterFreq != null ? Math.round(clamp(mix(mutateFrom.filterFreq, lpHz, amt), 60, 200)) : Math.round(lpHz),

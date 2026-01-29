@@ -48,16 +48,22 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           </Select>
           <Select
             value={String(subOsc.octave)}
-            onValueChange={(v) => update("octave", parseInt(v) as -2 | -1 | 0)}
+            onValueChange={(v) => update("octave", parseInt(v))}
             disabled={!subOsc.enabled}
           >
             <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-sub-octave">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="-4">-4 Oct</SelectItem>
+              <SelectItem value="-3">-3 Oct</SelectItem>
               <SelectItem value="-2">-2 Oct</SelectItem>
               <SelectItem value="-1">-1 Oct</SelectItem>
               <SelectItem value="0">0 Oct</SelectItem>
+              <SelectItem value="1">+1 Oct</SelectItem>
+              <SelectItem value="2">+2 Oct</SelectItem>
+              <SelectItem value="3">+3 Oct</SelectItem>
+              <SelectItem value="4">+4 Oct</SelectItem>
             </SelectContent>
           </Select>
         </div>

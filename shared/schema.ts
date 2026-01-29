@@ -266,7 +266,7 @@ export type SubWaveformType = z.infer<typeof SubWaveformType>;
 const SubOscillatorSchema = z.object({
   enabled: z.boolean(),
   waveform: SubWaveformType,
-  octave: z.number().min(-2).max(0),
+  octave: z.number().min(-4).max(4),
   level: z.number().min(0).max(100),
   attack: z.number().min(0).max(100),
   decay: z.number().min(10).max(2000),

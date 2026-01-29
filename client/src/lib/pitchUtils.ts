@@ -47,7 +47,7 @@ export function createDefaultPitchState(baseHz: number = 440): PitchState {
 }
 
 export const PITCH_RANGES = {
-  coarse: { minSt: -24, maxSt: 24 },
+  coarse: { minSt: -48, maxSt: 48 },
   extended: { minSt: -48, maxSt: 48 },
   cents: { min: -100, max: 100 },
   hz: { min: 20, max: 20000 },
