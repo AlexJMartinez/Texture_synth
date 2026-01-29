@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import type { Preset, SynthParameters, DbPreset } from "@shared/schema";
 import { factoryPresets } from "@shared/schema";
-import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw, Download, RefreshCw } from "lucide-react";
+import { Save, FolderOpen, Trash2, Plus, Music, RotateCcw, Download, RefreshCw, Pencil, Check, X } from "lucide-react";
 import type { FullSynthSettings, FullPreset } from "@/lib/fullPreset";
 import { FULL_PRESET_VERSION } from "@/lib/fullPreset";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -68,6 +68,24 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
     },
   });
 
+  // Update preset mutation (rename or overwrite)
+  const updatePresetMutation = useMutation({
+    mutationFn: async ({ id, name, settings }: { id: number; name?: string; settings?: unknown }) => {
+      return apiRequest("PATCH", `/api/presets/${id}`, { name, settings });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/presets"] });
+      if (variables.settings) {
+        toast({ title: "Preset updated", description: "Settings saved to existing preset" });
+      } else {
+        toast({ title: "Preset renamed" });
+      }
+    },
+    onError: (error) => {
+      toast({ title: "Failed to update preset", description: error.message, variant: "destructive" });
+    },
+  });
+
   const [hiddenFactoryPresets, setHiddenFactoryPresets] = useState<string[]>(() => {
     const stored = localStorage.getItem("synth-hidden-factory-presets");
     if (stored) {
@@ -86,6 +104,10 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
 
   const [newPresetName, setNewPresetName] = useState("");
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [editingPresetId, setEditingPresetId] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [overwriteDialogOpen, setOverwriteDialogOpen] = useState(false);
+  const [selectedPresetForOverwrite, setSelectedPresetForOverwrite] = useState<{ id: number; name: string } | null>(null);
 
   const savePreset = () => {
     if (!newPresetName.trim()) return;
@@ -102,6 +124,40 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
 
   const deletePreset = (id: number) => {
     deletePresetMutation.mutate(id);
+  };
+
+  const startRename = (id: number, currentName: string) => {
+    setEditingPresetId(id);
+    setEditingName(currentName);
+  };
+
+  const confirmRename = () => {
+    if (editingPresetId && editingName.trim()) {
+      updatePresetMutation.mutate({ id: editingPresetId, name: editingName.trim() });
+    }
+    setEditingPresetId(null);
+    setEditingName("");
+  };
+
+  const cancelRename = () => {
+    setEditingPresetId(null);
+    setEditingName("");
+  };
+
+  const openOverwriteDialog = (id: number, name: string) => {
+    setSelectedPresetForOverwrite({ id, name });
+    setOverwriteDialogOpen(true);
+  };
+
+  const confirmOverwrite = () => {
+    if (selectedPresetForOverwrite) {
+      updatePresetMutation.mutate({ 
+        id: selectedPresetForOverwrite.id, 
+        settings: currentSettings 
+      });
+    }
+    setOverwriteDialogOpen(false);
+    setSelectedPresetForOverwrite(null);
   };
 
   const hideFactoryPreset = (id: string) => {
@@ -329,34 +385,116 @@ export function PresetPanel({ currentSettings, onLoadPreset }: PresetPanelProps)
                       key={preset.id}
                       className="flex items-center gap-1 px-2 py-1 rounded text-[10px] hover-elevate bg-muted/30 border border-border/50"
                     >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onLoadPreset(preset.settings);
-                        }}
-                        className="flex-1 text-left"
-                        data-testid={`preset-user-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
-                      >
-                        {preset.name}
-                      </button>
-                      <button
-                        type="button"
-                        className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20 disabled:opacity-30"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deletePreset(preset.id);
-                        }}
-                        disabled={deletePresetMutation.isPending}
-                        data-testid={`button-delete-${preset.id}`}
-                      >
-                        <Trash2 className="w-3 h-3 text-destructive" />
-                      </button>
+                      {editingPresetId === preset.id ? (
+                        <>
+                          <Input
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") confirmRename();
+                              if (e.key === "Escape") cancelRename();
+                            }}
+                            className="flex-1 h-5 text-[10px] px-1"
+                            autoFocus
+                            data-testid={`input-rename-${preset.id}`}
+                          />
+                          <button
+                            type="button"
+                            className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity hover:bg-primary/20"
+                            onClick={confirmRename}
+                            data-testid={`button-confirm-rename-${preset.id}`}
+                          >
+                            <Check className="w-3 h-3 text-primary" />
+                          </button>
+                          <button
+                            type="button"
+                            className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity hover:bg-muted"
+                            onClick={cancelRename}
+                            data-testid={`button-cancel-rename-${preset.id}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onLoadPreset(preset.settings);
+                            }}
+                            className="flex-1 text-left truncate"
+                            data-testid={`preset-user-${preset.name.toLowerCase().replace(/\s/g, '-')}`}
+                          >
+                            {preset.name}
+                          </button>
+                          <button
+                            type="button"
+                            className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-accent/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openOverwriteDialog(preset.id, preset.name);
+                            }}
+                            title="Save current settings to this preset"
+                            data-testid={`button-overwrite-${preset.id}`}
+                          >
+                            <Save className="w-3 h-3 text-accent" />
+                          </button>
+                          <button
+                            type="button"
+                            className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-primary/20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startRename(preset.id, preset.name);
+                            }}
+                            title="Rename preset"
+                            data-testid={`button-rename-${preset.id}`}
+                          >
+                            <Pencil className="w-3 h-3 text-primary" />
+                          </button>
+                          <button
+                            type="button"
+                            className="h-5 w-5 p-0 rounded flex items-center justify-center opacity-50 hover:opacity-100 transition-opacity hover:bg-destructive/20 disabled:opacity-30"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deletePreset(preset.id);
+                            }}
+                            disabled={deletePresetMutation.isPending}
+                            data-testid={`button-delete-${preset.id}`}
+                          >
+                            <Trash2 className="w-3 h-3 text-destructive" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
+
+            {/* Overwrite confirmation dialog */}
+            <Dialog open={overwriteDialogOpen} onOpenChange={setOverwriteDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Overwrite Preset?</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground py-4">
+                  Save current settings to "{selectedPresetForOverwrite?.name}"? This will replace the existing preset data.
+                </p>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="secondary">Cancel</Button>
+                  </DialogClose>
+                  <Button 
+                    onClick={confirmOverwrite} 
+                    disabled={updatePresetMutation.isPending}
+                    data-testid="button-confirm-overwrite"
+                  >
+                    {updatePresetMutation.isPending ? "Saving..." : "Overwrite"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </ScrollArea>
       </CardContent>

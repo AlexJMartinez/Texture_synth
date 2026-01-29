@@ -12,6 +12,7 @@ export interface IStorage {
   getAllPresets(): Promise<DbPreset[]>;
   getPreset(id: number): Promise<DbPreset | undefined>;
   createPreset(preset: InsertPreset): Promise<DbPreset>;
+  updatePreset(id: number, updates: { name?: string; settings?: unknown }): Promise<DbPreset | undefined>;
   deletePreset(id: number): Promise<boolean>;
 }
 
@@ -43,6 +44,17 @@ export class DatabaseStorage implements IStorage {
   async createPreset(preset: InsertPreset): Promise<DbPreset> {
     const [created] = await db.insert(presets).values(preset).returning();
     return created;
+  }
+
+  async updatePreset(id: number, updates: { name?: string; settings?: unknown }): Promise<DbPreset | undefined> {
+    const updateData: Record<string, unknown> = {};
+    if (updates.name !== undefined) updateData.name = updates.name;
+    if (updates.settings !== undefined) updateData.settings = updates.settings;
+    
+    if (Object.keys(updateData).length === 0) return undefined;
+    
+    const [updated] = await db.update(presets).set(updateData).where(eq(presets.id, id)).returning();
+    return updated || undefined;
   }
 
   async deletePreset(id: number): Promise<boolean> {

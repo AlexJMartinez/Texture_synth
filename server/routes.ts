@@ -40,6 +40,28 @@ export async function registerRoutes(
     }
   });
 
+  // Update a preset (rename or overwrite settings)
+  app.patch("/api/presets/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Invalid preset ID" });
+      }
+      const { name, settings } = req.body;
+      if (!name && !settings) {
+        return res.status(400).json({ error: "No updates provided" });
+      }
+      const updated = await storage.updatePreset(id, { name, settings });
+      if (!updated) {
+        return res.status(404).json({ error: "Preset not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating preset:", error);
+      res.status(500).json({ error: "Failed to update preset" });
+    }
+  });
+
   // Delete a preset
   app.delete("/api/presets/:id", async (req, res) => {
     try {

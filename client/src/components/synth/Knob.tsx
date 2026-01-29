@@ -141,12 +141,23 @@ export function Knob({
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
 
-    const delta = (startY.current - e.clientY) / 150;
-    const newNormalized = Math.max(0, Math.min(1, startValue.current + delta));
-    const newValue = denormalizeValue(newNormalized);
+    // Shift+drag for fine control: 10x slower sensitivity, always ±1 step
+    const sensitivity = e.shiftKey ? 1500 : 150;
+    const delta = (startY.current - e.clientY) / sensitivity;
     
-    const snappedValue = Math.round(newValue / step) * step;
-    onChange(Math.max(min, Math.min(max, snappedValue)));
+    if (e.shiftKey) {
+      // Fine mode: direct step-based adjustment from start value
+      const pixelDelta = startY.current - e.clientY;
+      const stepsToMove = Math.round(pixelDelta / 10); // 10 pixels per step
+      const fineStep = step || 1;
+      const newValue = denormalizeValue(startValue.current) + (stepsToMove * fineStep);
+      onChange(Math.max(min, Math.min(max, Math.round(newValue / fineStep) * fineStep)));
+    } else {
+      const newNormalized = Math.max(0, Math.min(1, startValue.current + delta));
+      const newValue = denormalizeValue(newNormalized);
+      const snappedValue = Math.round(newValue / step) * step;
+      onChange(Math.max(min, Math.min(max, snappedValue)));
+    }
   }, [isDragging, denormalizeValue, step, min, max, onChange]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
