@@ -1665,7 +1665,8 @@ export default function Synthesizer() {
           const attackEnd = now + filterEnv.attack / 1000;
           const holdEnd = attackEnd + filterEnv.hold / 1000;
           const decayEnd = holdEnd + filterEnv.decay / 1000;
-          const baseFreq = params.filter.frequency;
+          // Ensure baseFreq is always positive for exponentialRampToValueAtTime
+          const baseFreq = Math.max(20, params.filter.frequency);
           const envAmount = filterEnv.amount / 100;
           const modRange = envAmount > 0 
             ? Math.min(20000, baseFreq * Math.pow(10, Math.abs(envAmount) * 2)) - baseFreq
