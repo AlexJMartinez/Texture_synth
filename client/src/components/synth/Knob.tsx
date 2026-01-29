@@ -272,7 +272,7 @@ export function Knob({
           />
         </div>
         <svg
-          className="absolute inset-0 w-full h-full -rotate-[135deg]"
+          className="absolute inset-0 w-full h-full -rotate-[225deg]"
           viewBox="0 0 100 100"
         >
           <circle
