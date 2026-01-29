@@ -108,6 +108,12 @@ export function Knob({
   }, [min, max, logarithmic]);
 
   const rotation = normalizeValue(value) * 270 - 135;
+  
+  // Arc calculation: circumference = 2 * π * r = 2 * π * 46 ≈ 289
+  // For 270 degree arc: (270/360) * 289 ≈ 216.77
+  const circumference = 2 * Math.PI * 46;
+  const arcLength270 = (270 / 360) * circumference; // ~216.77
+  const gapLength = circumference - arcLength270; // ~72.26
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -276,7 +282,7 @@ export function Knob({
             fill="none"
             stroke={`hsl(var(--${accentColor})/0.2)`}
             strokeWidth="3"
-            strokeDasharray={`${270 * 2.88} 360`}
+            strokeDasharray={`${arcLength270} ${gapLength}`}
             strokeLinecap="round"
           />
           {normalizeValue(value) > 0.01 && (
@@ -287,7 +293,7 @@ export function Knob({
               fill="none"
               stroke={`hsl(var(--${accentColor}))`}
               strokeWidth="3"
-              strokeDasharray={`${normalizeValue(value) * 270 * 2.88} 360`}
+              strokeDasharray={`${normalizeValue(value) * arcLength270} ${circumference}`}
               strokeLinecap="round"
               style={{ filter: `drop-shadow(0 0 3px hsl(var(--${accentColor})/0.5))` }}
             />
