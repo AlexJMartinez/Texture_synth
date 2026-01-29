@@ -30,6 +30,22 @@ import {
   defaultLowEndSettings,
   defaultOscPhaseSettings
 } from "@/lib/advancedSynthSettings";
+import type { OscUnisonSettings } from "@/lib/unisonSettings";
+import { randomizeUnisonSettings } from "@/lib/unisonSettings";
+import type { RingModSettings } from "@/lib/ringModSettings";
+import { randomizeRingModSettings } from "@/lib/ringModSettings";
+import type { MultibandCompSettings } from "@/lib/multibandCompSettings";
+import { randomizeMultibandCompSettings, defaultMultibandCompSettings } from "@/lib/multibandCompSettings";
+import type { PhaserFlangerSettings } from "@/lib/phaserFlangerSettings";
+import { randomizePhaserFlangerSettings, defaultPhaserFlangerSettings } from "@/lib/phaserFlangerSettings";
+import type { ParametricEQSettings } from "@/lib/eqSettings";
+import { randomizeParametricEQSettings, defaultParametricEQSettings } from "@/lib/eqSettings";
+import type { ParallelProcessingSettings } from "@/lib/parallelProcessingSettings";
+import { randomizeParallelProcessingSettings, defaultParallelProcessingSettings } from "@/lib/parallelProcessingSettings";
+import type { CurveModulatorSettings } from "@/lib/curveModulatorSettings";
+import { randomizeCurveModulatorSettings } from "@/lib/curveModulatorSettings";
+import type { StepSequencerSettings } from "@/lib/stepSequencerSettings";
+import { randomizeStepSequencerSettings } from "@/lib/stepSequencerSettings";
 
 function randomRatioPreset(): ModRatioPreset {
   return (["0.5", "1", "2", "3", "4", "6", "8", "custom"] as const)[Math.floor(Math.random() * 8)];
@@ -78,6 +94,22 @@ interface RandomizeControlsProps {
   onPhaseSettingsRandomize?: (settings: OscPhaseSettings) => void;
   advancedSpectralSettings?: AdvancedSpectralSettings;
   onAdvancedSpectralSettingsRandomize?: (settings: Partial<AdvancedSpectralSettings>) => void;
+  unisonSettings?: OscUnisonSettings;
+  onUnisonSettingsRandomize?: (settings: OscUnisonSettings) => void;
+  ringModSettings?: RingModSettings;
+  onRingModSettingsRandomize?: (settings: RingModSettings) => void;
+  multibandCompSettings?: MultibandCompSettings;
+  onMultibandCompSettingsRandomize?: (settings: MultibandCompSettings) => void;
+  phaserFlangerSettings?: PhaserFlangerSettings;
+  onPhaserFlangerSettingsRandomize?: (settings: PhaserFlangerSettings) => void;
+  eqSettings?: ParametricEQSettings;
+  onEqSettingsRandomize?: (settings: ParametricEQSettings) => void;
+  parallelProcessingSettings?: ParallelProcessingSettings;
+  onParallelProcessingSettingsRandomize?: (settings: ParallelProcessingSettings) => void;
+  curveModulatorSettings?: CurveModulatorSettings;
+  onCurveModulatorSettingsRandomize?: (settings: CurveModulatorSettings) => void;
+  stepSequencerSettings?: StepSequencerSettings;
+  onStepSequencerSettingsRandomize?: (settings: StepSequencerSettings) => void;
 }
 
 function randomizeOscEnvelope(chaos: number): OscEnvelope {
@@ -216,7 +248,23 @@ export function RandomizeControls({
   phaseSettings,
   onPhaseSettingsRandomize,
   advancedSpectralSettings,
-  onAdvancedSpectralSettingsRandomize
+  onAdvancedSpectralSettingsRandomize,
+  unisonSettings,
+  onUnisonSettingsRandomize,
+  ringModSettings,
+  onRingModSettingsRandomize,
+  multibandCompSettings,
+  onMultibandCompSettingsRandomize,
+  phaserFlangerSettings,
+  onPhaserFlangerSettingsRandomize,
+  eqSettings,
+  onEqSettingsRandomize,
+  parallelProcessingSettings,
+  onParallelProcessingSettingsRandomize,
+  curveModulatorSettings,
+  onCurveModulatorSettingsRandomize,
+  stepSequencerSettings,
+  onStepSequencerSettingsRandomize
 }: RandomizeControlsProps) {
   const [chaosAmount, setChaosAmount] = useState(50);
   const [variationAmount, setVariationAmount] = useState(15); // 5-50% range for subtle to moderate variations
@@ -563,6 +611,54 @@ export function RandomizeControls({
     // Randomize advanced spectral settings
     if (onAdvancedSpectralSettingsRandomize) {
       onAdvancedSpectralSettingsRandomize(randomizeAdvancedSpectralSettings(chaosAmount));
+    }
+    
+    // Randomize unison settings (one-shot safe: limit voices to 1-4 for CPU)
+    if (onUnisonSettingsRandomize) {
+      onUnisonSettingsRandomize(randomizeUnisonSettings());
+    }
+    
+    // Randomize ring modulation (metallic/inharmonic textures)
+    if (onRingModSettingsRandomize) {
+      onRingModSettingsRandomize(randomizeRingModSettings());
+    }
+    
+    // Randomize multiband compression (one-shot safe ranges)
+    if (onMultibandCompSettingsRandomize) {
+      onMultibandCompSettingsRandomize(
+        randomizeMultibandCompSettings(multibandCompSettings || defaultMultibandCompSettings, chaos)
+      );
+    }
+    
+    // Randomize phaser/flanger (subtle modulation effects)
+    if (onPhaserFlangerSettingsRandomize) {
+      onPhaserFlangerSettingsRandomize(
+        randomizePhaserFlangerSettings(phaserFlangerSettings || defaultPhaserFlangerSettings, chaos)
+      );
+    }
+    
+    // Randomize parametric EQ (subtle tonal shaping)
+    if (onEqSettingsRandomize) {
+      onEqSettingsRandomize(
+        randomizeParametricEQSettings(eqSettings || defaultParametricEQSettings, chaos)
+      );
+    }
+    
+    // Randomize parallel processing (dry/wet blend)
+    if (onParallelProcessingSettingsRandomize) {
+      onParallelProcessingSettingsRandomize(
+        randomizeParallelProcessingSettings(parallelProcessingSettings || defaultParallelProcessingSettings, chaos)
+      );
+    }
+    
+    // Randomize curve modulator (drawable envelope shapes)
+    if (onCurveModulatorSettingsRandomize) {
+      onCurveModulatorSettingsRandomize(randomizeCurveModulatorSettings());
+    }
+    
+    // Randomize step sequencer (rhythmic modulation)
+    if (onStepSequencerSettingsRandomize) {
+      onStepSequencerSettingsRandomize(randomizeStepSequencerSettings());
     }
   };
 
@@ -980,6 +1076,136 @@ export function RandomizeControls({
           inharmonicCut: Math.round(mutateValue(advancedSpectralSettings.harmonicResynth.inharmonicCut, -48, 0) * 2) / 2,
           harmonicDecay: mutateSpectralValue(advancedSpectralSettings.harmonicResynth.harmonicDecay, 0, 100),
         },
+      });
+    }
+    
+    // Mutate unison settings (subtle changes to voices/detune)
+    if (onUnisonSettingsRandomize && unisonSettings) {
+      const mutateUnison = (u: typeof unisonSettings.osc1) => ({
+        ...u,
+        detune: Math.round(mutateValue(u.detune, 0, 50)), // 0-50 cents for one-shot
+        spread: Math.round(mutateValue(u.spread, 0, 100)),
+        blend: Math.round(mutateValue(u.blend, 50, 100)),
+      });
+      onUnisonSettingsRandomize({
+        osc1: mutateUnison(unisonSettings.osc1),
+        osc2: mutateUnison(unisonSettings.osc2),
+        osc3: mutateUnison(unisonSettings.osc3),
+      });
+    }
+    
+    // Mutate ring modulation (keep sources, adjust mix/level)
+    if (onRingModSettingsRandomize && ringModSettings) {
+      onRingModSettingsRandomize({
+        ...ringModSettings,
+        mix: Math.round(mutateValue(ringModSettings.mix, 20, 80)),
+        outputLevel: Math.round(mutateValue(ringModSettings.outputLevel, 60, 100)),
+      });
+    }
+    
+    // Mutate multiband compression
+    if (onMultibandCompSettingsRandomize && multibandCompSettings) {
+      const mutateBand = (band: typeof multibandCompSettings.lowBand) => ({
+        ...band,
+        threshold: Math.round(mutateValue(band.threshold, -40, -10)),
+        ratio: Math.round(mutateValue(band.ratio, 1, 8) * 10) / 10,
+        attack: Math.round(mutateValue(band.attack, 0.5, 50)),
+        release: Math.round(mutateValue(band.release, 20, 200)),
+        gain: Math.round(mutateValue(band.gain, -6, 6)),
+      });
+      onMultibandCompSettingsRandomize({
+        ...multibandCompSettings,
+        lowCrossover: Math.round(mutateValue(multibandCompSettings.lowCrossover, 80, 300)),
+        highCrossover: Math.round(mutateValue(multibandCompSettings.highCrossover, 2000, 6000)),
+        lowBand: mutateBand(multibandCompSettings.lowBand),
+        midBand: mutateBand(multibandCompSettings.midBand),
+        highBand: mutateBand(multibandCompSettings.highBand),
+        mix: Math.round(mutateValue(multibandCompSettings.mix, 0.5, 1) * 100) / 100,
+      });
+    }
+    
+    // Mutate phaser/flanger
+    if (onPhaserFlangerSettingsRandomize && phaserFlangerSettings) {
+      onPhaserFlangerSettingsRandomize({
+        phaser: {
+          ...phaserFlangerSettings.phaser,
+          rate: Math.round(mutateValue(phaserFlangerSettings.phaser.rate, 0.1, 3) * 10) / 10,
+          depth: Math.round(mutateValue(phaserFlangerSettings.phaser.depth, 0, 1) * 100) / 100,
+          feedback: Math.round(mutateValue(phaserFlangerSettings.phaser.feedback, -0.8, 0.8) * 100) / 100,
+          mix: Math.round(mutateValue(phaserFlangerSettings.phaser.mix, 0.3, 0.8) * 100) / 100,
+        },
+        flanger: {
+          ...phaserFlangerSettings.flanger,
+          rate: Math.round(mutateValue(phaserFlangerSettings.flanger.rate, 0.1, 2) * 10) / 10,
+          depth: Math.round(mutateValue(phaserFlangerSettings.flanger.depth, 0, 1) * 100) / 100,
+          feedback: Math.round(mutateValue(phaserFlangerSettings.flanger.feedback, -0.8, 0.8) * 100) / 100,
+          delay: Math.round(mutateValue(phaserFlangerSettings.flanger.delay, 0.5, 5) * 10) / 10,
+          mix: Math.round(mutateValue(phaserFlangerSettings.flanger.mix, 0.3, 0.8) * 100) / 100,
+        },
+      });
+    }
+    
+    // Mutate parametric EQ (subtle tonal adjustments)
+    if (onEqSettingsRandomize && eqSettings) {
+      onEqSettingsRandomize({
+        ...eqSettings,
+        lowBand: {
+          ...eqSettings.lowBand,
+          frequency: Math.round(mutateValue(eqSettings.lowBand.frequency, 50, 200)),
+          gain: Math.round(mutateValue(eqSettings.lowBand.gain, -6, 6) * 10) / 10,
+          q: Math.round(mutateValue(eqSettings.lowBand.q, 0.3, 1.5) * 10) / 10,
+        },
+        midBand: {
+          ...eqSettings.midBand,
+          frequency: Math.round(mutateValue(eqSettings.midBand.frequency, 500, 3500)),
+          gain: Math.round(mutateValue(eqSettings.midBand.gain, -6, 6) * 10) / 10,
+          q: Math.round(mutateValue(eqSettings.midBand.q, 0.5, 3) * 10) / 10,
+        },
+        highBand: {
+          ...eqSettings.highBand,
+          frequency: Math.round(mutateValue(eqSettings.highBand.frequency, 4000, 12000)),
+          gain: Math.round(mutateValue(eqSettings.highBand.gain, -6, 6) * 10) / 10,
+          q: Math.round(mutateValue(eqSettings.highBand.q, 0.3, 1.5) * 10) / 10,
+        },
+      });
+    }
+    
+    // Mutate parallel processing (dry/wet balance)
+    if (onParallelProcessingSettingsRandomize && parallelProcessingSettings) {
+      onParallelProcessingSettingsRandomize({
+        ...parallelProcessingSettings,
+        dryWetMix: Math.round(mutateValue(parallelProcessingSettings.dryWetMix, 0.3, 0.7) * 100) / 100,
+        dryGain: Math.round(mutateValue(parallelProcessingSettings.dryGain, -6, 6) * 10) / 10,
+        wetGain: Math.round(mutateValue(parallelProcessingSettings.wetGain, -6, 6) * 10) / 10,
+      });
+    }
+    
+    // Mutate curve modulator (subtle shape changes, keep structure)
+    if (onCurveModulatorSettingsRandomize && curveModulatorSettings) {
+      const mutatedPoints = curveModulatorSettings.points.map((p, i) => ({
+        x: p.x, // Keep x positions
+        y: i === 0 || i === curveModulatorSettings.points.length - 1
+          ? p.y // Keep endpoints
+          : Math.max(0, Math.min(1, p.y + (Math.random() - 0.5) * strength)),
+      }));
+      onCurveModulatorSettingsRandomize({
+        ...curveModulatorSettings,
+        points: mutatedPoints,
+        duration: Math.round(mutateValue(curveModulatorSettings.duration, 0.1, 2) * 100) / 100,
+        smoothing: Math.round(mutateValue(curveModulatorSettings.smoothing, 0.2, 0.8) * 100) / 100,
+      });
+    }
+    
+    // Mutate step sequencer (subtle step value changes)
+    if (onStepSequencerSettingsRandomize && stepSequencerSettings) {
+      const mutatedSteps = stepSequencerSettings.steps.map(s =>
+        Math.max(0, Math.min(1, s + (Math.random() - 0.5) * strength * 0.5))
+      );
+      onStepSequencerSettingsRandomize({
+        ...stepSequencerSettings,
+        steps: mutatedSteps,
+        smoothing: Math.round(mutateValue(stepSequencerSettings.smoothing, 0, 0.5) * 100) / 100,
+        swing: Math.round(mutateValue(stepSequencerSettings.swing, 0, 0.3) * 100) / 100,
       });
     }
   };

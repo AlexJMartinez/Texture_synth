@@ -2452,6 +2452,7 @@ export default function Synthesizer() {
       
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
+      let oscAlreadyStarted = false; // Track if oscillator was started in unison loop
 
       // Check if wavetable mode is enabled for this oscillator
       const wtSettings = wtSettingsToUse?.[key as keyof AllOscWavetableSettings];
@@ -2524,6 +2525,7 @@ export default function Synthesizer() {
         unisonMerge.gain.value = 1 / Math.sqrt(voiceCount); // Normalize volume
         
         let primaryOsc: OscillatorNode | null = null;
+        oscAlreadyStarted = true; // Unison voices are started in the loop below
         
         for (let v = 0; v < voiceCount; v++) {
           const oscNode = ctx.createOscillator();
@@ -2759,11 +2761,18 @@ export default function Synthesizer() {
       
       // Apply phase offset via start time delay
       // For bass/sub frequencies, phase alignment is critical for weight and punch
-      // Ensure start time is never negative (phase offset could be negative)
-      const oscStartTime = Math.max(now, now + phaseSeconds);
-      sourceNode.start(oscStartTime);
-      sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
-      if (sourcesCollector) {
+      // Skip if oscillator was already started (unison mode starts voices in its own loop)
+      if (!oscAlreadyStarted) {
+        // Ensure start time is never negative (phase offset could be negative)
+        const oscStartTime = Math.max(now, now + phaseSeconds);
+        sourceNode.start(oscStartTime);
+        sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
+        if (sourcesCollector) {
+          sourcesCollector.push(sourceNode);
+        }
+      } else if (sourcesCollector) {
+        // For unison mode, primary osc was already added to collector in the loop
+        // but we still need to add it if not yet added
         sourcesCollector.push(sourceNode);
       }
     }
@@ -3629,6 +3638,46 @@ export default function Synthesizer() {
                 const newSettings = { ...advancedSpectralSettings, ...settings };
                 setAdvancedSpectralSettings(newSettings);
                 saveAdvancedSpectralSettings(newSettings);
+              }}
+              unisonSettings={unisonSettings}
+              onUnisonSettingsRandomize={(settings) => {
+                setUnisonSettings(settings);
+                saveUnisonSettings(settings);
+              }}
+              ringModSettings={ringModSettings}
+              onRingModSettingsRandomize={(settings) => {
+                setRingModSettings(settings);
+                saveRingModSettings(settings);
+              }}
+              multibandCompSettings={multibandCompSettings}
+              onMultibandCompSettingsRandomize={(settings) => {
+                setMultibandCompSettings(settings);
+                saveMultibandCompSettings(settings);
+              }}
+              phaserFlangerSettings={phaserFlangerSettings}
+              onPhaserFlangerSettingsRandomize={(settings) => {
+                setPhaserFlangerSettings(settings);
+                savePhaserFlangerSettings(settings);
+              }}
+              eqSettings={parametricEQSettings}
+              onEqSettingsRandomize={(settings) => {
+                setParametricEQSettings(settings);
+                saveParametricEQSettings(settings);
+              }}
+              parallelProcessingSettings={parallelProcessingSettings}
+              onParallelProcessingSettingsRandomize={(settings) => {
+                setParallelProcessingSettings(settings);
+                saveParallelProcessingSettings(settings);
+              }}
+              curveModulatorSettings={curveModulatorSettings}
+              onCurveModulatorSettingsRandomize={(settings) => {
+                setCurveModulatorSettings(settings);
+                saveCurveModulatorSettings(settings);
+              }}
+              stepSequencerSettings={stepSequencerSettings}
+              onStepSequencerSettingsRandomize={(settings) => {
+                setStepSequencerSettings(settings);
+                saveStepSequencerSettings(settings);
               }}
             />
           </div>
