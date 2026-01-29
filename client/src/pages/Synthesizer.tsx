@@ -151,6 +151,21 @@ import {
   defaultMIDISettings,
 } from "@/lib/midiInput";
 import { UndoHistory } from "@/lib/undoHistory";
+import { CurveModulatorPanel } from "@/components/synth/CurveModulatorPanel";
+import {
+  type CurveModulatorSettings,
+  loadCurveModulatorSettings,
+  saveCurveModulatorSettings,
+  defaultCurveModulatorSettings,
+} from "@/lib/curveModulatorSettings";
+import { StepSequencerPanel } from "@/components/synth/StepSequencerPanel";
+import {
+  type StepSequencerSettings,
+  loadStepSequencerSettings,
+  saveStepSequencerSettings,
+  defaultStepSequencerSettings,
+} from "@/lib/stepSequencerSettings";
+import { DAWDragPanel } from "@/components/synth/DAWDragPanel";
 import {
   createUnisonWavetableOscillators,
   getPeriodicWaveAtPosition,
@@ -190,6 +205,61 @@ function getEffectiveDelayTime(params: SynthParameters): number {
     return divisionToMs(params.effects.delayDivision, params.tempo);
   }
   return params.effects.delayTime;
+}
+
+// Convert AudioBuffer to WAV Blob
+function bufferToWavBlob(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const format = 1;
+  const bitDepth = 16;
+  
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = buffer.length * blockAlign;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+  
+  const arrayBuffer = new ArrayBuffer(totalSize);
+  const view = new DataView(arrayBuffer);
+  
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, "RIFF");
+  view.setUint32(4, totalSize - 8, true);
+  writeString(8, "WAVE");
+  writeString(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, format, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(36, "data");
+  view.setUint32(40, dataSize, true);
+  
+  const channels: Float32Array[] = [];
+  for (let ch = 0; ch < numChannels; ch++) {
+    channels.push(buffer.getChannelData(ch));
+  }
+  
+  let offset = 44;
+  for (let i = 0; i < buffer.length; i++) {
+    for (let ch = 0; ch < numChannels; ch++) {
+      const sample = Math.max(-1, Math.min(1, channels[ch][i]));
+      const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+      view.setInt16(offset, intSample, true);
+      offset += 2;
+    }
+  }
+  
+  return new Blob([arrayBuffer], { type: "audio/wav" });
 }
 
 // Modulation evaluation system
@@ -532,6 +602,8 @@ export default function Synthesizer() {
   const [roundRobinSettings, setRoundRobinSettings] = useState<RoundRobinSettings>(loadRoundRobinSettings);
   const [parallelProcessingSettings, setParallelProcessingSettings] = useState<ParallelProcessingSettings>(loadParallelProcessingSettings);
   const [midiSettings, setMidiSettings] = useState<MIDIInputSettings>(loadMIDISettings);
+  const [curveModulatorSettings, setCurveModulatorSettings] = useState<CurveModulatorSettings>(loadCurveModulatorSettings);
+  const [stepSequencerSettings, setStepSequencerSettings] = useState<StepSequencerSettings>(loadStepSequencerSettings);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -3581,6 +3653,24 @@ export default function Synthesizer() {
                 onUpdateModulators={(modulators) => setParams(prev => ({ ...prev, modulators }))}
                 onUpdateRoutes={(modulationRoutes) => setParams(prev => ({ ...prev, modulationRoutes }))}
               />
+              
+              {/* Curve and Step Modulators */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                <CurveModulatorPanel
+                  settings={curveModulatorSettings}
+                  onChange={(settings) => {
+                    setCurveModulatorSettings(settings);
+                    saveCurveModulatorSettings(settings);
+                  }}
+                />
+                <StepSequencerPanel
+                  settings={stepSequencerSettings}
+                  onChange={(settings) => {
+                    setStepSequencerSettings(settings);
+                    saveStepSequencerSettings(settings);
+                  }}
+                />
+              </div>
             </div>
           </TabsContent>
 
@@ -3775,6 +3865,15 @@ export default function Synthesizer() {
                   saveMIDISettings(settings);
                 }}
                 onNoteOn={handleTrigger}
+              />
+              <DAWDragPanel
+                onRenderAudio={async () => {
+                  if (!audioBuffer) {
+                    throw new Error("No audio buffer - trigger a sound first");
+                  }
+                  return bufferToWavBlob(audioBuffer);
+                }}
+                isExporting={isExporting}
               />
             </div>
           </TabsContent>

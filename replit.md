@@ -81,6 +81,9 @@ Core architectural decisions include:
 - **MIDI Input**: Web MIDI API integration for triggering sounds. Features device selection, velocity sensitivity toggle, and note range filtering. Works in Chrome/Edge browsers.
 - **Undo/Redo System**: 50-state parameter history with keyboard shortcuts (Ctrl+Z/Cmd+Z for undo, Ctrl+Y/Cmd+Y or Ctrl+Shift+Z for redo). Tracks main synth parameters only (not localStorage settings which are intentional global preferences).
 - **Keyboard Shortcuts**: Spacebar (play/trigger), E (export), Ctrl+Z/Y (undo/redo). Disabled when focus is in input fields.
+- **Curve Modulator**: Drawable one-shot envelope curves with 2-10 control points, Catmull-Rom spline interpolation, duration (0.01-5s), loop mode, bipolar mode, and smoothing control. Interactive canvas editor with double-click to add/remove points.
+- **Step Sequencer Modulator**: 8/16-step sequencer with tempo-synced rates (1/1 to 1/32, triplets, dotted), swing control (0-50%), smoothing, and bipolar mode. Click-to-draw step values in a bar graph interface.
+- **DAW Drag Export**: Drag-and-drop audio files directly into DAW tracks. Supports browser file drag API where available, with fallback to download button. Custom filename support.
 
 ## External Dependencies
 - **React**: Frontend library.
