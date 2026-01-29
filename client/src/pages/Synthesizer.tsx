@@ -1653,7 +1653,8 @@ export default function Synthesizer() {
       } else {
         const filter = ctx.createBiquadFilter();
         filter.type = params.filter.type as BiquadFilterType;
-        filter.frequency.value = params.filter.frequency;
+        // Ensure frequency is always positive to prevent exponentialRamp errors
+        filter.frequency.value = Math.max(20, params.filter.frequency);
         filter.Q.value = params.filter.resonance;
         if (params.filter.type === "peaking" || params.filter.type === "lowshelf" || params.filter.type === "highshelf") {
           filter.gain.value = params.filter.gain;
@@ -3296,12 +3297,19 @@ export default function Synthesizer() {
         await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings, ringModSettings, parallelProcessingSettings);
       }, durationInSeconds);
     } catch (err) {
-      console.error("Tone.Offline error:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorStack = err instanceof Error ? err.stack : "No stack trace";
+      console.error("Tone.Offline error:", errorMessage);
+      console.error("Error stack:", errorStack);
       console.error("Duration:", durationInSeconds, "TotalDuration:", totalDuration);
       console.error("Params:", JSON.stringify({
         ampEnv: params.envelopes.env3,
         filterEnv: params.envelopes.env1,
         pitchEnv: params.envelopes.env2,
+        filter: {
+          frequency: params.filter.frequency,
+          enabled: params.filter.enabled
+        },
         compressor: params.mastering.compressorEnabled ? {
           attack: params.mastering.compressorAttack,
           release: params.mastering.compressorRelease

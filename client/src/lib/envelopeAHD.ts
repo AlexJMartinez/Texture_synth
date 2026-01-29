@@ -41,13 +41,17 @@ export function triggerAHD(
   param.setValueAtTime(start, t0);
 
   // Use safePeak which is already ensured to be positive
-  param.setTargetAtTime(safePeak, t0, A / 5);
+  // Ensure time constant (A/5) is always positive
+  const attackTimeConstant = Math.max(0.0001, A / 5);
+  param.setTargetAtTime(safePeak, t0, attackTimeConstant);
 
   const tA = t0 + A;
   param.setValueAtTime(safePeak, tA);
 
   const tH = tA + H;
-  param.setTargetAtTime(EPS, tH, D / 5);
+  // Ensure decay time constant is always positive
+  const decayTimeConstant = Math.max(0.0001, D / 5);
+  param.setTargetAtTime(EPS, tH, decayTimeConstant);
 
   const tEnd = tH + D;
   return tEnd;
