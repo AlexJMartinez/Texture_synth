@@ -597,9 +597,9 @@ export const defaultSynthParameters: SynthParameters = {
     osc3: { ...defaultOscillator, enabled: false, pitch: hzToPitch(220), waveform: "sawtooth", level: 30 },
   },
   envelopes: {
-    env1: { ...defaultEnvelope, target: "amplitude", enabled: false },
-    env2: { ...defaultEnvelope, target: "filter", enabled: false, amount: 50 },
-    env3: { ...defaultEnvelope, target: "pitch", enabled: false, amount: 25 },
+    env1: { ...defaultEnvelope, target: "filter", enabled: false, amount: 50 },
+    env2: { ...defaultEnvelope, target: "pitch", enabled: false, amount: 24 },
+    env3: { ...defaultEnvelope, target: "amplitude", enabled: false, amount: 100 },
   },
   filter: {
     enabled: false,
