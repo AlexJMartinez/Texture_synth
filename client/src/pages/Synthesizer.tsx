@@ -83,7 +83,9 @@ import {
   getPeriodicWaveAtPosition,
   initializeWavetableEngine,
 } from "@/lib/wavetableEngine";
-import { getWavetableById } from "@/lib/factoryWavetables";
+import { getWavetableById, registerCustomWavetable } from "@/lib/factoryWavetables";
+import { WavetableEditor } from "@/components/synth/WavetableEditor";
+import type { WavetableData } from "@/lib/wavetableSettings";
 
 const IR_STORAGE_KEY = "synth-custom-irs";
 
@@ -447,6 +449,7 @@ export default function Synthesizer() {
   const [advancedSpectralSettings, setAdvancedSpectralSettings] = useState<AdvancedSpectralSettings>(loadAdvancedSpectralSettings);
   const [wavetableSettings, setWavetableSettings] = useState<AllOscWavetableSettings>(loadWavetableSettings);
   const [wavetableEditorOpen, setWavetableEditorOpen] = useState(false);
+  const [wavetableEditorOsc, setWavetableEditorOsc] = useState<1 | 2 | 3>(1);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -3193,7 +3196,7 @@ export default function Synthesizer() {
                         setWavetableSettings(newSettings);
                         saveWavetableSettings(newSettings);
                       }}
-                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
+                      onOpenWavetableEditor={() => { setWavetableEditorOsc(1); setWavetableEditorOpen(true); }}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -3216,7 +3219,7 @@ export default function Synthesizer() {
                         setWavetableSettings(newSettings);
                         saveWavetableSettings(newSettings);
                       }}
-                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
+                      onOpenWavetableEditor={() => { setWavetableEditorOsc(2); setWavetableEditorOpen(true); }}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -3239,7 +3242,7 @@ export default function Synthesizer() {
                         setWavetableSettings(newSettings);
                         saveWavetableSettings(newSettings);
                       }}
-                      onOpenWavetableEditor={() => setWavetableEditorOpen(true)}
+                      onOpenWavetableEditor={() => { setWavetableEditorOsc(3); setWavetableEditorOpen(true); }}
                     />
                   </TabsContent>
                 </Tabs>
@@ -3437,6 +3440,23 @@ export default function Synthesizer() {
         </Tabs>
       </div>
     </div>
+    
+    {/* Wavetable Editor Dialog */}
+    <WavetableEditor
+      open={wavetableEditorOpen}
+      onClose={() => setWavetableEditorOpen(false)}
+      wavetableId={wavetableSettings[`osc${wavetableEditorOsc}` as keyof AllOscWavetableSettings].wavetableId}
+      onSave={(wavetable: WavetableData) => {
+        registerCustomWavetable(wavetable);
+        const oscKey = `osc${wavetableEditorOsc}` as keyof AllOscWavetableSettings;
+        const newSettings = {
+          ...wavetableSettings,
+          [oscKey]: { ...wavetableSettings[oscKey], wavetableId: wavetable.id }
+        };
+        setWavetableSettings(newSettings);
+        saveWavetableSettings(newSettings);
+      }}
+    />
     </ModulationProvider>
   );
 }

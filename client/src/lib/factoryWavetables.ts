@@ -469,17 +469,90 @@ export function getFactoryWavetables(): WavetableData[] {
   return cachedFactoryWavetables;
 }
 
+// Custom/user wavetables storage (in-memory + localStorage)
+const CUSTOM_WAVETABLES_KEY = "synth-custom-wavetables";
+let customWavetables: WavetableData[] = [];
+
+// Load custom wavetables from localStorage on init
+function loadCustomWavetables(): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return; // SSR guard
+  }
+  try {
+    const stored = localStorage.getItem(CUSTOM_WAVETABLES_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      customWavetables = parsed.map((wt: any) => ({
+        ...wt,
+        frames: wt.frames.map((f: number[]) => new Float32Array(f)),
+      }));
+    }
+  } catch (e) {
+    console.warn("Failed to load custom wavetables:", e);
+  }
+}
+
+// Save custom wavetables to localStorage
+function saveCustomWavetables(): void {
+  if (typeof window === "undefined" || typeof localStorage === "undefined") {
+    return; // SSR guard
+  }
+  try {
+    const serialized = customWavetables.map(wt => ({
+      ...wt,
+      frames: wt.frames.map(f => Array.from(f)),
+    }));
+    localStorage.setItem(CUSTOM_WAVETABLES_KEY, JSON.stringify(serialized));
+  } catch (e) {
+    console.warn("Failed to save custom wavetables:", e);
+  }
+}
+
+// Initialize custom wavetables on module load
+loadCustomWavetables();
+
+// Register a custom wavetable (add or update)
+export function registerCustomWavetable(wavetable: WavetableData): void {
+  const existingIndex = customWavetables.findIndex(wt => wt.id === wavetable.id);
+  if (existingIndex >= 0) {
+    customWavetables[existingIndex] = wavetable;
+  } else {
+    customWavetables.push(wavetable);
+  }
+  saveCustomWavetables();
+}
+
+// Get all custom wavetables
+export function getCustomWavetables(): WavetableData[] {
+  return [...customWavetables];
+}
+
+// Delete a custom wavetable
+export function deleteCustomWavetable(id: string): boolean {
+  const index = customWavetables.findIndex(wt => wt.id === id);
+  if (index >= 0) {
+    customWavetables.splice(index, 1);
+    saveCustomWavetables();
+    return true;
+  }
+  return false;
+}
+
 // Get wavetable by ID (factory or user)
 export function getWavetableById(id: string): WavetableData | null {
   const factory = getFactoryWavetables().find(wt => wt.id === id);
   if (factory) return factory;
   
   // Check user wavetables
-  // (User wavetables need to be loaded from localStorage separately)
+  const custom = customWavetables.find(wt => wt.id === id);
+  if (custom) return custom;
+  
   return null;
 }
 
 // Get wavetables by category
 export function getWavetablesByCategory(category: WavetableData["category"]): WavetableData[] {
-  return getFactoryWavetables().filter(wt => wt.category === category);
+  const factory = getFactoryWavetables().filter(wt => wt.category === category);
+  const custom = customWavetables.filter(wt => wt.category === category);
+  return [...factory, ...custom];
 }

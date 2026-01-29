@@ -3,7 +3,7 @@
 
 import type { WavetableData, OscWavetableSettings, WavetableInterpolation } from "./wavetableSettings";
 import { getFrameAtPosition, frameToPeriodicWave } from "./wavetableSettings";
-import { getFactoryWavetables, getWavetableById } from "./factoryWavetables";
+import { getFactoryWavetables, getWavetableById, getCustomWavetables } from "./factoryWavetables";
 
 // Cache for PeriodicWave objects to avoid regenerating them
 const periodicWaveCache = new Map<string, PeriodicWave>();
@@ -245,8 +245,9 @@ export function applyWavetablePositionModulation(
 
 // Get all available wavetables (factory + user)
 export function getAllWavetables(): WavetableData[] {
-  // TODO: Add user wavetables from localStorage
-  return getFactoryWavetables();
+  const factory = getFactoryWavetables();
+  const custom = getCustomWavetables();
+  return [...factory, ...custom];
 }
 
 // Initialize wavetable system (preload common wavetables)
