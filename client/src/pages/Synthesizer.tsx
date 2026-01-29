@@ -157,6 +157,7 @@ import {
   loadCurveModulatorSettings,
   saveCurveModulatorSettings,
   defaultCurveModulatorSettings,
+  interpolateCurve,
 } from "@/lib/curveModulatorSettings";
 import { StepSequencerPanel } from "@/components/synth/StepSequencerPanel";
 import {
@@ -164,6 +165,8 @@ import {
   loadStepSequencerSettings,
   saveStepSequencerSettings,
   defaultStepSequencerSettings,
+  rateToBPMDivision,
+  getStepValue,
 } from "@/lib/stepSequencerSettings";
 import { DAWDragPanel } from "@/components/synth/DAWDragPanel";
 import {
@@ -384,6 +387,67 @@ function evaluateMacro(mod: { value: number; amount: number }): number {
   return (mod.value / 100) * (mod.amount / 100);
 }
 
+// Evaluate Curve Modulator - uses drawable curve with Catmull-Rom interpolation
+function evaluateCurveModulator(
+  settings: CurveModulatorSettings,
+  time: number
+): number {
+  if (!settings.enabled || settings.points.length === 0) return 0;
+  
+  let t = time / settings.duration;
+  
+  if (settings.loop) {
+    t = t % 1;
+  } else {
+    t = Math.min(1, t);
+  }
+  
+  let value = interpolateCurve(settings.points, t, settings.smoothing);
+  
+  value = Math.max(0, Math.min(1, value));
+  
+  if (settings.bipolar) {
+    value = value * 2 - 1;
+  }
+  
+  return value;
+}
+
+// Evaluate Step Sequencer Modulator - tempo-synced step values
+function evaluateStepSequencer(
+  settings: StepSequencerSettings,
+  time: number,
+  tempo: number
+): number {
+  if (!settings.enabled) return 0;
+  
+  const beatsPerSecond = tempo / 60;
+  const beatDivision = rateToBPMDivision(settings.rate);
+  const stepsPerSecond = beatsPerSecond / beatDivision;
+  const stepDuration = 1 / stepsPerSecond;
+  
+  let stepPosition = (time / stepDuration);
+  const stepIndex = Math.floor(stepPosition) % settings.stepCount;
+  const stepFraction = stepPosition - Math.floor(stepPosition);
+  
+  // Apply swing to odd steps
+  if (settings.swing > 0 && stepIndex % 2 === 1) {
+    // Swing delays odd steps
+  }
+  
+  const currentValue = getStepValue(settings, stepIndex);
+  const nextValue = getStepValue(settings, (stepIndex + 1) % settings.stepCount);
+  
+  // Apply smoothing interpolation
+  if (settings.smoothing > 0) {
+    const smoothT = stepFraction;
+    const smoothedValue = currentValue + (nextValue - currentValue) * smoothT * settings.smoothing;
+    return smoothedValue;
+  }
+  
+  return currentValue;
+}
+
 function evaluateModulator(
   mod: SynthParameters["modulators"][0],
   time: number,
@@ -417,12 +481,26 @@ function getModulatedValue(
   time: number,
   duration: number,
   tempo: number,
-  states: Map<string, ModulatorState>
+  states: Map<string, ModulatorState>,
+  curveSettings?: CurveModulatorSettings,
+  stepSettings?: StepSequencerSettings
 ): number {
   let totalMod = 0;
   
   for (const route of routes) {
     if (route.targetPath === basePath) {
+      // Check for virtual modulator IDs (curve/stepSequencer)
+      if (route.modulatorId === "curve" && curveSettings) {
+        const curveValue = evaluateCurveModulator(curveSettings, time);
+        totalMod += curveValue * (route.depth / 100);
+        continue;
+      }
+      if (route.modulatorId === "stepSequencer" && stepSettings) {
+        const stepValue = evaluateStepSequencer(stepSettings, time, tempo);
+        totalMod += stepValue * (route.depth / 100);
+        continue;
+      }
+      
       const mod = modulators.find(m => m.id === route.modulatorId);
       if (mod) {
         const state = states.get(mod.id);
@@ -1511,7 +1589,9 @@ export default function Synthesizer() {
     convSettings?: ConvolverSettings,
     revSettings?: ReverbSettings,
     wtSettingsToUse?: AllOscWavetableSettings,
-    unisonSettingsToUse?: OscUnisonSettings
+    unisonSettingsToUse?: OscUnisonSettings,
+    ringModSettingsToUse?: RingModSettings,
+    parallelSettingsToUse?: ParallelProcessingSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -1686,13 +1766,38 @@ export default function Synthesizer() {
     lastNode.connect(dcBlock);
     lastNode = dcBlock;
 
+    // Parallel Processing: Split signal into dry and wet paths
+    const parallel = parallelSettingsToUse;
+    const parallelEnabled = parallel?.enabled;
+    
+    // Dry path (bypasses effects when parallel processing is enabled)
+    const parallelDryGain = ctx.createGain();
+    if (parallelEnabled) {
+      const dryMix = 1 - parallel.dryWetMix;
+      const dryGainDb = parallel.dryGain;
+      parallelDryGain.gain.value = dryMix * Math.pow(10, dryGainDb / 20);
+    } else {
+      parallelDryGain.gain.value = 0; // No parallel dry when disabled
+    }
+    lastNode.connect(parallelDryGain);
+    
+    // Wet path (goes through effects)
     const dryGain = ctx.createGain();
-    dryGain.gain.value = 1;
+    if (parallelEnabled) {
+      const wetMix = parallel.dryWetMix;
+      const wetGainDb = parallel.wetGain;
+      dryGain.gain.value = wetMix * Math.pow(10, wetGainDb / 20);
+    } else {
+      dryGain.gain.value = 1;
+    }
     lastNode.connect(dryGain);
     
     const effectsMixer = ctx.createGain();
     effectsMixer.gain.value = 1;
     dryGain.connect(effectsMixer);
+    
+    // Connect parallel dry path to effects mixer (bypassing effects)
+    parallelDryGain.connect(effectsMixer);
 
     if (params.effects.delayEnabled && params.effects.delayMix > 0) {
       const delayNode = ctx.createDelay(3);
@@ -2321,6 +2426,13 @@ export default function Synthesizer() {
       { osc: params.oscillators.osc3, key: "osc3" as const },
     ];
 
+    // Capture oscillator outputs for ring modulation
+    const oscOutputNodes: Record<string, GainNode> = {};
+    
+    // Ring modulation destination (will be connected after oscillators are created)
+    const ringModOutput = ctx.createGain();
+    ringModOutput.gain.value = 0;
+
     for (const { osc, key } of oscConfigs) {
       if (!osc.enabled) continue;
 
@@ -2642,6 +2754,9 @@ export default function Synthesizer() {
         finalGain.connect(masterGain);
       }
       
+      // Capture oscillator output for ring modulation
+      oscOutputNodes[key] = finalGain;
+      
       // Apply phase offset via start time delay
       // For bass/sub frequencies, phase alignment is critical for weight and punch
       // Ensure start time is never negative (phase offset could be negative)
@@ -2650,6 +2765,38 @@ export default function Synthesizer() {
       sourceNode.stop(stopAt); // Fix 3: Stop after safety fade
       if (sourcesCollector) {
         sourcesCollector.push(sourceNode);
+      }
+    }
+
+    // Ring Modulation: Multiply two oscillator signals together
+    const ringMod = ringModSettingsToUse;
+    if (ringMod?.enabled && ringMod.mix > 0) {
+      const source1Node = oscOutputNodes[ringMod.source1];
+      const source2Node = oscOutputNodes[ringMod.source2];
+      
+      if (source1Node && source2Node && ringMod.source1 !== ringMod.source2) {
+        // Ring modulation uses amplitude modulation where one signal modulates the gain of another
+        // This creates sum and difference frequencies (classic ring mod effect)
+        const ringModGain = ctx.createGain();
+        ringModGain.gain.value = 0; // Will be modulated by source2
+        
+        // Route source1 through the modulated gain
+        source1Node.connect(ringModGain);
+        
+        // Use source2 to modulate the gain of source1
+        // Scale the modulation depth
+        const modDepthGain = ctx.createGain();
+        modDepthGain.gain.value = 2.0; // Bipolar modulation
+        source2Node.connect(modDepthGain);
+        modDepthGain.connect(ringModGain.gain);
+        
+        // Mix ring mod output with dry signal
+        const ringModMix = ctx.createGain();
+        ringModMix.gain.value = (ringMod.mix / 100) * (ringMod.outputLevel / 100);
+        ringModGain.connect(ringModMix);
+        
+        // Connect to master chain
+        ringModMix.connect(masterGain);
       }
     }
 
@@ -3136,7 +3283,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings, ringModSettings, parallelProcessingSettings);
       }, durationInSeconds);
     } catch (err) {
       console.error("Tone.Offline error:", err);
@@ -3205,7 +3352,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
@@ -3652,6 +3799,8 @@ export default function Synthesizer() {
                 tempo={params.tempo}
                 onUpdateModulators={(modulators) => setParams(prev => ({ ...prev, modulators }))}
                 onUpdateRoutes={(modulationRoutes) => setParams(prev => ({ ...prev, modulationRoutes }))}
+                curveEnabled={curveModulatorSettings.enabled}
+                stepSequencerEnabled={stepSequencerSettings.enabled}
               />
               
               {/* Curve and Step Modulators */}

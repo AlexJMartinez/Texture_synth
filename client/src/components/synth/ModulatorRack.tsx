@@ -23,6 +23,8 @@ interface ModulatorRackProps {
   tempo: number;
   onUpdateModulators: (modulators: Modulator[]) => void;
   onUpdateRoutes: (routes: ModulationRoute[]) => void;
+  curveEnabled?: boolean;
+  stepSequencerEnabled?: boolean;
 }
 
 const LFO_SHAPES: { value: LfoShape; label: string }[] = [
@@ -456,7 +458,108 @@ function ModulatorCard({
   );
 }
 
-export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, onUpdateRoutes }: ModulatorRackProps) {
+function VirtualModulatorCard({
+  id,
+  name,
+  color,
+  routes,
+  onAddRoute,
+  onUpdateRoute,
+  onDeleteRoute,
+}: {
+  id: string;
+  name: string;
+  color: string;
+  routes: ModulationRoute[];
+  onAddRoute: () => void;
+  onUpdateRoute: (route: ModulationRoute) => void;
+  onDeleteRoute: (routeId: string) => void;
+}) {
+  const modRoutes = routes.filter(r => r.modulatorId === id);
+  const hasActiveRoutes = modRoutes.some(r => r.targetPath && r.targetPath.length > 0);
+  const glowClass = hasActiveRoutes ? "shadow-[0_0_10px_rgba(100,200,200,0.5)]" : "";
+
+  return (
+    <div className={`rounded-md border p-2 ${color} ${glowClass} min-w-[140px] transition-shadow duration-300`} data-testid={`modulator-card-${id}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1">
+          <Waves className="w-3 h-3" />
+          <span className="text-[10px] font-medium">{name}</span>
+        </div>
+      </div>
+      
+      <div className="text-[9px] text-muted-foreground text-center py-1">
+        Virtual modulator
+      </div>
+
+      <div className="mt-2 pt-2 border-t border-border/50">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] font-medium">Routes</span>
+          <Button 
+            size="icon" 
+            variant="ghost" 
+            onClick={onAddRoute} 
+            className="h-4 w-4"
+            data-testid={`button-add-route-${id}`}
+          >
+            <Plus className="w-2.5 h-2.5" />
+          </Button>
+        </div>
+        {modRoutes.length === 0 ? (
+          <div className="text-[8px] text-muted-foreground text-center py-0.5">No routes</div>
+        ) : (
+          <div className="space-y-1 max-h-[80px] overflow-y-auto">
+            {modRoutes.map((route) => (
+              <div key={route.id} className="flex items-center gap-1" data-testid={`route-row-${route.id}`}>
+                <Select
+                  value={route.targetPath || ""}
+                  onValueChange={(v) => onUpdateRoute({ ...route, targetPath: v })}
+                >
+                  <SelectTrigger className="h-5 text-[8px] flex-1 px-1" data-testid={`select-route-target-${route.id}`}>
+                    <SelectValue placeholder="Target" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation", "Mastering", "Envelopes"].map((category) => (
+                      <SelectGroup key={category}>
+                        <SelectLabel className="text-[9px] font-semibold">{category}</SelectLabel>
+                        {MODULATION_TARGETS.filter(t => t.category === category).map((target) => (
+                          <SelectItem key={target.path} value={target.path} className="text-[9px]">
+                            {target.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Knob
+                  value={route.depth}
+                  min={-100}
+                  max={100}
+                  step={1}
+                  size="xs"
+                  label="Depth"
+                  onChange={(v) => onUpdateRoute({ ...route, depth: v })}
+                  format={(v) => `${v > 0 ? "+" : ""}${v}%`}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => onDeleteRoute(route.id)}
+                  className="h-4 w-4"
+                  data-testid={`button-delete-route-${route.id}`}
+                >
+                  <X className="w-2 h-2" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, onUpdateRoutes, curveEnabled, stepSequencerEnabled }: ModulatorRackProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   const addModulator = (type: ModulatorType) => {
@@ -530,7 +633,7 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
         </div>
       }
     >
-      {modulators.length === 0 ? (
+      {modulators.length === 0 && !curveEnabled && !stepSequencerEnabled ? (
         <div className="text-center py-4 text-[10px] text-muted-foreground">
           No modulators added. Click "Add" to create LFOs, envelopes, or macros.
         </div>
@@ -548,6 +651,28 @@ export function ModulatorRack({ modulators, routes, tempo, onUpdateModulators, o
               onDeleteRoute={deleteRoute}
             />
           ))}
+          {curveEnabled && (
+            <VirtualModulatorCard
+              id="curve"
+              name="Curve"
+              color="bg-cyan-500/20 border-cyan-500/50"
+              routes={routes}
+              onAddRoute={() => addRoute("curve")}
+              onUpdateRoute={updateRoute}
+              onDeleteRoute={deleteRoute}
+            />
+          )}
+          {stepSequencerEnabled && (
+            <VirtualModulatorCard
+              id="stepSequencer"
+              name="Step Seq"
+              color="bg-pink-500/20 border-pink-500/50"
+              routes={routes}
+              onAddRoute={() => addRoute("stepSequencer")}
+              onUpdateRoute={updateRoute}
+              onDeleteRoute={deleteRoute}
+            />
+          )}
         </div>
       )}
     </CollapsiblePanel>

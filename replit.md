@@ -71,18 +71,18 @@ Core architectural decisions include:
 
 ### Advanced Features (January 2026)
 - **Unison/Super Mode**: Per-oscillator voice stacking (1-8 voices) with detune spread (0-100 cents), stereo width (0-100%), and blend controls. Stored in localStorage. Audio implementation creates multiple oscillators with calculated detuning.
-- **Ring Modulation**: UI panel for oscillator multiplication with source selection (OSC 1/2/3), mix, and output level controls. Settings stored in localStorage. (Audio implementation pending - requires capturing oscillator outputs before mixing)
+- **Ring Modulation**: UI panel for oscillator multiplication with source selection (OSC 1/2/3), mix, and output level controls. Settings stored in localStorage. Audio implementation uses amplitude modulation where source2 modulates the gain of source1 via GainNode, creating sum and difference frequencies.
 - **Sample Layer**: Drag-and-drop audio import with pitch adjustment (-24 to +24 st), attack/decay envelopes, start/end position, reverse, and loop controls. Samples stored as base64 in localStorage.
 - **Multiband Compression**: 3-band compressor with adjustable crossover frequencies (Low X: 20-500Hz, High X: 2k-10kHz), per-band threshold/ratio/attack/release/gain, and mix control. Stored in localStorage.
 - **Phaser/Flanger Effects**: Modulation effects with rate, depth, feedback, and mix controls. Phaser includes stages (2/4/6/8/12). Flanger includes base delay time. Stored in localStorage.
 - **Parametric EQ**: 3-band EQ with low shelf, peaking (mid), and high shelf bands. Each band has frequency, gain (-15 to +15 dB), and Q controls. Stored in localStorage.
 - **Round-Robin Export**: Generate 2-8 subtle variations of the current sound for realistic round-robin playback. Configurable variation amount and parameter selection (pitch, envelope, filter, level).
-- **Parallel Processing**: Global dry/wet blend for effects chain with separate dry/wet gain controls (-12 to +12 dB). Stored in localStorage. (Audio routing pending - requires effects chain refactoring)
+- **Parallel Processing**: Global dry/wet blend for effects chain with separate dry/wet gain controls (-12 to +12 dB). Stored in localStorage. Audio implementation splits signal before effects with parallelDryGain (bypassing effects) and wet path (through effects), mixed back with dB gain controls.
 - **MIDI Input**: Web MIDI API integration for triggering sounds. Features device selection, velocity sensitivity toggle, and note range filtering. Works in Chrome/Edge browsers.
 - **Undo/Redo System**: 50-state parameter history with keyboard shortcuts (Ctrl+Z/Cmd+Z for undo, Ctrl+Y/Cmd+Y or Ctrl+Shift+Z for redo). Tracks main synth parameters only (not localStorage settings which are intentional global preferences).
 - **Keyboard Shortcuts**: Spacebar (play/trigger), E (export), Ctrl+Z/Y (undo/redo). Disabled when focus is in input fields.
-- **Curve Modulator**: Drawable one-shot envelope curves with 2-10 control points, Catmull-Rom spline interpolation, duration (0.01-5s), loop mode, bipolar mode, and smoothing control. Interactive canvas editor with double-click to add/remove points.
-- **Step Sequencer Modulator**: 8/16-step sequencer with tempo-synced rates (1/1 to 1/32, triplets, dotted), swing control (0-50%), smoothing, and bipolar mode. Click-to-draw step values in a bar graph interface.
+- **Curve Modulator**: Drawable one-shot envelope curves with 2-10 control points, Catmull-Rom spline interpolation, duration (0.01-5s), loop mode, bipolar mode, and smoothing control. Interactive canvas editor with double-click to add/remove points. Appears as virtual modulator card in ModulatorRack when enabled, allowing routes to any parameter.
+- **Step Sequencer Modulator**: 8/16-step sequencer with tempo-synced rates (1/1 to 1/32, triplets, dotted), swing control (0-50%), smoothing, and bipolar mode. Click-to-draw step values in a bar graph interface. Appears as virtual modulator card in ModulatorRack when enabled, allowing routes to any parameter.
 - **DAW Drag Export**: Drag-and-drop audio files directly into DAW tracks. Supports browser file drag API where available, with fallback to download button. Custom filename support.
 
 ## External Dependencies
