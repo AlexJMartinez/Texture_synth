@@ -40,7 +40,7 @@ export function WavetableEditor({
   const [currentFrame, setCurrentFrame] = useState(0);
   const [tool, setTool] = useState<DrawTool>("pencil");
   const [isDrawing, setIsDrawing] = useState(false);
-  const [lastPoint, setLastPoint] = useState<{ x: number; y: number } | null>(null);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [wavetableName, setWavetableName] = useState("Custom Wavetable");
   const [undoStack, setUndoStack] = useState<Float32Array[][]>([]);
@@ -235,48 +235,48 @@ export function WavetableEditor({
   }, []);
   
   const drawAtPoint = useCallback((x: number, y: number, prevX?: number, prevY?: number) => {
-    if (frames.length === 0) return;
-    
-    const frame = new Float32Array(frames[currentFrame]);
-    const sampleIndex = Math.floor((x / LOGICAL_WIDTH) * SAMPLES_PER_FRAME);
+    const sampleIndex = Math.min(SAMPLES_PER_FRAME - 1, Math.floor((x / LOGICAL_WIDTH) * SAMPLES_PER_FRAME));
     const value = 1 - (y / LOGICAL_HEIGHT) * 2;
     
-    if (tool === "pencil" || tool === "line") {
-      if (prevX !== undefined && prevY !== undefined) {
-        const prevSampleIndex = Math.floor((prevX / LOGICAL_WIDTH) * SAMPLES_PER_FRAME);
-        const prevValue = 1 - (prevY / LOGICAL_HEIGHT) * 2;
-        
-        const startIdx = Math.min(sampleIndex, prevSampleIndex);
-        const endIdx = Math.max(sampleIndex, prevSampleIndex);
-        
-        for (let i = startIdx; i <= endIdx; i++) {
-          const t = endIdx === startIdx ? 0 : (i - startIdx) / (endIdx - startIdx);
-          const interpolatedValue = prevValue + (value - prevValue) * t;
-          frame[Math.max(0, Math.min(SAMPLES_PER_FRAME - 1, i))] = Math.max(-1, Math.min(1, interpolatedValue));
+    setFrames(prevFrames => {
+      if (prevFrames.length === 0) return prevFrames;
+      
+      const frame = new Float32Array(prevFrames[currentFrame]);
+      
+      if (tool === "pencil" || tool === "line") {
+        if (prevX !== undefined && prevY !== undefined) {
+          const prevSampleIndex = Math.min(SAMPLES_PER_FRAME - 1, Math.floor((prevX / LOGICAL_WIDTH) * SAMPLES_PER_FRAME));
+          const prevValue = 1 - (prevY / LOGICAL_HEIGHT) * 2;
+          
+          const startIdx = Math.min(sampleIndex, prevSampleIndex);
+          const endIdx = Math.max(sampleIndex, prevSampleIndex);
+          
+          for (let i = startIdx; i <= endIdx; i++) {
+            const t = endIdx === startIdx ? 0 : (i - startIdx) / (endIdx - startIdx);
+            const interpolatedValue = prevValue + (value - prevValue) * t;
+            frame[i] = Math.max(-1, Math.min(1, interpolatedValue));
+          }
+        } else {
+          frame[sampleIndex] = Math.max(-1, Math.min(1, value));
         }
-      } else {
-        frame[Math.max(0, Math.min(SAMPLES_PER_FRAME - 1, sampleIndex))] = Math.max(-1, Math.min(1, value));
-      }
-    } else if (tool === "eraser") {
-      const brushSize = 5;
-      for (let i = sampleIndex - brushSize; i <= sampleIndex + brushSize; i++) {
-        if (i >= 0 && i < SAMPLES_PER_FRAME) {
+      } else if (tool === "eraser") {
+        const brushSize = 5;
+        for (let i = Math.max(0, sampleIndex - brushSize); i <= Math.min(SAMPLES_PER_FRAME - 1, sampleIndex + brushSize); i++) {
           frame[i] = 0;
         }
-      }
-    } else if (tool === "smooth") {
-      const brushSize = 3;
-      for (let i = sampleIndex - brushSize; i <= sampleIndex + brushSize; i++) {
-        if (i >= 1 && i < SAMPLES_PER_FRAME - 1) {
-          frame[i] = (frame[i - 1] + frame[i] + frame[i + 1]) / 3;
+      } else if (tool === "smooth") {
+        const brushSize = 3;
+        const originalFrame = new Float32Array(frame);
+        for (let i = Math.max(1, sampleIndex - brushSize); i <= Math.min(SAMPLES_PER_FRAME - 2, sampleIndex + brushSize); i++) {
+          frame[i] = (originalFrame[i - 1] + originalFrame[i] + originalFrame[i + 1]) / 3;
         }
       }
-    }
-    
-    const newFrames = [...frames];
-    newFrames[currentFrame] = frame;
-    setFrames(newFrames);
-  }, [frames, currentFrame, tool]);
+      
+      const newFrames = [...prevFrames];
+      newFrames[currentFrame] = frame;
+      return newFrames;
+    });
+  }, [currentFrame, tool]);
   
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
@@ -285,24 +285,25 @@ export function WavetableEditor({
     setIsDrawing(true);
     const point = getCanvasPointFromPointer(e);
     if (point) {
-      setLastPoint(point);
+      lastPointRef.current = point;
       drawAtPoint(point.x, point.y);
     }
-  }, [drawAtPoint, saveUndoState]);
+  }, [drawAtPoint, saveUndoState, getCanvasPointFromPointer]);
   
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isDrawing) return;
     e.preventDefault();
     const point = getCanvasPointFromPointer(e);
+    const lastPoint = lastPointRef.current;
     if (point && lastPoint) {
       drawAtPoint(point.x, point.y, lastPoint.x, lastPoint.y);
-      setLastPoint(point);
+      lastPointRef.current = point;
     }
-  }, [isDrawing, getCanvasPointFromPointer, drawAtPoint, lastPoint]);
+  }, [isDrawing, getCanvasPointFromPointer, drawAtPoint]);
   
   const handlePointerUp = useCallback(() => {
     setIsDrawing(false);
-    setLastPoint(null);
+    lastPointRef.current = null;
   }, []);
   
   const addFrame = useCallback(() => {
@@ -310,25 +311,31 @@ export function WavetableEditor({
     for (let i = 0; i < SAMPLES_PER_FRAME; i++) {
       newFrame[i] = Math.sin((i / SAMPLES_PER_FRAME) * Math.PI * 2);
     }
-    setFrames(prev => [...prev, newFrame]);
-    setCurrentFrame(frames.length);
-  }, [frames.length]);
+    setFrames(prev => {
+      setCurrentFrame(prev.length);
+      return [...prev, newFrame];
+    });
+  }, []);
   
   const duplicateFrame = useCallback(() => {
-    if (frames.length === 0) return;
-    const copy = new Float32Array(frames[currentFrame]);
-    const newFrames = [...frames];
-    newFrames.splice(currentFrame + 1, 0, copy);
-    setFrames(newFrames);
-    setCurrentFrame(currentFrame + 1);
-  }, [frames, currentFrame]);
+    setFrames(prev => {
+      if (prev.length === 0) return prev;
+      const copy = new Float32Array(prev[currentFrame]);
+      const newFrames = [...prev];
+      newFrames.splice(currentFrame + 1, 0, copy);
+      setCurrentFrame(currentFrame + 1);
+      return newFrames;
+    });
+  }, [currentFrame]);
   
   const deleteFrame = useCallback(() => {
-    if (frames.length <= 1) return;
-    const newFrames = frames.filter((_, i) => i !== currentFrame);
-    setFrames(newFrames);
-    setCurrentFrame(Math.min(currentFrame, newFrames.length - 1));
-  }, [frames, currentFrame]);
+    setFrames(prev => {
+      if (prev.length <= 1) return prev;
+      const newFrames = prev.filter((_, i) => i !== currentFrame);
+      setCurrentFrame(Math.min(currentFrame, newFrames.length - 1));
+      return newFrames;
+    });
+  }, [currentFrame]);
   
   const resetFrame = useCallback(() => {
     saveUndoState();
