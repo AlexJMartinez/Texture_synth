@@ -695,6 +695,7 @@ export default function Synthesizer() {
   const [isCapturingGranular, setIsCapturingGranular] = useState(false);
   const [isGranularPlaying, setIsGranularPlaying] = useState(false);
   const granularPlaybackRef = useRef<{ stop: () => void } | null>(null);
+  const isGranularPlayingRef = useRef(false); // Ref to track playback state across async boundaries
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -3604,12 +3605,13 @@ export default function Synthesizer() {
   const isRenderingGranularRef = useRef(false);
   
   const toggleGranularPlayback = useCallback(async () => {
-    // Stop if currently playing
-    if (isGranularPlaying) {
+    // Stop if currently playing (use ref for accurate state)
+    if (isGranularPlayingRef.current) {
       if (granularPlaybackRef.current) {
         granularPlaybackRef.current.stop();
         granularPlaybackRef.current = null;
       }
+      isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
       return;
     }
@@ -3621,6 +3623,7 @@ export default function Synthesizer() {
     if (!granularBuffer?.data || !granularSettings.enabled) return;
     
     isRenderingGranularRef.current = true;
+    isGranularPlayingRef.current = true;
     setIsGranularPlaying(true);
     
     await Tone.start();
@@ -3642,14 +3645,15 @@ export default function Synthesizer() {
         await generateSound(rawCtx, params, durationMs, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings, granularSettings, granularBuffer);
       }, durationSec);
       
-      // Check if we were stopped during render
-      if (!isGranularPlaying) {
+      // Check if we were stopped during render (use ref for accurate state)
+      if (!isGranularPlayingRef.current) {
         isRenderingGranularRef.current = false;
         return;
       }
       
       const renderedBuffer = buffer.get() as AudioBuffer;
       if (!renderedBuffer) {
+        isGranularPlayingRef.current = false;
         setIsGranularPlaying(false);
         isRenderingGranularRef.current = false;
         return;
@@ -3690,10 +3694,11 @@ export default function Synthesizer() {
       isRenderingGranularRef.current = false;
     } catch (err) {
       console.error("Granular playback error:", err);
+      isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
       isRenderingGranularRef.current = false;
     }
-  }, [isGranularPlaying, granularBuffer, granularSettings, params, oscEnvelopes, generateSound, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
+  }, [granularBuffer, granularSettings, params, oscEnvelopes, generateSound, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
   
   const toggleGranularPlaybackRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -3925,6 +3930,7 @@ export default function Synthesizer() {
       if (granularPlaybackRef.current) {
         granularPlaybackRef.current.stop();
         granularPlaybackRef.current = null;
+        isGranularPlayingRef.current = false;
         setIsGranularPlaying(false);
       }
     };
@@ -3935,6 +3941,7 @@ export default function Synthesizer() {
     if (granularPlaybackRef.current && !granularSettings.enabled) {
       granularPlaybackRef.current.stop();
       granularPlaybackRef.current = null;
+      isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
     }
   }, [granularSettings.enabled]);

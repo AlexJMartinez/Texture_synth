@@ -134,13 +134,14 @@ export function GranularPanel({
   const [grainPositions, setGrainPositions] = useState<number[]>([]);
   
   // Draw bar-style waveform on canvas (matches main terrain display)
-  const drawBarWaveform = useCallback((canvas: HTMLCanvasElement, data: Float32Array | null) => {
+  const drawBarWaveform = useCallback((canvas: HTMLCanvasElement, data: Float32Array | null, cssWidth: number, cssHeight: number) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const width = canvas.width;
-    const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
+    // Use CSS dimensions for drawing (canvas is scaled for devicePixelRatio)
+    const width = cssWidth;
+    const height = cssHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     const barWidth = 2;
     const gap = 1;
@@ -212,14 +213,16 @@ export function GranularPanel({
     
     // Set canvas size based on container
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * window.devicePixelRatio;
-    canvas.height = rect.height * window.devicePixelRatio;
+    const cssWidth = rect.width;
+    const cssHeight = rect.height;
+    canvas.width = cssWidth * window.devicePixelRatio;
+    canvas.height = cssHeight * window.devicePixelRatio;
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
     }
     
-    drawBarWaveform(canvas, sampleBuffer?.data || null);
+    drawBarWaveform(canvas, sampleBuffer?.data || null, cssWidth, cssHeight);
   }, [sampleBuffer?.data, drawBarWaveform]);
   
   // Helper to convert Float32Array to WAV ArrayBuffer (defined before use)
