@@ -2435,7 +2435,9 @@ export default function Synthesizer() {
     const ringModActive = ringMod?.enabled && ringMod.mix > 0;
     const ringModWet = ringModActive ? (ringMod.mix / 100) : 0;
     // Crossfade: reduce dry signal of involved oscillators based on mix
-    const ringModDryLevel = 1 - (ringModWet * 0.7); // Keep some dry even at 100% wet
+    // Gentler dry reduction - at 100% mix, dry is 50% (not 30%)
+    // This prevents volume drops while still allowing ring mod to cut through
+    const ringModDryLevel = 1 - (ringModWet * 0.5);
 
     for (const { osc, key } of oscConfigs) {
       if (!osc.enabled) continue;
@@ -2860,24 +2862,26 @@ export default function Synthesizer() {
         source1Node.connect(ringModGain);
         
         // source2 modulates the gain of source1
-        // Scale up the modulation depth for audibility
+        // Ring mod products are inherently quieter (A1 * A2 where both < 1)
+        // Use unity modulation depth - the makeup gain handles loudness
         const modDepthGain = ctx.createGain();
-        modDepthGain.gain.value = 4.0; // Stronger modulation for clear ring mod effect
+        modDepthGain.gain.value = 1.0; // Unity modulation for true ring mod
         source2Node.connect(modDepthGain);
         modDepthGain.connect(ringModGain.gain);
+        
+        // Ring mod makeup gain - compensate for signal multiplication
+        // Typical oscillator levels are 0.1-1.0, so product is 0.01-1.0
+        // Apply 8x makeup gain to bring ring mod output to comparable level
+        const ringModMakeup = ctx.createGain();
+        ringModMakeup.gain.value = 8.0;
+        ringModGain.connect(ringModMakeup);
         
         // Output level for ring mod (wet signal)
         const ringModOut = ctx.createGain();
         ringModOut.gain.value = wetAmount * outputLevel;
-        ringModGain.connect(ringModOut);
+        ringModMakeup.connect(ringModOut);
         
-        // Reduce dry signal from source1 based on mix (crossfade)
-        // This makes the ring mod effect actually audible rather than just adding to existing sound
-        // We need to attenuate the existing connection - but since it's already connected,
-        // we create an inverse signal or adjust at later stage
-        // For now, connect ring mod output directly - the output level control provides the effect
-        
-        // Connect to the filter chain (before effects) for proper integration
+        // Connect to the master gain
         ringModOut.connect(masterGain);
       }
     }
