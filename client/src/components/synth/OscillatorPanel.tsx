@@ -233,10 +233,12 @@ export function OscillatorPanel({
                 value={oscillator.fmRatioPreset}
                 onValueChange={(v) => {
                   const preset = v as ModRatioPreset;
+                  // Update both fmRatio and fmRatioPreset in a single call to avoid race condition
                   if (preset !== "custom") {
-                    updateOscillator("fmRatio", parseFloat(preset));
+                    onChange({ ...oscillator, fmRatio: parseFloat(preset), fmRatioPreset: preset });
+                  } else {
+                    onChange({ ...oscillator, fmRatioPreset: preset });
                   }
-                  updateOscillator("fmRatioPreset", preset);
                 }}
                 disabled={!oscillator.fmEnabled}
               >
