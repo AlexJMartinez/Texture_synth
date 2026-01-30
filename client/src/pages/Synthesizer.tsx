@@ -2564,15 +2564,13 @@ export default function Synthesizer() {
         const modulatorFreq = oscPitchHz * osc.fmRatio;
         const op1DetuneOffset = advFM?.operator1Detune || 0;
         
-        // FM8-style modulation index: depth 0-1000 maps to index 0-100
-        // Use carrier frequency for depth calculation so ratio only affects timbre, not intensity
-        const fmIndex = osc.fmDepth / 10;
-        const fmDepthHz = fmIndex * oscPitchHz; // Use carrier freq, not modulator freq
+        // FM depth is direct Hz value (0-1000Hz range on knob)
+        // This gives usable range: 0-200Hz for subtle, 200-500Hz for moderate, 500-1000Hz for aggressive
+        const fmDepthHz = osc.fmDepth;
         
-        // Operator 2 calculations
+        // Operator 2 calculations - also use direct Hz value
         const op2Freq = op2Settings ? oscPitchHz * op2Settings.ratio : 0;
-        const op2Index = op2Settings ? op2Settings.depth / 10 : 0;
-        const op2DepthHz = op2Index * op2Freq;
+        const op2DepthHz = op2Settings ? op2Settings.depth : 0; // Direct Hz value
         
         let modOsc: OscillatorNode | null = null;
         let modGain: GainNode | null = null;
@@ -2613,9 +2611,9 @@ export default function Synthesizer() {
             feedbackDelay.delayTime.value = 1 / ctx.sampleRate; // 1 sample delay
             
             const feedbackGain = ctx.createGain();
-            // Feedback scales with modulator frequency for consistent effect across pitches
-            // Range: 0-1 maps to 0-4x frequency (sweet spot for rich harmonics without noise)
-            feedbackGain.gain.value = osc.fmFeedback * modulatorFreq * 4;
+            // Feedback adds harmonics to the modulator waveform
+            // Range: 0-1 maps to 0-500Hz max deviation (subtle to moderate effect)
+            feedbackGain.gain.value = osc.fmFeedback * 500;
             
             modOsc.connect(feedbackDelay);
             feedbackDelay.connect(feedbackGain);
@@ -2639,7 +2637,8 @@ export default function Synthesizer() {
             op2FeedbackDelay.delayTime.value = 1 / ctx.sampleRate;
             
             const op2FeedbackGain = ctx.createGain();
-            op2FeedbackGain.gain.value = op2Settings.feedback * op2Freq * 4;
+            // Fixed 500Hz max feedback deviation (same as Op1)
+            op2FeedbackGain.gain.value = op2Settings.feedback * 500;
             
             op2Osc.connect(op2FeedbackDelay);
             op2FeedbackDelay.connect(op2FeedbackGain);
