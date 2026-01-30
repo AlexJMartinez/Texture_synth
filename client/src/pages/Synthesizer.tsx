@@ -706,6 +706,7 @@ export default function Synthesizer() {
   const activeSourcesRef = useRef<AudioScheduledSourceNode[]>([]);
   const activeFadeGainRef = useRef<GainNode | null>(null);
   const playTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPreviewSeedRef = useRef<number>(Date.now());
   
   // Undo/Redo history for parameters
   const undoHistoryRef = useRef(new UndoHistory<SynthParameters>(50));
@@ -3511,6 +3512,7 @@ export default function Synthesizer() {
     
     // Fix 5 & 6: Use same OfflineAudioContext for preview and export with locked seed
     const seed = Date.now();
+    lastPreviewSeedRef.current = seed; // Store for granular capture
     const sampleRate = 44100;
     // Ensure duration is at least 0.1s to prevent "value should be positive" error in Tone.Offline
     const durationInSeconds = Math.max(0.1, totalDuration / 1000);
@@ -3846,7 +3848,8 @@ export default function Synthesizer() {
       // Use the SAME duration calculation as preview for consistent capture
       const captureDuration = getTotalDuration(captureParams, oscEnvelopes);
       const durationInSeconds = Math.max(0.1, captureDuration / 1000);
-      const seed = Date.now();
+      // Use the same seed as the last preview to ensure captured waveform matches
+      const seed = lastPreviewSeedRef.current;
       
       const buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
