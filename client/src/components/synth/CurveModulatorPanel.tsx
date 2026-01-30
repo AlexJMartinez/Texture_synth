@@ -29,8 +29,22 @@ export function CurveModulatorPanel({ settings, onChange }: CurveModulatorPanelP
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    const width = canvas.width;
-    const height = canvas.height;
+    // High-DPI scaling for crisp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = 280;
+    const displayHeight = 120;
+    
+    // Set canvas size accounting for device pixel ratio
+    canvas.width = displayWidth * dpr;
+    canvas.height = displayHeight * dpr;
+    canvas.style.width = `${displayWidth}px`;
+    canvas.style.height = `${displayHeight}px`;
+    
+    // Scale context to match
+    ctx.scale(dpr, dpr);
+    
+    const width = displayWidth;
+    const height = displayHeight;
     const padding = 10;
     
     ctx.fillStyle = "hsl(140, 10%, 12%)";
@@ -244,9 +258,8 @@ export function CurveModulatorPanel({ settings, onChange }: CurveModulatorPanelP
         <div className="relative">
           <canvas
             ref={canvasRef}
-            width={280}
-            height={120}
             className="w-full rounded-md border border-primary/20 cursor-crosshair"
+            style={{ width: '280px', height: '120px' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
