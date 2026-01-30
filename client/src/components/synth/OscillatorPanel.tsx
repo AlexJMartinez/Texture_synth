@@ -308,6 +308,26 @@ export function OscillatorPanel({
                   
                   {fmAdvancedOpen && (
                     <div className="space-y-1 mt-1">
+                      {/* Carrier Waveform - FM mode bypasses main osc waveform */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-muted-foreground shrink-0">Carrier</span>
+                        <Select
+                          value={advancedFM.carrierWaveform || "sine"}
+                          onValueChange={(v) => onAdvancedFMChange({ ...advancedFM, carrierWaveform: v as "sine" | "triangle" | "sawtooth" | "square" })}
+                          disabled={!oscillator.fmEnabled}
+                        >
+                          <SelectTrigger className="h-5 text-[9px] flex-1" data-testid={`select-fm-carrier-${index}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="sine">Sine</SelectItem>
+                            <SelectItem value="triangle">Triangle</SelectItem>
+                            <SelectItem value="sawtooth">Saw</SelectItem>
+                            <SelectItem value="square">Square</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
                       {/* Algorithm Selector */}
                       <Select
                         value={advancedFM.algorithm}

@@ -17,6 +17,7 @@ export interface AdvancedFMSettings {
   algorithm: FMAlgorithm;
   operator1Detune: number; // -100 to 100 cents for fine-tuning
   operator2: FMOperator2;
+  carrierWaveform: "sine" | "triangle" | "sawtooth" | "square"; // Carrier waveform when FM bypasses main osc
 }
 
 export const defaultAdvancedFMSettings: AdvancedFMSettings = {
@@ -30,6 +31,7 @@ export const defaultAdvancedFMSettings: AdvancedFMSettings = {
     waveform: "sine",
     feedback: 0,
   },
+  carrierWaveform: "sine", // Classic FM uses sine carrier
 };
 
 // Per-oscillator FM settings map
