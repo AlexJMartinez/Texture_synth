@@ -1,7 +1,7 @@
 # OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-OneShot Synth is a professional web-based one-shot synthesizer built with React and Tone.js. Its primary purpose is to enable music producers to create unique, percussive sounds with an aggressive envelope style, similar to the hyperpop genre and the Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive), extensive effects processing, and flexible export capabilities (WAV/MP3 formats, 44.1k/48k/96k sample rates). The project aims to provide a powerful tool for generating everything from clean tones to abrasive and impactful sounds.
+OneShot Synth is a professional web-based synthesizer designed for music producers to create unique, aggressive, percussive sounds akin to hyperpop and Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive), extensive effects, and flexible export options (WAV/MP3, various sample rates). The project aims to be a powerful tool for generating a wide range of impactful sounds.
 
 ## User Preferences
 I want iterative development.
@@ -9,86 +9,53 @@ Ask before making major changes.
 Do not make changes to the folder `shared`.
 
 ## System Architecture
-The application is built using React with TypeScript and Vite for the frontend, styled with Tailwind CSS and shadcn/ui components. Tone.js is utilized for audio context management, leveraging the Web Audio API for synthesis. State management relies on React hooks with localStorage for local settings, while user presets are stored in PostgreSQL for global sharing across all users and devices.
+The application uses React with TypeScript and Vite for the frontend, styled with Tailwind CSS and shadcn/ui. Tone.js manages audio, leveraging the Web Audio API. State relies on React hooks with localStorage for local settings, and PostgreSQL for global user presets.
 
-The UI features a clean, professional audio design with a tabbed organization system: Sound, Layers, FX, Master, and Export. It employs a soft green color palette inspired by Felt Instruments, with a dark background, primary soft sage green, and accent mint green hues. Visualizations include a 3D terrain waveform display with a purple to cyan gradient that animates in response to audio data. Controls are compact knobs with double-click/double-tap functionality to reset values.
+The UI features a clean, professional audio design with tabbed organization (Sound, Layers, FX, Master, Export), using a soft green color palette and a dark background. Visualizations include a 3D terrain waveform display. Controls are compact knobs with double-click reset.
 
-Core architectural decisions include:
-- **Multi-Oscillator Architecture**: Three main oscillators with sine, triangle, sawtooth, and square waveforms, featuring per-oscillator pitch, detune, drift, level, and FM/PM/AM synthesis capabilities.
-  - **Advanced FM Synthesis**: Classic 2-operator FM architecture per oscillator. When FM is enabled, it **bypasses the main oscillator waveform** (like wavetable mode) and uses its own carrier waveform (selectable: sine/triangle/saw/square, default sine). The modulator with AHD index envelope modulates the carrier frequency, creating glass hits, metallic clicks, digital clangs, and sci-fi impacts. Features algorithm routing (series/parallel/feedback/mixed), operator 2 controls (ratio, detune, depth, waveform, feedback), and fine-tuning. Key best practices: envelope the modulator via index envelope, keep FM index lower for sub layers, distort after FM not before. Settings stored in localStorage.
-- **Per-Oscillator Envelopes**: Independent AHD (Attack/Hold/Decay) envelopes for each oscillator, allowing individual amplitude shaping before mixing to master. Stored in localStorage separately from presets. Each oscillator's ENV section has a toggle to enable and A/H/D knobs for timing control.
-- **Click Layer**: A dedicated transient generator with ultra-fast noise, various noise types, filter options, and sample rate reduction.
-- **Sub Oscillator**: A separate layer for low-end, offering sine and triangle waveforms with dedicated envelopes and filtering.
-- **Advanced Synthesis Engines**: Selectable Modal and Additive synthesis engines for diverse sound generation. Both engines follow the key selector - when the key is changed, their basePitch values update to match the new key frequency.
-  - **Modal Synthesis**: Physical modeling with modeCount (1-4 resonant modes), inharmonicity (0-100% quadratic detuning), exciterType (noise burst/sharp impulse/soft mallet/pitched pluck), plus per-mode ratio, decay, and level controls.
-  - **Additive Synthesis**: Harmonic stacking with partialCount (1-8 active harmonics), randomness (0-100% pitch and level variation), spread, decay slope, and per-partial level/detune controls.
-- **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
-  - **Amp Envelope**: Extended ranges matching contemporary synths - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for fine control at fast times and long pad tails.
-  - **Filter Envelope**: Extended ranges - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for sweeping filter movements.
-  - **Pitch Envelope**: Standard ranges - Attack 0-2s, Hold 0-2s, Decay 0-10s.
-  - **Pitch Envelope**: Uses semitone-based modulation (-48 to +48 st) for authentic 808-style pitch drops with exponential curve option.
-- **Advanced Filters**: Nine filter types including standard, advanced, and comb filters. Enhanced with:
-  - **Filter Drive/Saturation**: Pre or post-filter saturation with soft/hard/tube/tape modes.
-  - **Dual Filter Mode**: Series or parallel routing of two independent filters with morph control.
-  - **Formant Filter**: Vowel-based filtering (A, E, I, O, U) with resonant peak shaping.
-  - **Filter FM**: Modulate cutoff frequency from oscillators or LFO with configurable depth.
-  - **Keytracking**: Scale filter cutoff based on pitch (-100% to +100%).
-  - **Self-Oscillation**: Enable filter resonance to produce tones at high Q.
-- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync option), Convolution Reverb, Algorithmic Reverb, and Chorus.
-  - **Algorithmic Reverb**: Three reverb types (Hall/Plate/Room) with enhanced impulse response generation featuring:
-    - Type-specific early reflections (8/6/4 reflections for hall/plate/room)
-    - Pre-delay control (0-200ms)
-    - Damping for high-frequency decay control (0-100%)
-    - Diffusion for tail density (0-100%)
-    - Internal modulation to prevent metallic artifacts (0-100%)
-    - Stereo width/decorrelation control (0-100%)
-    - All settings stored in localStorage
-  - **Delay Beat Sync**: Switch between milliseconds and tempo-synced delay times (1/1, 1/2, 1/4, 1/8, 1/16, 1/32, triplets, dotted notes).
-  - **Enhanced Convolver**: Kilohearts-style convolution reverb with custom IR loading plus advanced processing: pre-delay (0-500ms), size/decay (10-100% with exponential curve), lo/hi cut filters (20Hz-20kHz with frequency clamping), reverse toggle, and time-stretch (0.5x-2x with linear interpolation). Settings stored in localStorage separately from presets.
-- **Modulation System**: Phaseplant-style modulator rack at the bottom of the UI.
-  - **LFO**: Sine, triangle, sawtooth, square, random shapes with rate sync option, phase control, and bipolar/unipolar modes.
-  - **Envelope**: ADSR modulator with attack, decay, sustain, release controls.
-  - **Random/S&H**: Sample-and-hold random modulation with rate and smoothing controls.
-  - **Macro**: Manual control knobs assignable to multiple parameters.
-  - **Modulation Routing**: Assign any modulator to 75+ parameters with depth control, including filter, oscillators, effects, spectral scrambler, mastering, and envelope amounts. Visual feedback shows colored rings on modulated knobs matching modulator colors (LFO=blue, Envelope=orange, Random=purple, Macro=green).
-- **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling. Enhanced with:
-  - **Asymmetric Shaping**: Apply different curves to positive and negative signal with DC offset control.
-  - **Multi-Band Waveshaping**: 3-band split (low/mid/high) with independent curves and drive per band.
-  - **Dynamic Shaping**: Envelope-follower driven distortion with sensitivity, attack, and release controls.
-  - **Chebyshev Polynomials**: Order 2-7 for harmonic-rich distortion.
-  - **Foldback Iterations**: 1-5 iterations for aggressive wavefold saturation.
-  - **Custom Curve Editor**: Interactive canvas with draggable control points (2-10 points), Catmull-Rom spline interpolation for smooth curves, add/remove points via double-click or buttons, endpoint-only vertical movement, touch support, and localStorage persistence.
-- **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool using radix-2 Cooley-Tukey algorithm (O(N log N)) with overlap-add windowing and Hermitian symmetry for real-valued output. Features FFT size selection (256-2048 bins), scramble amount, bin shift, freeze mode, spectral gating (-60dB to 0dB threshold for tearing/crackle effects), spectral stretch/squeeze (0.5x-2.0x for moving frequencies up/down), bin density control (5%-100% for sparse/broken sounds), and wet/dry mix for metallic, glitchy hyperpop textures. Includes audibility safeguards: wet mix capped at 70%, energy normalization (up to 4x gain), and automatic wet reduction if processed signal is too quiet. DC and Nyquist bins are preserved unshifted but apply gating/density for signal integrity.
-- **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor) for harmonic content.
-- **Mastering Section**: Includes a Soft-Knee Compressor, HF Exciter, and Stereo Widener.
-- **Impact/Transient Tools**: Features a Transient Shaper, Hard Limiter, and Multiband Distortion.
+Key architectural decisions include:
+- **Multi-Oscillator Architecture**: Three main oscillators with multiple waveforms, per-oscillator pitch, detune, drift, level, and advanced FM/PM/AM capabilities. FM synthesis bypasses the main oscillator waveform when active.
+- **Per-Oscillator AHD Envelopes**: Independent Attack/Hold/Decay envelopes for each oscillator's amplitude.
+- **Dedicated Layers**: A Click Layer for transients and a Sub Oscillator for low-end.
+- **Advanced Synthesis Engines**: Selectable Modal and Additive synthesis, which update their basePitch based on the global key selector.
+  - **Modal Synthesis**: Physical modeling with modeCount, inharmonicity, and various exciter types.
+  - **Additive Synthesis**: Harmonic stacking with partialCount, randomness, spread, and decay slope.
+- **Granular Synthesis Engine**: One-shot friendly granular textures with two modes (Cinematic and Design), sample input (drag-drop or self-sample), density-based grain scheduling, various window types, and post-bus processing including anti-mud rules. Includes an independent AHD envelope.
+- **3-Envelope System**: Dedicated AHD envelopes for filter cutoff, pitch, and amplitude, with extended ranges for precise control. Pitch envelope uses semitone-based modulation.
+- **Advanced Filters**: Nine filter types with enhancements like Filter Drive/Saturation, Dual Filter Mode (series/parallel), Formant Filter, Filter FM, Keytracking, and Self-Oscillation.
+- **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync), Convolution Reverb (with custom IR loading and advanced processing), Algorithmic Reverb (with type-specific early reflections, pre-delay, damping, diffusion, modulation), and Chorus.
+- **Modulation System**: A Phaseplant-style modulator rack offering LFO, ADSR Envelope, Random/S&H, and Macro controls. Features flexible routing to 75+ parameters with visual feedback.
+- **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling. Enhanced with Asymmetric Shaping, Multi-Band Waveshaping, Dynamic Shaping, Chebyshev Polynomials, Foldback Iterations, and a Custom Curve Editor.
+- **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool with scramble amount, bin shift, freeze mode, spectral gating, stretch/squeeze, and bin density control. Includes audibility safeguards.
+- **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor).
+- **Mastering Section**: Soft-Knee Compressor, HF Exciter, and Stereo Widener.
+- **Impact/Transient Tools**: Transient Shaper, Hard Limiter, and Multiband Distortion.
 - **Real-time Playback & Offline Rendering**: Tone.js for live preview and Tone.Offline for WAV export.
-- **Canonical Pitch Model**: Internal pitch representation uses `PitchState {mode, baseHz, st, cents}` for flexible display and consistent audio generation.
-- **Audio Retriggering**: Gain ramps and scheduled stops prevent audio pops/clicks.
-- **Preset Management**: Factory presets (built-in) and shared user presets with save/load/delete functionality. User presets are stored in PostgreSQL database for global sharing across all users and devices. Factory presets can be hidden locally (stored in localStorage). Features import/export for backup.
-- **Randomization**: Features full randomization with chaos control slider (10-100%) and gentle mutation. Includes audibility safeguards to prevent silent outputs.
-
-### Advanced Features (January 2026)
-- **Unison/Super Mode**: Per-oscillator voice stacking (1-8 voices) with detune spread (0-100 cents), stereo width (0-100%), and blend controls. Stored in localStorage. Audio implementation creates multiple oscillators with calculated detuning.
-- **Ring Modulation**: Refactored to use a dedicated modulator oscillator (not existing oscillators) with configurable frequency (20-2000Hz), waveform selection, and depth with AHD envelope for one-shot control. Includes post-filtering (HP/LP) to clean the signal. Proper parallel wet/dry mixing. Settings stored in localStorage.
-- **Sample Layer**: Drag-and-drop audio import with pitch adjustment (-24 to +24 st), attack/decay envelopes, start/end position, reverse, and loop controls. Samples stored as base64 in localStorage.
-- **Multiband Compression**: 3-band compressor with adjustable crossover frequencies (Low X: 20-500Hz, High X: 2k-10kHz), per-band threshold/ratio/attack/release/gain, and mix control. Stored in localStorage.
-- **Phaser/Flanger Effects**: Modulation effects with rate, depth, feedback, and mix controls. Phaser includes stages (2/4/6/8/12). Flanger includes base delay time. Stored in localStorage.
-- **Parametric EQ**: 3-band EQ with low shelf, peaking (mid), and high shelf bands. Each band has frequency, gain (-15 to +15 dB), and Q controls. Stored in localStorage.
-- **Round-Robin Export**: Generate 2-8 subtle variations of the current sound for realistic round-robin playback. Configurable variation amount and parameter selection (pitch, envelope, filter, level).
-- **Parallel Processing**: Global dry/wet blend for effects chain with separate dry/wet gain controls (-12 to +12 dB). Stored in localStorage. Audio implementation splits signal before effects with parallelDryGain (bypassing effects) and wet path (through effects), mixed back with dB gain controls.
-- **MIDI Input**: Web MIDI API integration for triggering sounds. Features device selection, velocity sensitivity toggle, and note range filtering. Works in Chrome/Edge browsers.
-- **Undo/Redo System**: 50-state parameter history with keyboard shortcuts (Ctrl+Z/Cmd+Z for undo, Ctrl+Y/Cmd+Y or Ctrl+Shift+Z for redo). Tracks main synth parameters only (not localStorage settings which are intentional global preferences).
-- **Keyboard Shortcuts**: Spacebar (play/trigger), E (export), Ctrl+Z/Y (undo/redo). Disabled when focus is in input fields.
-- **Curve Modulator**: Drawable one-shot envelope curves with 2-10 control points, Catmull-Rom spline interpolation, duration (0.01-5s), loop mode, bipolar mode, and smoothing control. Interactive canvas editor with double-click to add/remove points. Appears as virtual modulator card in ModulatorRack when enabled, allowing routes to any parameter.
-- **Step Sequencer Modulator**: 8/16-step sequencer with tempo-synced rates (1/1 to 1/32, triplets, dotted), swing control (0-50%), smoothing, and bipolar mode. Click-to-draw step values in a bar graph interface. Appears as virtual modulator card in ModulatorRack when enabled, allowing routes to any parameter.
-- **DAW Drag Export**: Drag-and-drop audio files directly into DAW tracks. Supports browser file drag API where available, with fallback to download button. Custom filename support.
+- **Canonical Pitch Model**: Internal pitch representation for consistent audio generation.
+- **Audio Retriggering**: Gain ramps and scheduled stops prevent audio artifacts.
+- **Preset Management**: Factory presets and shared user presets (PostgreSQL), with local hiding and import/export.
+- **Randomization**: Full randomization with chaos control and gentle mutation, including audibility safeguards.
+- **Unison/Super Mode**: Per-oscillator voice stacking with detune, stereo width, and blend controls.
+- **Ring Modulation**: Dedicated modulator oscillator with configurable frequency, waveform, depth, and AHD envelope.
+- **Sample Layer**: Drag-and-drop audio import with pitch, envelopes, position, reverse, and loop controls.
+- **Multiband Compression**: 3-band compressor with adjustable crossovers and per-band controls.
+- **Phaser/Flanger Effects**: Modulation effects with rate, depth, feedback, mix, and specific parameters like phaser stages or flanger base delay.
+- **Parametric EQ**: 3-band EQ (low shelf, peaking, high shelf) with frequency, gain, and Q controls.
+- **Round-Robin Export**: Generates subtle variations of sounds for realistic playback.
+- **Parallel Processing**: Global dry/wet blend for the effects chain with separate gain controls.
+- **MIDI Input**: Web MIDI API integration for triggering sounds, with device selection, velocity sensitivity, and note range filtering.
+- **Undo/Redo System**: 50-state parameter history for main synth parameters.
+- **Keyboard Shortcuts**: Spacebar (play/trigger), E (export), Ctrl+Z/Y (undo/redo).
+- **Curve Modulator**: Drawable one-shot envelope curves with control points, spline interpolation, and loop modes.
+- **Step Sequencer Modulator**: 8/16-step sequencer with tempo-synced rates, swing, and smoothing.
+- **DAW Drag Export**: Drag-and-drop audio files into DAWs, with fallback download.
 
 ## External Dependencies
 - **React**: Frontend library.
-- **TypeScript**: Superset of JavaScript for type safety.
+- **TypeScript**: Type-safe JavaScript.
 - **Vite**: Frontend build tool.
 - **Tailwind CSS**: Utility-first CSS framework.
 - **shadcn/ui**: Reusable UI components.
-- **Tone.js**: Web Audio framework for audio synthesis and manipulation.
-- **Web Audio API**: Browser-native API for processing and synthesizing audio.
+- **Tone.js**: Web Audio framework.
+- **Web Audio API**: Browser-native audio processing.
+- **PostgreSQL**: Database for user presets.

@@ -266,6 +266,9 @@ export function RandomizeControls({
     const fmEnabledFinal = fmEnabled || indexEnvWanted;
     const indexEnvEnabled = indexEnvWanted;
     
+    const pmPreset = randomRatioPreset();
+    const pmEnabled = Math.random() > 0.8;
+    
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.3,
       waveform: Math.random() > 0.5 ? current.waveform : randomWaveform(),
@@ -283,6 +286,12 @@ export function RandomizeControls({
       amRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
       amDepth: Math.round(randomInRange(20, 80 * chaos)),
       amWaveform: randomWaveform(),
+      pmEnabled,
+      pmRatio: pmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(pmPreset),
+      pmRatioPreset: pmPreset,
+      pmDepth: Math.round(randomInRange(0, 30 * chaos)),
+      pmWaveform: randomWaveform(),
+      pmFeedback: Math.random() > 0.8 ? Math.round(randomInRange(0, 0.3 * chaos) * 100) / 100 : 0,
       indexEnvEnabled,
       indexEnvDecay: Math.round(randomInRange(5, 50 * chaos + 10)),
       indexEnvDepth: Math.round(randomInRange(5, 40 * chaos)),
@@ -513,15 +522,17 @@ export function RandomizeControls({
     // Randomize advanced FM settings (algorithm, operator 2)
     if (onAdvancedFMSettingsRandomize) {
       const algorithms: FMAlgorithm[] = ["series", "parallel", "feedback", "mixed"];
+      const waveforms = ["sine", "triangle", "sawtooth", "square"] as const;
       const randomAdvancedFM = (): AdvancedFMSettings => ({
         algorithm: algorithms[Math.floor(Math.random() * 4)],
+        carrierWaveform: waveforms[Math.floor(Math.random() * 4)],
         operator1Detune: Math.round(randomInRange(-30 * chaos, 30 * chaos)),
         operator2: {
           enabled: Math.random() > 0.5,
           ratio: [0.5, 1, 2, 3, 4, 6, 8][Math.floor(Math.random() * 7)],
           ratioDetune: Math.round(randomInRange(-50 * chaos, 50 * chaos)),
           depth: Math.round(randExp(50, 600, 1.5)),
-          waveform: ["sine", "triangle", "sawtooth", "square"][Math.floor(Math.random() * 4)] as "sine" | "triangle" | "sawtooth" | "square",
+          waveform: waveforms[Math.floor(Math.random() * 4)],
           feedback: Math.round(Math.random() * 50) / 100,
         },
       });
@@ -663,6 +674,12 @@ export function RandomizeControls({
         amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
         amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
         amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
+        pmEnabled: osc.pmEnabled,
+        pmRatio: Math.round(mutateValue(osc.pmRatio, 0.25, 16) * 4) / 4,
+        pmRatioPreset: osc.pmRatioPreset,
+        pmDepth: Math.round(mutateValue(osc.pmDepth, 0, 60)),
+        pmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.pmWaveform,
+        pmFeedback: Math.round(mutateValue(osc.pmFeedback, 0, 0.5) * 100) / 100,
         indexEnvEnabled,
         indexEnvDecay: Math.round(mutateValue(osc.indexEnvDecay, 2, 100)),
         indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
@@ -890,6 +907,7 @@ export function RandomizeControls({
     if (onAdvancedFMSettingsRandomize && advancedFMSettings) {
       const mutateAdvancedFM = (fm: AdvancedFMSettings): AdvancedFMSettings => ({
         algorithm: fm.algorithm, // Keep algorithm
+        carrierWaveform: fm.carrierWaveform, // Keep carrier waveform
         operator1Detune: Math.round(mutateValue(fm.operator1Detune, -50, 50)),
         operator2: {
           enabled: fm.operator2.enabled,

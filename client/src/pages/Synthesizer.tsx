@@ -157,6 +157,27 @@ import {
   getStepValue,
 } from "@/lib/stepSequencerSettings";
 import { DAWDragPanel } from "@/components/synth/DAWDragPanel";
+import { GranularPanel } from "@/components/synth/GranularPanel";
+import {
+  type GranularSettings,
+  type GranularSampleBuffer,
+  loadGranularSettings,
+  saveGranularSettings,
+  CINEMATIC_DEFAULTS as defaultGranularSettings,
+  applyAntiMudRules,
+  clampToMode,
+} from "@/lib/granularSettings";
+import {
+  SeededRNG,
+  generateGrainSchedule,
+  windowWithSkew,
+  cubicInterpolate,
+  calculateHPCoeffs,
+  calculateLPCoeffs,
+  saturate,
+  applySafetyFade,
+  generateAHDEnvelope,
+} from "@/lib/granularUtils";
 import {
   createUnisonWavetableOscillators,
   getPeriodicWaveAtPosition,
@@ -669,6 +690,9 @@ export default function Synthesizer() {
   const [midiSettings, setMidiSettings] = useState<MIDIInputSettings>(loadMIDISettings);
   const [curveModulatorSettings, setCurveModulatorSettings] = useState<CurveModulatorSettings>(loadCurveModulatorSettings);
   const [stepSequencerSettings, setStepSequencerSettings] = useState<StepSequencerSettings>(loadStepSequencerSettings);
+  const [granularSettings, setGranularSettings] = useState<GranularSettings>(loadGranularSettings);
+  const [granularBuffer, setGranularBuffer] = useState<GranularSampleBuffer | null>(null);
+  const [isCapturingGranular, setIsCapturingGranular] = useState(false);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -1582,7 +1606,9 @@ export default function Synthesizer() {
     wtSettingsToUse?: AllOscWavetableSettings,
     ringModSettingsToUse?: RingModSettings,
     parallelSettingsToUse?: ParallelProcessingSettings,
-    advancedFMSettingsToUse?: OscAdvancedFMSettings
+    advancedFMSettingsToUse?: OscAdvancedFMSettings,
+    granularSettingsToUse?: GranularSettings,
+    granularBufferToUse?: GranularSampleBuffer | null
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -3234,6 +3260,170 @@ export default function Synthesizer() {
       });
     }
 
+    // Granular synthesis engine
+    if (params.granular.enabled && granularBufferToUse?.data) {
+      const granSettings = applyAntiMudRules(clampToMode(granularSettingsToUse || defaultGranularSettings));
+      const bufferData = granularBufferToUse.data;
+      const bufferSampleRate = granularBufferToUse.sampleRate;
+      const bufferDuration = granularBufferToUse.duration;
+      
+      // Generate grain schedule (deterministic based on seed)
+      const grainEvents = generateGrainSchedule(
+        granSettings,
+        bufferDuration,
+        durationSec,
+        ctx.sampleRate
+      );
+      
+      // Calculate total granular duration for envelope
+      const granDuration = (granSettings.envAttack + granSettings.envHold + granSettings.envDecay) / 1000;
+      const granularOutputSamples = Math.ceil(granDuration * ctx.sampleRate);
+      
+      // Create stereo output buffers for granular
+      const granLeftBuffer = new Float32Array(granularOutputSamples);
+      const granRightBuffer = new Float32Array(granularOutputSamples);
+      
+      // Render all grains into the output buffer
+      for (const grain of grainEvents) {
+        const grainStartSample = Math.floor(grain.startTime * ctx.sampleRate);
+        const grainDurationSamples = Math.ceil(grain.duration * ctx.sampleRate);
+        
+        if (grainStartSample >= granularOutputSamples) continue;
+        
+        const bufferStartSample = Math.floor(grain.bufferPosition * bufferData.length);
+        
+        // Render each sample of the grain
+        for (let i = 0; i < grainDurationSamples; i++) {
+          const outputIdx = grainStartSample + i;
+          if (outputIdx >= granularOutputSamples) break;
+          
+          // Phase within grain (0-1)
+          const phase = i / grainDurationSamples;
+          
+          // Read sample from buffer with interpolation and pitch shift
+          const readPos = bufferStartSample + (i * grain.playbackRate);
+          if (readPos < 0 || readPos >= bufferData.length - 1) continue;
+          
+          const sample = cubicInterpolate(bufferData, readPos);
+          
+          // Apply window
+          const windowGain = windowWithSkew(phase, grain.windowType, grain.windowSkew);
+          
+          // Apply per-grain gain
+          const grainedSample = sample * windowGain * grain.gain;
+          
+          // Apply stereo panning (constant power)
+          const panAngle = (grain.pan + 1) * Math.PI / 4; // 0 to PI/2
+          const leftGain = Math.cos(panAngle);
+          const rightGain = Math.sin(panAngle);
+          
+          granLeftBuffer[outputIdx] += grainedSample * leftGain;
+          granRightBuffer[outputIdx] += grainedSample * rightGain;
+        }
+      }
+      
+      // Apply post-bus processing
+      // High-pass filter
+      const hpCoeffs = calculateHPCoeffs(granSettings.postHPHz, ctx.sampleRate);
+      let hpX1L = 0, hpX2L = 0, hpY1L = 0, hpY2L = 0;
+      let hpX1R = 0, hpX2R = 0, hpY1R = 0, hpY2R = 0;
+      
+      for (let i = 0; i < granularOutputSamples; i++) {
+        // Left channel HP
+        const inL = granLeftBuffer[i];
+        const outL = hpCoeffs.b0 * inL + hpCoeffs.b1 * hpX1L + hpCoeffs.b2 * hpX2L 
+                   - hpCoeffs.a1 * hpY1L - hpCoeffs.a2 * hpY2L;
+        hpX2L = hpX1L; hpX1L = inL;
+        hpY2L = hpY1L; hpY1L = outL;
+        granLeftBuffer[i] = outL;
+        
+        // Right channel HP
+        const inR = granRightBuffer[i];
+        const outR = hpCoeffs.b0 * inR + hpCoeffs.b1 * hpX1R + hpCoeffs.b2 * hpX2R 
+                   - hpCoeffs.a1 * hpY1R - hpCoeffs.a2 * hpY2R;
+        hpX2R = hpX1R; hpX1R = inR;
+        hpY2R = hpY1R; hpY1R = outR;
+        granRightBuffer[i] = outR;
+      }
+      
+      // Low-pass filter
+      const lpCoeffs = calculateLPCoeffs(granSettings.postLPHz, ctx.sampleRate);
+      let lpX1L = 0, lpX2L = 0, lpY1L = 0, lpY2L = 0;
+      let lpX1R = 0, lpX2R = 0, lpY1R = 0, lpY2R = 0;
+      
+      for (let i = 0; i < granularOutputSamples; i++) {
+        // Left channel LP
+        const inL = granLeftBuffer[i];
+        const outL = lpCoeffs.b0 * inL + lpCoeffs.b1 * lpX1L + lpCoeffs.b2 * lpX2L 
+                   - lpCoeffs.a1 * lpY1L - lpCoeffs.a2 * lpY2L;
+        lpX2L = lpX1L; lpX1L = inL;
+        lpY2L = lpY1L; lpY1L = outL;
+        granLeftBuffer[i] = outL;
+        
+        // Right channel LP
+        const inR = granRightBuffer[i];
+        const outR = lpCoeffs.b0 * inR + lpCoeffs.b1 * lpX1R + lpCoeffs.b2 * lpX2R 
+                   - lpCoeffs.a1 * lpY1R - lpCoeffs.a2 * lpY2R;
+        lpX2R = lpX1R; lpX1R = inR;
+        lpY2R = lpY1R; lpY1R = outR;
+        granRightBuffer[i] = outR;
+      }
+      
+      // Apply saturation
+      if (granSettings.satDrive > 0) {
+        for (let i = 0; i < granularOutputSamples; i++) {
+          granLeftBuffer[i] = saturate(granLeftBuffer[i], granSettings.satDrive);
+          granRightBuffer[i] = saturate(granRightBuffer[i], granSettings.satDrive);
+        }
+      }
+      
+      // Apply granular AHD envelope
+      const granEnvelope = generateAHDEnvelope(
+        granSettings.envAttack,
+        granSettings.envHold,
+        granSettings.envDecay,
+        granularOutputSamples,
+        ctx.sampleRate
+      );
+      
+      for (let i = 0; i < granularOutputSamples; i++) {
+        granLeftBuffer[i] *= granEnvelope[i];
+        granRightBuffer[i] *= granEnvelope[i];
+      }
+      
+      // Apply safety fade
+      applySafetyFade(granLeftBuffer, ctx.sampleRate, 10);
+      applySafetyFade(granRightBuffer, ctx.sampleRate, 10);
+      
+      // Apply wet mix
+      const wetMix = granSettings.wetMix;
+      for (let i = 0; i < granularOutputSamples; i++) {
+        granLeftBuffer[i] *= wetMix;
+        granRightBuffer[i] *= wetMix;
+      }
+      
+      // Create audio buffer and source for granular output
+      const granBuffer = ctx.createBuffer(2, granularOutputSamples, ctx.sampleRate);
+      granBuffer.copyToChannel(granLeftBuffer, 0);
+      granBuffer.copyToChannel(granRightBuffer, 1);
+      
+      const granSource = ctx.createBufferSource();
+      granSource.buffer = granBuffer;
+      
+      const granGain = ctx.createGain();
+      granGain.gain.value = 0.5; // Level control
+      
+      granSource.connect(granGain);
+      granGain.connect(masterGain);
+      
+      granSource.start(now);
+      granSource.stop(stopAt + 0.1);
+      
+      if (sourcesCollector) {
+        sourcesCollector.push(granSource);
+      }
+    }
+
     const ampEnv = params.envelopes.env3;
     const volume = Math.max(EPS, params.output.volume / 100);
 
@@ -3328,7 +3518,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings, granularSettings, granularBuffer);
       }, durationInSeconds);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -3404,7 +3594,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings, granularSettings, granularBuffer]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
@@ -3539,6 +3729,82 @@ export default function Synthesizer() {
     }
     setExportResult(null);
   }, [exportResult]);
+
+  // Granular Capture: render current synth to granular buffer
+  const handleGranularCapture = useCallback(async () => {
+    setIsCapturingGranular(true);
+    
+    try {
+      // Temporarily disable granular to avoid recursion
+      const captureParams = {
+        ...params,
+        granular: { ...params.granular, enabled: false }
+      };
+      
+      // Render 500ms of current synth sound
+      const captureDuration = 500; // ms
+      const durationInSeconds = captureDuration / 1000;
+      const seed = Date.now();
+      
+      const buffer = await Tone.Offline(async (offlineCtx) => {
+        const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+        await generateSound(
+          rawCtx, captureParams, captureDuration, seed, undefined,
+          oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings,
+          ringModSettings, parallelProcessingSettings, advancedFMSettings,
+          undefined, null // No granular for capture
+        );
+      }, durationInSeconds);
+      
+      const renderedBuffer = buffer.get() as AudioBuffer;
+      if (renderedBuffer) {
+        // Convert to mono Float32Array
+        const channelData = renderedBuffer.getChannelData(0);
+        const data = new Float32Array(channelData.length);
+        data.set(channelData);
+        
+        // Mix to mono if stereo
+        if (renderedBuffer.numberOfChannels > 1) {
+          const rightChannel = renderedBuffer.getChannelData(1);
+          for (let i = 0; i < data.length; i++) {
+            data[i] = (data[i] + rightChannel[i]) / 2;
+          }
+        }
+        
+        // Normalize
+        let maxAmp = 0;
+        for (let i = 0; i < data.length; i++) {
+          if (Math.abs(data[i]) > maxAmp) maxAmp = Math.abs(data[i]);
+        }
+        if (maxAmp > 0.001) {
+          const normalizeGain = 0.9 / maxAmp;
+          for (let i = 0; i < data.length; i++) {
+            data[i] *= normalizeGain;
+          }
+        }
+        
+        setGranularBuffer({
+          data,
+          sampleRate: renderedBuffer.sampleRate,
+          duration: renderedBuffer.duration,
+          name: "Captured",
+          channels: 1,
+        });
+        
+        // Update granular settings with new deterministic seed tied to this capture
+        const capturedSeed = seed;
+        setGranularSettings(prev => {
+          const newSettings = { ...prev, seed: capturedSeed };
+          saveGranularSettings(newSettings);
+          return newSettings;
+        });
+      }
+    } catch (err) {
+      console.error("Granular capture error:", err);
+    } finally {
+      setIsCapturingGranular(false);
+    }
+  }, [params, oscEnvelopes, generateSound, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
 
   useEffect(() => {
     return () => {
@@ -3911,6 +4177,18 @@ export default function Synthesizer() {
                   setSampleLayerSettings(settings);
                   saveSampleLayerSettings(settings);
                 }}
+              />
+              <GranularPanel
+                settings={granularSettings}
+                onChange={(settings) => {
+                  setGranularSettings(settings);
+                  saveGranularSettings(settings);
+                }}
+                sampleBuffer={granularBuffer}
+                onSampleLoad={setGranularBuffer}
+                onCapture={handleGranularCapture}
+                onClearSample={() => setGranularBuffer(null)}
+                isCapturing={isCapturingGranular}
               />
               <div className="md:col-span-2">
                 <SynthEngineSelector
