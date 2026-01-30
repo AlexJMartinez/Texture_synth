@@ -7,7 +7,7 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
 import { WavetableSelector } from "./WavetableSelector";
 import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType, EnvelopeCurve } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
-import { ChevronDown, ChevronRight, Radio, Zap, Timer, Shuffle, Volume2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Radio, Zap, Timer, Shuffle, Volume2, Layers } from "lucide-react";
 import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
 import type { OscWavetableSettings } from "@/lib/wavetableSettings";
 
