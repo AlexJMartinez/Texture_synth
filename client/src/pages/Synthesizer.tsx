@@ -2608,9 +2608,12 @@ export default function Synthesizer() {
             modOsc.detune.value = op1DetuneOffset;
             
             const modGain = ctx.createGain();
-            const fmIndex = osc.fmDepth / 100;
+            // FM8-style modulation index: depth 0-100 maps to index 0-10
+            // Higher indices create more harmonics and complex timbres
+            const fmIndex = osc.fmDepth / 10; // 0-100 -> 0-10
             let fmDepthHz = fmIndex * modulatorFreq;
-            fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 5);
+            // Higher cap for FM8-style dramatic effects
+            fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 15);
             
             if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
               const baseDepth = Math.max(EPS, fmDepthHz);
@@ -2638,13 +2641,18 @@ export default function Synthesizer() {
               op2Osc.detune.value = op2.ratioDetune;
               
               const op2Gain = ctx.createGain();
-              const op2DepthHz = (op2.depth / 100) * op2Freq;
-              op2Gain.gain.value = Math.min(op2DepthHz, oscPitchHz * 5);
+              // FM8-style modulation index: depth 0-1000 maps to index 0-20
+              // Modulation amount = index * modulator frequency
+              const op2Index = (op2.depth / 50); // 0-1000 -> 0-20
+              const op2DepthHz = op2Index * op2Freq;
+              // Higher cap for dramatic FM effects (up to 20x carrier frequency)
+              op2Gain.gain.value = Math.min(op2DepthHz, oscPitchHz * 20);
               
-              // Operator 2 self-feedback
+              // Operator 2 self-feedback (creates harmonically rich tones)
               if (op2.feedback > 0) {
                 const op2FeedbackGain = ctx.createGain();
-                op2FeedbackGain.gain.value = op2.feedback * op2DepthHz * 0.5;
+                // Stronger feedback for more dramatic effect
+                op2FeedbackGain.gain.value = op2.feedback * op2Freq * 2;
                 op2Osc.connect(op2FeedbackGain);
                 op2FeedbackGain.connect(op2Osc.frequency);
               }
@@ -2671,9 +2679,9 @@ export default function Synthesizer() {
                   // Op1 <-> Op2 feedback loop, both -> Carrier
                   // Op2 modulates Op1, Op1 modulates carrier
                   op2Gain.connect(modOsc.frequency);
-                  // Also route Op1 back to Op2 for cross-feedback
+                  // Also route Op1 back to Op2 for cross-feedback (creates chaotic/metallic sounds)
                   const crossFeedbackGain = ctx.createGain();
-                  crossFeedbackGain.gain.value = fmDepthHz * 0.3;
+                  crossFeedbackGain.gain.value = fmDepthHz * 0.7; // Stronger cross-mod
                   modOsc.connect(crossFeedbackGain);
                   crossFeedbackGain.connect(op2Osc.frequency);
                   modOsc.connect(modGain);
@@ -2681,13 +2689,13 @@ export default function Synthesizer() {
                   break;
                   
                 case "mixed":
-                  // Op2 -> Op1 -> Carrier, plus Op2 -> Carrier directly
+                  // Op2 -> Op1 -> Carrier, plus Op2 -> Carrier directly (rich harmonics)
                   op2Gain.connect(modOsc.frequency);
                   modOsc.connect(modGain);
                   modGain.connect(primaryOsc.frequency);
-                  // Also route Op2 directly to carrier
+                  // Also route Op2 directly to carrier for additional complexity
                   const directGain = ctx.createGain();
-                  directGain.gain.value = op2DepthHz * 0.5;
+                  directGain.gain.value = op2DepthHz * 0.7; // Strong direct modulation
                   op2Osc.connect(directGain);
                   directGain.connect(primaryOsc.frequency);
                   break;
@@ -2701,10 +2709,11 @@ export default function Synthesizer() {
               modGain.connect(primaryOsc.frequency);
             }
             
-            // Operator 1 self-feedback
+            // Operator 1 self-feedback (creates saw-like harmonics when high)
             if (osc.fmFeedback > 0) {
               const feedbackGain = ctx.createGain();
-              feedbackGain.gain.value = osc.fmFeedback * fmDepthHz * 0.3;
+              // Stronger feedback for FM8-style self-modulation
+              feedbackGain.gain.value = osc.fmFeedback * modulatorFreq * 2;
               modOsc.connect(feedbackGain);
               feedbackGain.connect(modOsc.frequency);
             }
