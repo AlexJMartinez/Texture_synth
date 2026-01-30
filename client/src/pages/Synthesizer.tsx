@@ -3741,9 +3741,9 @@ export default function Synthesizer() {
         granular: { ...params.granular, enabled: false }
       };
       
-      // Render 500ms of current synth sound
-      const captureDuration = 500; // ms
-      const durationInSeconds = captureDuration / 1000;
+      // Use the SAME duration calculation as preview for consistent capture
+      const captureDuration = getTotalDuration(captureParams, oscEnvelopes);
+      const durationInSeconds = Math.max(0.1, captureDuration / 1000);
       const seed = Date.now();
       
       const buffer = await Tone.Offline(async (offlineCtx) => {
@@ -3804,7 +3804,7 @@ export default function Synthesizer() {
     } finally {
       setIsCapturingGranular(false);
     }
-  }, [params, oscEnvelopes, generateSound, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
+  }, [params, oscEnvelopes, generateSound, getTotalDuration, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
 
   useEffect(() => {
     return () => {

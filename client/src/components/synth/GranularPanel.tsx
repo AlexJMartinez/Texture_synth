@@ -1,10 +1,11 @@
-import { useCallback, useRef, useEffect, useState } from "react";
+import { useCallback, useRef, useEffect, useState, useMemo } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { Layers, Upload, Mic, Trash2 } from "lucide-react";
+import WaveSurfer from "wavesurfer.js";
 import type { 
   GranularSettings, 
   GranularMode, 
@@ -128,9 +129,99 @@ export function GranularPanel({
     setIsDragging(false);
   };
   
-  // Draw waveform preview with HiDPI support and grain visualization
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // WaveSurfer.js waveform visualization
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const grainOverlayRef = useRef<HTMLCanvasElement>(null);
   const [grainPositions, setGrainPositions] = useState<number[]>([]);
+  
+  // Initialize WaveSurfer
+  useEffect(() => {
+    if (!waveformRef.current) return;
+    
+    // Create WaveSurfer instance with professional styling
+    const ws = WaveSurfer.create({
+      container: waveformRef.current,
+      height: 64,
+      waveColor: 'rgba(143, 188, 143, 0.6)',
+      progressColor: 'rgba(143, 188, 143, 0.9)',
+      cursorColor: 'transparent',
+      barWidth: 2,
+      barGap: 1,
+      barRadius: 2,
+      normalize: true,
+      interact: false,
+      hideScrollbar: true,
+      fillParent: true,
+    });
+    
+    wavesurferRef.current = ws;
+    
+    return () => {
+      ws.destroy();
+      wavesurferRef.current = null;
+    };
+  }, []);
+  
+  // Helper to convert Float32Array to WAV ArrayBuffer (defined before use)
+  const audioBufferToWav = useCallback((samples: Float32Array, sampleRate: number): ArrayBuffer => {
+    const numChannels = 1;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const dataLength = samples.length * bytesPerSample;
+    const bufferLength = 44 + dataLength;
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+    
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, bufferLength - 8, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(36, 'data');
+    view.setUint32(40, dataLength, true);
+    
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+    
+    return arrayBuffer;
+  }, []);
+  
+  // Load sample into WaveSurfer when buffer changes
+  useEffect(() => {
+    const ws = wavesurferRef.current;
+    if (!ws || !sampleBuffer?.data) {
+      // Clear waveform if no sample
+      if (ws) {
+        ws.empty();
+      }
+      return;
+    }
+    
+    // Convert to WAV and load
+    const wavBuffer = audioBufferToWav(sampleBuffer.data, sampleBuffer.sampleRate);
+    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    ws.loadBlob(blob);
+    
+  }, [sampleBuffer?.data, sampleBuffer?.sampleRate, audioBufferToWav]);
   
   // Simulate grain positions for visualization (updates periodically when enabled)
   useEffect(() => {
@@ -139,16 +230,14 @@ export function GranularPanel({
       return;
     }
     
-    // Generate grain positions based on density and scan region
     const updateGrains = () => {
-      const numGrains = Math.min(Math.floor(settings.densityGps / 10), 12); // Visual density
+      const numGrains = Math.min(Math.floor(settings.densityGps / 8), 16);
       const positions: number[] = [];
       const scanStart = settings.scanStart;
       const scanWidth = settings.scanWidth;
-      const jitterNorm = settings.posJitterMs / 80; // Normalize to 0-1 range
+      const jitterNorm = settings.posJitterMs / 80;
       
       for (let i = 0; i < numGrains; i++) {
-        // Distribute grains across scan region with some randomness
         const basePos = scanStart + (i / numGrains) * scanWidth;
         const jitterAmount = (Math.random() - 0.5) * jitterNorm * scanWidth;
         const pos = Math.max(0, Math.min(1, basePos + jitterAmount));
@@ -158,130 +247,102 @@ export function GranularPanel({
     };
     
     updateGrains();
-    const interval = setInterval(updateGrains, 100); // Update at 10fps for smooth animation
+    const interval = setInterval(updateGrains, 80);
     return () => clearInterval(interval);
   }, [settings.enabled, settings.densityGps, settings.scanStart, settings.scanWidth, settings.posJitterMs, sampleBuffer?.data]);
   
+  // Draw grain overlay on canvas
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = grainOverlayRef.current;
     if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // HiDPI scaling for crisp rendering
     const dpr = window.devicePixelRatio || 1;
-    const displayWidth = 280;
-    const displayHeight = 56;
+    const rect = canvas.parentElement?.getBoundingClientRect();
+    const width = rect?.width || 280;
+    const height = 64;
     
-    // Set actual canvas size (scaled for DPI)
-    canvas.width = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
-    
-    // Scale context to match DPI
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
     ctx.scale(dpr, dpr);
     
-    const width = displayWidth;
-    const height = displayHeight;
-    
-    // Clear
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(0, 0, width, height);
+    ctx.clearRect(0, 0, width, height);
     
     if (!sampleBuffer?.data) {
-      // Draw placeholder text with proper font sizing for HiDPI
-      ctx.fillStyle = '#888';
-      ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(136, 136, 136, 0.9)';
+      ctx.font = '600 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('Drop sample or Capture', width / 2, height / 2);
       return;
     }
     
-    // Draw scan region overlay first (behind waveform)
+    // Draw scan region overlay
     const scanStartX = settings.scanStart * width;
     const scanEndX = (settings.scanStart + settings.scanWidth) * width;
     
-    ctx.fillStyle = 'rgba(143, 188, 143, 0.15)';
+    const regionGradient = ctx.createLinearGradient(scanStartX, 0, scanEndX, 0);
+    regionGradient.addColorStop(0, 'rgba(144, 238, 144, 0.15)');
+    regionGradient.addColorStop(0.5, 'rgba(144, 238, 144, 0.08)');
+    regionGradient.addColorStop(1, 'rgba(144, 238, 144, 0.15)');
+    ctx.fillStyle = regionGradient;
     ctx.fillRect(scanStartX, 0, scanEndX - scanStartX, height);
     
-    // Draw waveform
-    const data = sampleBuffer.data;
-    const step = Math.ceil(data.length / width);
-    
-    ctx.strokeStyle = '#8fbc8f';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    
-    for (let i = 0; i < width; i++) {
-      const start = i * step;
-      const end = Math.min(start + step, data.length);
-      
-      let min = 0, max = 0;
-      for (let j = start; j < end; j++) {
-        if (data[j] < min) min = data[j];
-        if (data[j] > max) max = data[j];
-      }
-      
-      const yMin = ((1 - max) / 2) * height;
-      const yMax = ((1 - min) / 2) * height;
-      
-      ctx.moveTo(i, yMin);
-      ctx.lineTo(i, yMax);
-    }
-    
-    ctx.stroke();
-    
-    // Draw grain visualization (Phaseplant-style vertical bars with glow)
+    // Draw grain visualization (Phaseplant-style with glow effect)
     if (grainPositions.length > 0 && settings.enabled) {
       const grainSizeMs = settings.grainSizeMs;
-      const grainWidthPx = Math.max(2, (grainSizeMs / 1000) * (sampleBuffer.sampleRate / data.length) * width * 0.5);
+      const grainWidthPx = Math.max(3, Math.min(12, grainSizeMs / 3));
       
-      grainPositions.forEach((pos, i) => {
+      grainPositions.forEach((pos) => {
         const x = pos * width;
-        const grainHeight = height * 0.7;
+        const grainHeight = height * 0.85;
         const yOffset = (height - grainHeight) / 2;
         
-        // Grain glow
-        const gradient = ctx.createLinearGradient(x - grainWidthPx, 0, x + grainWidthPx, 0);
-        gradient.addColorStop(0, 'rgba(144, 238, 144, 0)');
-        gradient.addColorStop(0.3, 'rgba(144, 238, 144, 0.3)');
-        gradient.addColorStop(0.5, 'rgba(144, 238, 144, 0.6)');
-        gradient.addColorStop(0.7, 'rgba(144, 238, 144, 0.3)');
-        gradient.addColorStop(1, 'rgba(144, 238, 144, 0)');
+        // Outer glow
+        const glowGradient = ctx.createRadialGradient(x, height / 2, 0, x, height / 2, grainWidthPx * 3);
+        glowGradient.addColorStop(0, 'rgba(144, 238, 144, 0.4)');
+        glowGradient.addColorStop(0.5, 'rgba(144, 238, 144, 0.15)');
+        glowGradient.addColorStop(1, 'rgba(144, 238, 144, 0)');
+        ctx.fillStyle = glowGradient;
+        ctx.fillRect(x - grainWidthPx * 3, 0, grainWidthPx * 6, height);
         
-        ctx.fillStyle = gradient;
-        ctx.fillRect(x - grainWidthPx, yOffset, grainWidthPx * 2, grainHeight);
-        
-        // Grain center line
-        ctx.strokeStyle = 'rgba(144, 238, 144, 0.8)';
-        ctx.lineWidth = 1;
+        // Inner bright bar
+        const barGradient = ctx.createLinearGradient(x - grainWidthPx / 2, 0, x + grainWidthPx / 2, 0);
+        barGradient.addColorStop(0, 'rgba(144, 238, 144, 0.1)');
+        barGradient.addColorStop(0.5, 'rgba(180, 255, 180, 0.9)');
+        barGradient.addColorStop(1, 'rgba(144, 238, 144, 0.1)');
+        ctx.fillStyle = barGradient;
         ctx.beginPath();
-        ctx.moveTo(x, yOffset);
-        ctx.lineTo(x, yOffset + grainHeight);
-        ctx.stroke();
+        ctx.roundRect(x - grainWidthPx / 2, yOffset, grainWidthPx, grainHeight, 2);
+        ctx.fill();
       });
     }
     
-    // Draw scan position line (playhead)
-    ctx.strokeStyle = '#90ee90';
+    // Draw scan boundaries
+    ctx.strokeStyle = 'rgba(144, 238, 144, 0.9)';
     ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(144, 238, 144, 0.5)';
+    ctx.shadowBlur = 4;
     ctx.beginPath();
     ctx.moveTo(scanStartX, 0);
     ctx.lineTo(scanStartX, height);
     ctx.stroke();
     
-    // Draw end boundary
-    ctx.strokeStyle = 'rgba(144, 238, 144, 0.4)';
+    ctx.strokeStyle = 'rgba(144, 238, 144, 0.5)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([2, 2]);
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([3, 3]);
     ctx.beginPath();
     ctx.moveTo(scanEndX, 0);
     ctx.lineTo(scanEndX, height);
     ctx.stroke();
     ctx.setLineDash([]);
     
-  }, [sampleBuffer, settings.scanStart, settings.scanWidth, settings.grainSizeMs, settings.enabled, grainPositions]);
+  }, [sampleBuffer?.data, settings.scanStart, settings.scanWidth, settings.grainSizeMs, settings.enabled, grainPositions]);
   
   return (
     <CollapsiblePanel
@@ -323,19 +384,26 @@ export function GranularPanel({
         {/* Sample Drop Zone + Waveform */}
         <div
           ref={dropZoneRef}
-          className={`relative border border-dashed rounded-md p-1 transition-colors cursor-pointer ${
-            isDragging ? 'border-primary bg-primary/10' : 'border-muted-foreground/30'
+          className={`relative border border-dashed rounded-lg overflow-hidden transition-all cursor-pointer ${
+            isDragging ? 'border-primary bg-primary/10 shadow-lg shadow-primary/20' : 'border-muted-foreground/30 hover:border-muted-foreground/50'
           }`}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
           data-testid="drop-zone-granular"
+          style={{ background: 'linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(15,15,15,1) 100%)' }}
         >
+          {/* WaveSurfer waveform container */}
+          <div 
+            ref={waveformRef} 
+            className="w-full h-16"
+            style={{ opacity: sampleBuffer?.data ? 1 : 0 }}
+          />
+          {/* Grain overlay canvas */}
           <canvas
-            ref={canvasRef}
-            className="w-full h-14 rounded"
-            style={{ imageRendering: 'crisp-edges' }}
+            ref={grainOverlayRef}
+            className="absolute inset-0 w-full h-16 pointer-events-none"
           />
           <input
             ref={fileInputRef}
