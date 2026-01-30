@@ -1591,7 +1591,8 @@ export default function Synthesizer() {
     wtSettingsToUse?: AllOscWavetableSettings,
     unisonSettingsToUse?: OscUnisonSettings,
     ringModSettingsToUse?: RingModSettings,
-    parallelSettingsToUse?: ParallelProcessingSettings
+    parallelSettingsToUse?: ParallelProcessingSettings,
+    advancedFMSettingsToUse?: OscAdvancedFMSettings
   ): Promise<{ masterGain: GainNode; safetyFadeGain: GainNode }> => {
     const now = ctx.currentTime;
     const durationSec = duration / 1000;
@@ -2591,12 +2592,20 @@ export default function Synthesizer() {
         
         // Apply FM/PM modulation to primary oscillator only (affects perceived pitch)
         if (primaryOsc) {
+          // Get advanced FM settings for this oscillator
+          const advFM = advancedFMSettingsToUse?.[key as keyof OscAdvancedFMSettings];
+          
           // FM Synthesis: Use modulation index scaling for consistent timbre across pitches
           if (osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise") {
+            // Operator 1 (basic FM modulator)
             const modOsc = ctx.createOscillator();
             modOsc.type = osc.fmWaveform as OscillatorType;
+            
+            // Apply operator 1 fine detune if advanced settings exist
+            const op1DetuneOffset = advFM?.operator1Detune || 0;
             const modulatorFreq = oscPitchHz * osc.fmRatio;
             modOsc.frequency.value = modulatorFreq;
+            modOsc.detune.value = op1DetuneOffset;
             
             const modGain = ctx.createGain();
             const fmIndex = osc.fmDepth / 100;
@@ -2616,9 +2625,83 @@ export default function Synthesizer() {
               modGain.gain.value = fmDepthHz;
             }
             
-            modOsc.connect(modGain);
-            modGain.connect(primaryOsc.frequency);
+            // Advanced FM: Operator 2 implementation
+            const op2 = advFM?.operator2;
+            const algorithm = advFM?.algorithm || "series";
             
+            if (op2?.enabled && op2.depth > 0) {
+              // Create operator 2
+              const op2Osc = ctx.createOscillator();
+              op2Osc.type = op2.waveform as OscillatorType;
+              const op2Freq = oscPitchHz * op2.ratio;
+              op2Osc.frequency.value = op2Freq;
+              op2Osc.detune.value = op2.ratioDetune;
+              
+              const op2Gain = ctx.createGain();
+              const op2DepthHz = (op2.depth / 100) * op2Freq;
+              op2Gain.gain.value = Math.min(op2DepthHz, oscPitchHz * 5);
+              
+              // Operator 2 self-feedback
+              if (op2.feedback > 0) {
+                const op2FeedbackGain = ctx.createGain();
+                op2FeedbackGain.gain.value = op2.feedback * op2DepthHz * 0.5;
+                op2Osc.connect(op2FeedbackGain);
+                op2FeedbackGain.connect(op2Osc.frequency);
+              }
+              
+              op2Osc.connect(op2Gain);
+              
+              // Algorithm routing
+              switch (algorithm) {
+                case "series":
+                  // Op2 -> Op1 -> Carrier (stacked modulation)
+                  op2Gain.connect(modOsc.frequency);
+                  modOsc.connect(modGain);
+                  modGain.connect(primaryOsc.frequency);
+                  break;
+                  
+                case "parallel":
+                  // Op1 -> Carrier, Op2 -> Carrier (both modulate carrier)
+                  modOsc.connect(modGain);
+                  modGain.connect(primaryOsc.frequency);
+                  op2Gain.connect(primaryOsc.frequency);
+                  break;
+                  
+                case "feedback":
+                  // Op1 <-> Op2 feedback loop, both -> Carrier
+                  // Op2 modulates Op1, Op1 modulates carrier
+                  op2Gain.connect(modOsc.frequency);
+                  // Also route Op1 back to Op2 for cross-feedback
+                  const crossFeedbackGain = ctx.createGain();
+                  crossFeedbackGain.gain.value = fmDepthHz * 0.3;
+                  modOsc.connect(crossFeedbackGain);
+                  crossFeedbackGain.connect(op2Osc.frequency);
+                  modOsc.connect(modGain);
+                  modGain.connect(primaryOsc.frequency);
+                  break;
+                  
+                case "mixed":
+                  // Op2 -> Op1 -> Carrier, plus Op2 -> Carrier directly
+                  op2Gain.connect(modOsc.frequency);
+                  modOsc.connect(modGain);
+                  modGain.connect(primaryOsc.frequency);
+                  // Also route Op2 directly to carrier
+                  const directGain = ctx.createGain();
+                  directGain.gain.value = op2DepthHz * 0.5;
+                  op2Osc.connect(directGain);
+                  directGain.connect(primaryOsc.frequency);
+                  break;
+              }
+              
+              op2Osc.start(now);
+              op2Osc.stop(stopAt);
+            } else {
+              // No operator 2 - just use operator 1
+              modOsc.connect(modGain);
+              modGain.connect(primaryOsc.frequency);
+            }
+            
+            // Operator 1 self-feedback
             if (osc.fmFeedback > 0) {
               const feedbackGain = ctx.createGain();
               feedbackGain.gain.value = osc.fmFeedback * fmDepthHz * 0.3;
@@ -3323,7 +3406,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings, ringModSettings, parallelProcessingSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings);
       }, durationInSeconds);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -3399,7 +3482,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
