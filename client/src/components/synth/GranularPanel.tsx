@@ -139,20 +139,18 @@ export function GranularPanel({
   useEffect(() => {
     if (!waveformRef.current) return;
     
-    // Create WaveSurfer instance with professional styling
+    // Create WaveSurfer instance with accurate waveform display (not bars)
     const ws = WaveSurfer.create({
       container: waveformRef.current,
       height: 64,
-      waveColor: 'rgba(143, 188, 143, 0.6)',
+      waveColor: 'rgba(143, 188, 143, 0.7)',
       progressColor: 'rgba(143, 188, 143, 0.9)',
       cursorColor: 'transparent',
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
       normalize: true,
       interact: false,
       hideScrollbar: true,
       fillParent: true,
+      minPxPerSec: 50, // Higher resolution display
     });
     
     wavesurferRef.current = ws;
