@@ -128,8 +128,39 @@ export function GranularPanel({
     setIsDragging(false);
   };
   
-  // Draw waveform preview
+  // Draw waveform preview with HiDPI support and grain visualization
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [grainPositions, setGrainPositions] = useState<number[]>([]);
+  
+  // Simulate grain positions for visualization (updates periodically when enabled)
+  useEffect(() => {
+    if (!settings.enabled || !sampleBuffer?.data) {
+      setGrainPositions([]);
+      return;
+    }
+    
+    // Generate grain positions based on density and scan region
+    const updateGrains = () => {
+      const numGrains = Math.min(Math.floor(settings.densityGps / 10), 12); // Visual density
+      const positions: number[] = [];
+      const scanStart = settings.scanStart;
+      const scanWidth = settings.scanWidth;
+      const jitterNorm = settings.posJitterMs / 80; // Normalize to 0-1 range
+      
+      for (let i = 0; i < numGrains; i++) {
+        // Distribute grains across scan region with some randomness
+        const basePos = scanStart + (i / numGrains) * scanWidth;
+        const jitterAmount = (Math.random() - 0.5) * jitterNorm * scanWidth;
+        const pos = Math.max(0, Math.min(1, basePos + jitterAmount));
+        positions.push(pos);
+      }
+      setGrainPositions(positions);
+    };
+    
+    updateGrains();
+    const interval = setInterval(updateGrains, 100); // Update at 10fps for smooth animation
+    return () => clearInterval(interval);
+  }, [settings.enabled, settings.densityGps, settings.scanStart, settings.scanWidth, settings.posJitterMs, sampleBuffer?.data]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -138,21 +169,41 @@ export function GranularPanel({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    const width = canvas.width;
-    const height = canvas.height;
+    // HiDPI scaling for crisp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const displayWidth = 280;
+    const displayHeight = 56;
+    
+    // Set actual canvas size (scaled for DPI)
+    canvas.width = displayWidth * dpr;
+    canvas.height = displayHeight * dpr;
+    
+    // Scale context to match DPI
+    ctx.scale(dpr, dpr);
+    
+    const width = displayWidth;
+    const height = displayHeight;
     
     // Clear
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, width, height);
     
     if (!sampleBuffer?.data) {
-      // Draw placeholder text
-      ctx.fillStyle = '#666';
-      ctx.font = '10px sans-serif';
+      // Draw placeholder text with proper font sizing for HiDPI
+      ctx.fillStyle = '#888';
+      ctx.font = '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('Drop sample or Capture', width / 2, height / 2 + 4);
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Drop sample or Capture', width / 2, height / 2);
       return;
     }
+    
+    // Draw scan region overlay first (behind waveform)
+    const scanStartX = settings.scanStart * width;
+    const scanEndX = (settings.scanStart + settings.scanWidth) * width;
+    
+    ctx.fillStyle = 'rgba(143, 188, 143, 0.15)';
+    ctx.fillRect(scanStartX, 0, scanEndX - scanStartX, height);
     
     // Draw waveform
     const data = sampleBuffer.data;
@@ -181,14 +232,38 @@ export function GranularPanel({
     
     ctx.stroke();
     
-    // Draw scan region overlay
-    const scanStartX = settings.scanStart * width;
-    const scanEndX = (settings.scanStart + settings.scanWidth) * width;
+    // Draw grain visualization (Phaseplant-style vertical bars with glow)
+    if (grainPositions.length > 0 && settings.enabled) {
+      const grainSizeMs = settings.grainSizeMs;
+      const grainWidthPx = Math.max(2, (grainSizeMs / 1000) * (sampleBuffer.sampleRate / data.length) * width * 0.5);
+      
+      grainPositions.forEach((pos, i) => {
+        const x = pos * width;
+        const grainHeight = height * 0.7;
+        const yOffset = (height - grainHeight) / 2;
+        
+        // Grain glow
+        const gradient = ctx.createLinearGradient(x - grainWidthPx, 0, x + grainWidthPx, 0);
+        gradient.addColorStop(0, 'rgba(144, 238, 144, 0)');
+        gradient.addColorStop(0.3, 'rgba(144, 238, 144, 0.3)');
+        gradient.addColorStop(0.5, 'rgba(144, 238, 144, 0.6)');
+        gradient.addColorStop(0.7, 'rgba(144, 238, 144, 0.3)');
+        gradient.addColorStop(1, 'rgba(144, 238, 144, 0)');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x - grainWidthPx, yOffset, grainWidthPx * 2, grainHeight);
+        
+        // Grain center line
+        ctx.strokeStyle = 'rgba(144, 238, 144, 0.8)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, yOffset);
+        ctx.lineTo(x, yOffset + grainHeight);
+        ctx.stroke();
+      });
+    }
     
-    ctx.fillStyle = 'rgba(143, 188, 143, 0.2)';
-    ctx.fillRect(scanStartX, 0, scanEndX - scanStartX, height);
-    
-    // Draw scan position line
+    // Draw scan position line (playhead)
     ctx.strokeStyle = '#90ee90';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -196,7 +271,17 @@ export function GranularPanel({
     ctx.lineTo(scanStartX, height);
     ctx.stroke();
     
-  }, [sampleBuffer, settings.scanStart, settings.scanWidth]);
+    // Draw end boundary
+    ctx.strokeStyle = 'rgba(144, 238, 144, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(scanEndX, 0);
+    ctx.lineTo(scanEndX, height);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+  }, [sampleBuffer, settings.scanStart, settings.scanWidth, settings.grainSizeMs, settings.enabled, grainPositions]);
   
   return (
     <CollapsiblePanel
@@ -249,9 +334,8 @@ export function GranularPanel({
         >
           <canvas
             ref={canvasRef}
-            width={200}
-            height={40}
-            className="w-full h-10 rounded"
+            className="w-full h-14 rounded"
+            style={{ imageRendering: 'crisp-edges' }}
           />
           <input
             ref={fileInputRef}
