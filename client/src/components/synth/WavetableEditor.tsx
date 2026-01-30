@@ -21,9 +21,9 @@ interface WavetableEditorProps {
 
 type DrawTool = "pencil" | "line" | "smooth" | "eraser";
 
-const CANVAS_WIDTH = 512;
-const CANVAS_HEIGHT = 256;
 const SAMPLES_PER_FRAME = 256;
+const LOGICAL_WIDTH = 512;
+const LOGICAL_HEIGHT = 256;
 
 export function WavetableEditor({
   open,
@@ -77,13 +77,35 @@ export function WavetableEditor({
   
   const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || frames.length === 0) return;
+    const container = containerRef.current;
+    if (!canvas || !container || frames.length === 0) return;
     
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    const width = canvas.width;
-    const height = canvas.height;
+    // Get device pixel ratio for high DPI rendering
+    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    
+    // Set canvas dimensions for high DPI
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+    
+    // Only resize if dimensions changed to avoid flicker
+    if (canvas.width !== Math.floor(displayWidth * dpr) || 
+        canvas.height !== Math.floor(displayHeight * dpr)) {
+      canvas.width = Math.floor(displayWidth * dpr);
+      canvas.height = Math.floor(displayHeight * dpr);
+      canvas.style.width = `${displayWidth}px`;
+      canvas.style.height = `${displayHeight}px`;
+    }
+    
+    // Scale context for high DPI
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    
+    // Use display dimensions for drawing (logical pixels)
+    const width = displayWidth;
+    const height = displayHeight;
     const frame = frames[currentFrame];
     if (!frame) return;
     
@@ -117,8 +139,11 @@ export function WavetableEditor({
       ctx.stroke();
     }
     
+    // Draw waveform with anti-aliasing for smooth appearance
     ctx.strokeStyle = "#4ade80";
     ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     ctx.beginPath();
     
     for (let i = 0; i < frame.length; i++) {
@@ -134,6 +159,7 @@ export function WavetableEditor({
     
     ctx.stroke();
     
+    // Fill under the curve
     ctx.fillStyle = "rgba(74, 222, 128, 0.1)";
     ctx.beginPath();
     ctx.moveTo(0, height / 2);
@@ -151,6 +177,29 @@ export function WavetableEditor({
     drawWaveform();
   }, [drawWaveform]);
   
+  // Handle resize for responsive high DPI rendering
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !open) return;
+    
+    const resizeObserver = new ResizeObserver(() => {
+      // Small delay to let layout settle
+      requestAnimationFrame(() => {
+        drawWaveform();
+      });
+    });
+    
+    resizeObserver.observe(container);
+    
+    // Initial draw after dialog animation settles
+    const timer = setTimeout(() => drawWaveform(), 100);
+    
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timer);
+    };
+  }, [open, drawWaveform]);
+  
   const saveUndoState = useCallback(() => {
     setUndoStack(prev => [...prev.slice(-20), frames.map(f => new Float32Array(f))]);
   }, [frames]);
@@ -164,26 +213,35 @@ export function WavetableEditor({
   
   const getCanvasPointFromPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    const container = containerRef.current;
+    if (!canvas || !container) return null;
     
-    const rect = canvas.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * CANVAS_WIDTH;
-    const y = ((e.clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
+    const rect = container.getBoundingClientRect();
+    // Normalize to 0-1 range based on container size
+    const normalizedX = (e.clientX - rect.left) / rect.width;
+    const normalizedY = (e.clientY - rect.top) / rect.height;
     
-    return { x: Math.max(0, Math.min(CANVAS_WIDTH, x)), y: Math.max(0, Math.min(CANVAS_HEIGHT, y)) };
+    // Use logical dimensions for drawing coordinates
+    const x = normalizedX * LOGICAL_WIDTH;
+    const y = normalizedY * LOGICAL_HEIGHT;
+    
+    return { 
+      x: Math.max(0, Math.min(LOGICAL_WIDTH, x)), 
+      y: Math.max(0, Math.min(LOGICAL_HEIGHT, y)) 
+    };
   }, []);
   
   const drawAtPoint = useCallback((x: number, y: number, prevX?: number, prevY?: number) => {
     if (frames.length === 0) return;
     
     const frame = new Float32Array(frames[currentFrame]);
-    const sampleIndex = Math.floor((x / CANVAS_WIDTH) * SAMPLES_PER_FRAME);
-    const value = 1 - (y / CANVAS_HEIGHT) * 2;
+    const sampleIndex = Math.floor((x / LOGICAL_WIDTH) * SAMPLES_PER_FRAME);
+    const value = 1 - (y / LOGICAL_HEIGHT) * 2;
     
     if (tool === "pencil" || tool === "line") {
       if (prevX !== undefined && prevY !== undefined) {
-        const prevSampleIndex = Math.floor((prevX / CANVAS_WIDTH) * SAMPLES_PER_FRAME);
-        const prevValue = 1 - (prevY / CANVAS_HEIGHT) * 2;
+        const prevSampleIndex = Math.floor((prevX / LOGICAL_WIDTH) * SAMPLES_PER_FRAME);
+        const prevValue = 1 - (prevY / LOGICAL_HEIGHT) * 2;
         
         const startIdx = Math.min(sampleIndex, prevSampleIndex);
         const endIdx = Math.max(sampleIndex, prevSampleIndex);
@@ -469,8 +527,6 @@ export function WavetableEditor({
           >
             <canvas
               ref={canvasRef}
-              width={CANVAS_WIDTH}
-              height={CANVAS_HEIGHT}
               className="w-full h-full"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
