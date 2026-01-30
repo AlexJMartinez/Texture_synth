@@ -1055,11 +1055,14 @@ export function RandomizeControls({
       });
     }
     
-    // Mutate ring modulation (keep sources, adjust mix/level)
+    // Mutate ring modulation (keep structure, adjust key parameters)
     if (onRingModSettingsRandomize && ringModSettings) {
       onRingModSettingsRandomize({
         ...ringModSettings,
-        mix: Math.round(mutateValue(ringModSettings.mix, 20, 80)),
+        freqHz: Math.round(mutateValue(ringModSettings.freqHz, 100, 1000)),
+        depth: Math.round(mutateValue(ringModSettings.depth, 20, 80)),
+        mix: Math.round(mutateValue(ringModSettings.mix, 15, 65)),
+        envDecay: Math.round(mutateValue(ringModSettings.envDecay, 30, 300)),
         outputLevel: Math.round(mutateValue(ringModSettings.outputLevel, 60, 100)),
       });
     }

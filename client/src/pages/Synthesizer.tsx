@@ -2430,14 +2430,9 @@ export default function Synthesizer() {
     // Dry level nodes for each oscillator (allows ring mod to crossfade)
     const oscDryNodes: Record<string, GainNode> = {};
     
-    // Pre-calculate ring mod dry levels (reduce dry when ring mod is active)
+    // Ring mod now uses dedicated modulator oscillator, not oscillator sources
     const ringMod = ringModSettingsToUse;
     const ringModActive = ringMod?.enabled && ringMod.mix > 0;
-    const ringModWet = ringModActive ? (ringMod.mix / 100) : 0;
-    // Crossfade: reduce dry signal of involved oscillators based on mix
-    // Gentler dry reduction - at 100% mix, dry is 50% (not 30%)
-    // This prevents volume drops while still allowing ring mod to cut through
-    const ringModDryLevel = 1 - (ringModWet * 0.5);
 
     for (const { osc, key } of oscConfigs) {
       if (!osc.enabled) continue;
@@ -2796,13 +2791,6 @@ export default function Synthesizer() {
 
       let baseLevel = osc.level / 100;
       
-      // Apply ring mod dry attenuation if this oscillator is involved in ring modulation
-      // This creates proper crossfade between dry and ring mod wet signals
-      // Only apply when sources are different (ring mod actually runs)
-      if (ringModActive && ringMod && ringMod.source1 !== ringMod.source2 && 
-          (ringMod.source1 === key || ringMod.source2 === key)) {
-        baseLevel *= ringModDryLevel;
-      }
       
       // Check for per-oscillator envelope (if enabled, use it; otherwise just set level)
       const oscEnv = perOscEnvelopes?.[key as keyof OscEnvelopes];
@@ -2843,46 +2831,84 @@ export default function Synthesizer() {
       }
     }
 
-    // Ring Modulation: Multiply two oscillator signals together
-    // True ring mod creates sum and difference frequencies (sidebands)
+    // Ring Modulation: Dedicated modulator oscillator with AHD envelope on depth
+    // Creates sum and difference frequencies (sidebands) for metallic one-shot tones
     if (ringModActive && ringMod) {
-      const source1Node = oscOutputNodes[ringMod.source1];
-      const source2Node = oscOutputNodes[ringMod.source2];
+      const wetAmount = ringMod.mix / 100;
+      const dryAmount = 1 - wetAmount;
+      const outputLevel = ringMod.outputLevel / 100;
+      const depth = ringMod.depth / 100;
       
-      if (source1Node && source2Node && ringMod.source1 !== ringMod.source2) {
-        const wetAmount = ringMod.mix / 100;
-        const outputLevel = ringMod.outputLevel / 100;
-        
-        // Ring modulation: source1 * source2
-        // We achieve this by using source2 as a gain modulator for source1
-        const ringModGain = ctx.createGain();
-        ringModGain.gain.value = 0; // Will be modulated by source2
-        
-        // Route source1 through the modulated gain (creates the product)
-        source1Node.connect(ringModGain);
-        
-        // source2 modulates the gain of source1
-        // Ring mod products are inherently quieter (A1 * A2 where both < 1)
-        // Use unity modulation depth - the makeup gain handles loudness
-        const modDepthGain = ctx.createGain();
-        modDepthGain.gain.value = 1.0; // Unity modulation for true ring mod
-        source2Node.connect(modDepthGain);
-        modDepthGain.connect(ringModGain.gain);
-        
-        // Ring mod makeup gain - compensate for signal multiplication
-        // Typical oscillator levels are 0.1-1.0, so product is 0.01-1.0
-        // Apply 8x makeup gain to bring ring mod output to comparable level
-        const ringModMakeup = ctx.createGain();
-        ringModMakeup.gain.value = 8.0;
-        ringModGain.connect(ringModMakeup);
-        
-        // Output level for ring mod (wet signal)
-        const ringModOut = ctx.createGain();
-        ringModOut.gain.value = wetAmount * outputLevel;
-        ringModMakeup.connect(ringModOut);
-        
-        // Connect to the master gain
-        ringModOut.connect(masterGain);
+      // Create ring mod chain following reference architecture:
+      // masterGain -> dry -> output
+      //            -> ringGain (modulated) -> hp -> lp -> wet -> output
+      
+      // Dry path gain
+      const ringDryGain = ctx.createGain();
+      ringDryGain.gain.setValueAtTime(dryAmount, now);
+      
+      // Wet path gain
+      const ringWetGain = ctx.createGain();
+      ringWetGain.gain.setValueAtTime(wetAmount * outputLevel, now);
+      
+      // Ring mod gain node - gain will be modulated by the modulator oscillator
+      const ringGain = ctx.createGain();
+      ringGain.gain.setValueAtTime(0, now); // Will be driven by modulator
+      
+      // Modulator oscillator (dedicated, not using existing oscillators)
+      const ringModOsc = ctx.createOscillator();
+      ringModOsc.type = ringMod.waveform;
+      ringModOsc.frequency.setValueAtTime(ringMod.freqHz, now);
+      
+      // Depth scaling: oscillator output is [-1,1]; scale to desired depth
+      const depthGain = ctx.createGain();
+      depthGain.gain.setValueAtTime(depth, now);
+      
+      // Depth envelope (crucial for one-shots - prevents constant noise)
+      const depthEnv = ctx.createGain();
+      depthEnv.gain.setValueAtTime(EPS, now);
+      
+      // Apply AHD envelope to depth
+      triggerAHD(depthEnv.gain, now, {
+        attack: ringMod.envAttack / 1000,
+        hold: ringMod.envHold / 1000,
+        decay: ringMod.envDecay / 1000
+      }, 1.0, { startFromCurrent: false });
+      
+      // Wire mod -> depthGain -> depthEnv -> ringGain.gain
+      ringModOsc.connect(depthGain);
+      depthGain.connect(depthEnv);
+      depthEnv.connect(ringGain.gain);
+      
+      // Post-filtering (prevents fizz/mud)
+      const ringHP = ctx.createBiquadFilter();
+      ringHP.type = "highpass";
+      ringHP.frequency.setValueAtTime(ringMod.hpHz, now);
+      ringHP.Q.setValueAtTime(0.707, now);
+      
+      const ringLP = ctx.createBiquadFilter();
+      ringLP.type = "lowpass";
+      ringLP.frequency.setValueAtTime(ringMod.lpHz, now);
+      ringLP.Q.setValueAtTime(0.707, now);
+      
+      // Route audio: combinedGain (where all oscillators merge) goes through ring modulation
+      // The audio signal passes through ringGain which is amplitude-modulated by the modulator
+      combinedGain.connect(ringGain);
+      
+      // Ring path: ringGain -> HP -> LP -> wetGain -> output
+      ringGain.connect(ringHP);
+      ringHP.connect(ringLP);
+      ringLP.connect(ringWetGain);
+      
+      // Connect ring mod wet signal to lastNode (the filter/effects chain entry point)
+      // This adds the ring mod effect in parallel with the normal signal path
+      ringWetGain.connect(lastNode);
+      
+      // Start/stop modulator oscillator
+      ringModOsc.start(now);
+      ringModOsc.stop(stopAt);
+      if (sourcesCollector) {
+        sourcesCollector.push(ringModOsc);
       }
     }
 

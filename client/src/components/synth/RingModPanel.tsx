@@ -32,44 +32,31 @@ export function RingModPanel({ settings, onChange }: RingModPanelProps) {
       }
     >
       <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <span className="text-[9px] text-muted-foreground">Source 1</span>
-            <Select
-              value={settings.source1}
-              onValueChange={(v) => update("source1", v as "osc1" | "osc2" | "osc3")}
-              disabled={!settings.enabled}
-            >
-              <SelectTrigger className="h-6 text-[10px]" data-testid="select-ring-source1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="osc1">OSC 1</SelectItem>
-                <SelectItem value="osc2">OSC 2</SelectItem>
-                <SelectItem value="osc3">OSC 3</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <span className="text-[9px] text-muted-foreground">Source 2</span>
-            <Select
-              value={settings.source2}
-              onValueChange={(v) => update("source2", v as "osc1" | "osc2" | "osc3")}
-              disabled={!settings.enabled}
-            >
-              <SelectTrigger className="h-6 text-[10px]" data-testid="select-ring-source2">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="osc1">OSC 1</SelectItem>
-                <SelectItem value="osc2">OSC 2</SelectItem>
-                <SelectItem value="osc3">OSC 3</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        
         <div className="flex justify-center gap-2">
+          <Knob
+            value={settings.freqHz}
+            min={20}
+            max={2000}
+            step={10}
+            label="Freq"
+            unit="Hz"
+            onChange={(v) => update("freqHz", v)}
+            accentColor="primary"
+            size="xs"
+            disabled={!settings.enabled}
+          />
+          <Knob
+            value={settings.depth}
+            min={0}
+            max={100}
+            step={1}
+            label="Depth"
+            unit="%"
+            onChange={(v) => update("depth", v)}
+            accentColor="accent"
+            size="xs"
+            disabled={!settings.enabled}
+          />
           <Knob
             value={settings.mix}
             min={0}
@@ -78,6 +65,94 @@ export function RingModPanel({ settings, onChange }: RingModPanelProps) {
             label="Mix"
             unit="%"
             onChange={(v) => update("mix", v)}
+            accentColor="accent"
+            size="xs"
+            disabled={!settings.enabled}
+          />
+        </div>
+        
+        <div className="space-y-1">
+          <span className="text-[9px] text-muted-foreground block text-center">Modulator</span>
+          <Select
+            value={settings.waveform}
+            onValueChange={(v) => update("waveform", v as OscillatorType)}
+            disabled={!settings.enabled}
+          >
+            <SelectTrigger className="h-6 text-[10px]" data-testid="select-ring-waveform">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="sine">Sine</SelectItem>
+              <SelectItem value="triangle">Triangle</SelectItem>
+              <SelectItem value="sawtooth">Sawtooth</SelectItem>
+              <SelectItem value="square">Square</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-1">
+          <span className="text-[9px] text-muted-foreground block text-center">Depth Envelope (AHD)</span>
+          <div className="flex justify-center gap-2">
+            <Knob
+              value={settings.envAttack}
+              min={0}
+              max={100}
+              step={1}
+              label="A"
+              unit="ms"
+              onChange={(v) => update("envAttack", v)}
+              accentColor="primary"
+              size="xs"
+              disabled={!settings.enabled}
+            />
+            <Knob
+              value={settings.envHold}
+              min={0}
+              max={200}
+              step={1}
+              label="H"
+              unit="ms"
+              onChange={(v) => update("envHold", v)}
+              accentColor="primary"
+              size="xs"
+              disabled={!settings.enabled}
+            />
+            <Knob
+              value={settings.envDecay}
+              min={0}
+              max={1000}
+              step={10}
+              label="D"
+              unit="ms"
+              onChange={(v) => update("envDecay", v)}
+              accentColor="primary"
+              size="xs"
+              disabled={!settings.enabled}
+            />
+          </div>
+        </div>
+        
+        <div className="flex justify-center gap-2">
+          <Knob
+            value={settings.hpHz}
+            min={20}
+            max={1000}
+            step={10}
+            label="HP"
+            unit="Hz"
+            onChange={(v) => update("hpHz", v)}
+            accentColor="accent"
+            size="xs"
+            disabled={!settings.enabled}
+          />
+          <Knob
+            value={settings.lpHz}
+            min={1000}
+            max={20000}
+            step={100}
+            label="LP"
+            unit="Hz"
+            onChange={(v) => update("lpHz", v)}
             accentColor="accent"
             size="xs"
             disabled={!settings.enabled}
@@ -97,7 +172,7 @@ export function RingModPanel({ settings, onChange }: RingModPanelProps) {
         </div>
         
         <p className="text-[8px] text-muted-foreground text-center">
-          Multiplies selected oscillators for metallic tones
+          Dedicated modulator with envelope for metallic one-shots
         </p>
       </div>
     </CollapsiblePanel>

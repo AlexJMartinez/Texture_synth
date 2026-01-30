@@ -1,0 +1,75 @@
+// ringMod.ts
+export type RingModParams = {
+  enabled: boolean;
+  freqHz: number;          // modulator frequency
+  depth: number;           // 0..1 (how strong the modulation is)
+  mix: number;             // 0..1 dry/wet
+  waveform?: OscillatorType; // "sine" default
+  env?: { attack: number; hold: number; decay: number }; // AHD on depth
+  hpHz?: number;           // post ring-mod cleanup
+  lpHz?: number;
+};
+
+const EPS = 1e-5;
+
+export function createRingModChain(ctx: BaseAudioContext, t0: number, p: RingModParams) {
+  // input -> dry -> mix -> out
+  //       -> ring -> mix -> out
+  const input = ctx.createGain();
+  const output = ctx.createGain();
+
+  const dryGain = ctx.createGain();
+  const wetGain = ctx.createGain();
+
+  dryGain.gain.setValueAtTime(1 - p.mix, t0);
+  wetGain.gain.setValueAtTime(p.mix, t0);
+
+  // Ring mod stage: carrier * modulator
+  const ringGain = ctx.createGain();
+  ringGain.gain.setValueAtTime(0, t0); // will be driven by mod oscillator
+
+  // Modulator oscillator
+  const mod = ctx.createOscillator();
+  mod.type = p.waveform ?? "sine";
+  mod.frequency.setValueAtTime(p.freqHz, t0);
+
+  // Depth scaling: oscillator output is [-1,1]; scale to desired depth
+  const depthGain = ctx.createGain();
+  depthGain.gain.setValueAtTime(p.depth, t0);
+
+  // Optional envelope on depth (huge for one-shots)
+  const depthEnv = ctx.createGain();
+  depthEnv.gain.setValueAtTime(EPS, t0);
+
+  // Wire mod -> depthGain -> depthEnv -> ringGain.gain
+  mod.connect(depthGain).connect(depthEnv);
+  depthEnv.connect(ringGain.gain);
+
+  // Post filtering (prevents fizz/mud)
+  const hp = ctx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.setValueAtTime(p.hpHz ?? 200, t0);
+  hp.Q.setValueAtTime(0.707, t0);
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.setValueAtTime(p.lpHz ?? 12000, t0);
+  lp.Q.setValueAtTime(0.707, t0);
+
+  // Route audio
+  input.connect(dryGain).connect(output);
+  input.connect(ringGain).connect(hp).connect(lp).connect(wetGain).connect(output);
+
+  // Start/stop mod oscillator
+  mod.start(t0);
+
+  return {
+    input,
+    output,
+    mod,
+    depthEnvParam: depthEnv.gain,
+    stopAt: (tStop: number) => {
+      try { mod.stop(tStop); } catch {}
+    }
+  };
+}
