@@ -2503,6 +2503,7 @@ export default function Synthesizer() {
             wtResult.outputGain.connect(oscGain);
             frequencyParam = wtResult.oscillators[0]?.frequency || null;
             sourceNode = wtResult.oscillators[0]; // Track first osc for stopping
+            oscAlreadyStarted = true; // Wavetable oscillators are already started in createUnisonWavetableOscillators
             
             // Register all additional oscillators for cleanup (first is tracked via sourceNode)
             if (sourcesCollector && wtResult.oscillators.length > 1) {
