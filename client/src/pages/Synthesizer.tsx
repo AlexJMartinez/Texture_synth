@@ -3264,9 +3264,9 @@ export default function Synthesizer() {
       });
     }
 
-    // Granular synthesis engine
-    if (params.granular.enabled && granularBufferToUse?.data) {
-      const granSettings = applyAntiMudRules(clampToMode(granularSettingsToUse || defaultGranularSettings));
+    // Granular synthesis engine - use passed settings, not params.granular
+    if (granularSettingsToUse?.enabled && granularBufferToUse?.data) {
+      const granSettings = applyAntiMudRules(clampToMode(granularSettingsToUse));
       const bufferData = granularBufferToUse.data;
       const bufferSampleRate = granularBufferToUse.sampleRate;
       const bufferDuration = granularBufferToUse.duration;
