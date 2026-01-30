@@ -2796,7 +2796,9 @@ export default function Synthesizer() {
       
       // Apply ring mod dry attenuation if this oscillator is involved in ring modulation
       // This creates proper crossfade between dry and ring mod wet signals
-      if (ringModActive && ringMod && (ringMod.source1 === key || ringMod.source2 === key)) {
+      // Only apply when sources are different (ring mod actually runs)
+      if (ringModActive && ringMod && ringMod.source1 !== ringMod.source2 && 
+          (ringMod.source1 === key || ringMod.source2 === key)) {
         baseLevel *= ringModDryLevel;
       }
       
