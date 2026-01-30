@@ -2482,14 +2482,14 @@ export default function Synthesizer() {
         noiseSource.buffer = noiseBuffer;
         noiseSource.connect(oscGain);
         sourceNode = noiseSource;
-      } else if (useWavetable && ctx instanceof AudioContext) {
-        // Wavetable oscillator mode (only for live AudioContext, not offline)
+      } else if (useWavetable) {
+        // Wavetable oscillator mode (works with both AudioContext and OfflineAudioContext)
         const wavetable = getWavetableById(wtSettings.wavetableId);
         if (wavetable) {
           // Ensure start time is never negative
           const safeStartTime = Math.max(0, now + phaseSeconds);
           const wtResult = createUnisonWavetableOscillators(
-            ctx as AudioContext,
+            ctx,
             wtSettings,
             oscPitchHz,
             safeStartTime,

@@ -17,7 +17,7 @@ function getCacheKey(wavetableId: string, position: number, interpolation: Wavet
 
 // Get or create PeriodicWave for a wavetable at a specific position
 export function getPeriodicWaveAtPosition(
-  audioContext: AudioContext,
+  audioContext: AudioContext | OfflineAudioContext,
   wavetable: WavetableData,
   position: number,
   interpolation: WavetableInterpolation = "linear"
@@ -55,7 +55,7 @@ export interface WavetableOscillatorResult {
 }
 
 export function createWavetableOscillator(
-  audioContext: AudioContext,
+  audioContext: AudioContext | OfflineAudioContext,
   settings: OscWavetableSettings,
   frequency: number,
   startTime: number,
@@ -107,7 +107,7 @@ export interface UnisonWavetableResult {
 }
 
 export function createUnisonWavetableOscillators(
-  audioContext: AudioContext,
+  audioContext: AudioContext | OfflineAudioContext,
   settings: OscWavetableSettings,
   frequency: number,
   startTime: number,

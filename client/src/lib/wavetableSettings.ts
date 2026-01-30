@@ -150,7 +150,7 @@ export function deleteUserWavetable(id: string): void {
 
 // Generate PeriodicWave from wavetable frame (for Web Audio API)
 export function frameToPeriodicWave(
-  audioContext: AudioContext,
+  audioContext: AudioContext | OfflineAudioContext,
   frame: Float32Array,
   normalize: boolean = true
 ): PeriodicWave {
