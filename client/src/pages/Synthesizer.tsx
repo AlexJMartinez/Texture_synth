@@ -693,6 +693,8 @@ export default function Synthesizer() {
   const [granularSettings, setGranularSettings] = useState<GranularSettings>(loadGranularSettings);
   const [granularBuffer, setGranularBuffer] = useState<GranularSampleBuffer | null>(null);
   const [isCapturingGranular, setIsCapturingGranular] = useState(false);
+  const [isGranularPlaying, setIsGranularPlaying] = useState(false);
+  const granularPlaybackRef = useRef<{ stop: () => void } | null>(null);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -3596,6 +3598,106 @@ export default function Synthesizer() {
     }, totalDuration);
   }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings, granularSettings, granularBuffer]);
 
+  // Toggle granular playback (for spacebar control when granular has sample)
+  const isRenderingGranularRef = useRef(false);
+  
+  const toggleGranularPlayback = useCallback(async () => {
+    // Stop if currently playing
+    if (isGranularPlaying) {
+      if (granularPlaybackRef.current) {
+        granularPlaybackRef.current.stop();
+        granularPlaybackRef.current = null;
+      }
+      setIsGranularPlaying(false);
+      return;
+    }
+    
+    // Prevent concurrent renders
+    if (isRenderingGranularRef.current) return;
+    
+    // Start granular playback
+    if (!granularBuffer?.data || !granularSettings.enabled) return;
+    
+    isRenderingGranularRef.current = true;
+    setIsGranularPlaying(true);
+    
+    await Tone.start();
+    const ctx = Tone.getContext().rawContext as AudioContext;
+    
+    // Use full granular envelope duration for more musical loop (1-2 bars)
+    const seed = granularSettings.seed || Date.now();
+    const envelopeDurationMs = granularSettings.envAttack + 
+                               granularSettings.envHold + 
+                               granularSettings.envDecay;
+    // Ensure minimum 2 seconds for texture loops, max 8 seconds
+    const durationMs = Math.max(2000, Math.min(8000, envelopeDurationMs));
+    const durationSec = durationMs / 1000;
+    
+    try {
+      // Render using full generateSound to include effects chain
+      const buffer = await Tone.Offline(async (offlineCtx) => {
+        const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
+        await generateSound(rawCtx, params, durationMs, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings, granularSettings, granularBuffer);
+      }, durationSec);
+      
+      // Check if we were stopped during render
+      if (!isGranularPlaying) {
+        isRenderingGranularRef.current = false;
+        return;
+      }
+      
+      const renderedBuffer = buffer.get() as AudioBuffer;
+      if (!renderedBuffer) {
+        setIsGranularPlaying(false);
+        isRenderingGranularRef.current = false;
+        return;
+      }
+      
+      // Create looping playback with crossfade for seamless loop
+      let source: AudioBufferSourceNode | null = ctx.createBufferSource();
+      source.buffer = renderedBuffer;
+      source.loop = true;
+      
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 1;
+      
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      source.start();
+      
+      // Store stop function
+      granularPlaybackRef.current = {
+        stop: () => {
+          if (source) {
+            try {
+              gainNode.gain.setValueAtTime(gainNode.gain.value, ctx.currentTime);
+              gainNode.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+              setTimeout(() => {
+                source?.stop();
+                source?.disconnect();
+                gainNode.disconnect();
+              }, 60);
+            } catch (e) {
+              // Ignore errors
+            }
+            source = null;
+          }
+        }
+      };
+      
+      isRenderingGranularRef.current = false;
+    } catch (err) {
+      console.error("Granular playback error:", err);
+      setIsGranularPlaying(false);
+      isRenderingGranularRef.current = false;
+    }
+  }, [isGranularPlaying, granularBuffer, granularSettings, params, oscEnvelopes, generateSound, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
+  
+  const toggleGranularPlaybackRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    toggleGranularPlaybackRef.current = toggleGranularPlayback;
+  }, [toggleGranularPlayback]);
+
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
       console.error("No audio to export - trigger a sound first");
@@ -3813,6 +3915,26 @@ export default function Synthesizer() {
       }
     };
   }, [exportResult]);
+  
+  // Cleanup granular playback when component unmounts or granular disabled
+  useEffect(() => {
+    return () => {
+      if (granularPlaybackRef.current) {
+        granularPlaybackRef.current.stop();
+        granularPlaybackRef.current = null;
+        setIsGranularPlaying(false);
+      }
+    };
+  }, []);
+  
+  // Stop granular playback when settings change significantly
+  useEffect(() => {
+    if (granularPlaybackRef.current && !granularSettings.enabled) {
+      granularPlaybackRef.current.stop();
+      granularPlaybackRef.current = null;
+      setIsGranularPlaying(false);
+    }
+  }, [granularSettings.enabled]);
 
   // Update refs for keyboard shortcuts
   useEffect(() => {
@@ -3829,10 +3951,15 @@ export default function Synthesizer() {
         return;
       }
       
-      // Spacebar: Play/Trigger
+      // Spacebar: Toggle granular playback if sample loaded, otherwise trigger synth
       if (e.code === "Space" && !e.repeat) {
         e.preventDefault();
-        handleTriggerRef.current();
+        // If granular is enabled and has a sample, toggle granular playback
+        if (granularSettings.enabled && granularBuffer?.data) {
+          toggleGranularPlaybackRef.current();
+        } else {
+          handleTriggerRef.current();
+        }
         return;
       }
       
@@ -3860,7 +3987,7 @@ export default function Synthesizer() {
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, granularSettings.enabled, granularBuffer]);
 
   return (
     <ModulationProvider modulators={params.modulators} routes={params.modulationRoutes}>

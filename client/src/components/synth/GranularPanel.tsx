@@ -292,43 +292,77 @@ export function GranularPanel({
     ctx.fillStyle = regionGradient;
     ctx.fillRect(scanStartX, 0, scanEndX - scanStartX, height);
     
-    // Draw grain visualization (Phaseplant-style: small circular dots scattered on waveform)
+    // Draw grain visualization (Phaseplant-style: elegant glowing orbs)
     if (grainPositions.length > 0 && settings.enabled) {
-      // Phaseplant uses small dots - size based on grain size but kept subtle
-      const dotRadius = Math.max(3, Math.min(6, settings.grainSizeMs / 8));
+      // Sort positions for consistent z-layering
+      const sortedPositions = [...grainPositions].sort((a, b) => a - b);
       
-      grainPositions.forEach((pos, index) => {
+      // Base size scales with grain size - keep them small and elegant
+      const baseRadius = Math.max(4, Math.min(8, settings.grainSizeMs / 6));
+      
+      // Draw all grains with layered glow effect
+      sortedPositions.forEach((pos, index) => {
         const x = pos * width;
-        // Scatter dots vertically across the waveform area with some randomness
-        const yVariation = Math.sin(index * 2.7 + pos * 10) * (height * 0.35);
+        // Use a seeded pseudo-random for vertical position based on index
+        const hash = ((index * 2654435761) >>> 0) % 1000 / 1000;
+        const yVariation = (hash - 0.5) * (height * 0.6);
         const y = height / 2 + yVariation;
         
-        // Outer glow (subtle)
-        ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
-        ctx.shadowBlur = 8;
+        // Size variation based on position hash
+        const sizeVar = 0.7 + hash * 0.6;
+        const radius = baseRadius * sizeVar;
         
-        // Gradient fill for the dot (Phaseplant uses blue/cyan tones)
-        const dotGradient = ctx.createRadialGradient(x, y, 0, x, y, dotRadius);
-        dotGradient.addColorStop(0, 'rgba(150, 220, 255, 1)');
-        dotGradient.addColorStop(0.4, 'rgba(100, 180, 255, 0.95)');
-        dotGradient.addColorStop(0.7, 'rgba(70, 150, 230, 0.8)');
-        dotGradient.addColorStop(1, 'rgba(50, 120, 200, 0.4)');
-        
-        ctx.fillStyle = dotGradient;
+        // Outer soft glow layer (large, very soft)
+        ctx.save();
+        const outerGlow = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
+        outerGlow.addColorStop(0, 'rgba(80, 180, 255, 0.3)');
+        outerGlow.addColorStop(0.4, 'rgba(60, 150, 230, 0.15)');
+        outerGlow.addColorStop(1, 'rgba(40, 120, 200, 0)');
+        ctx.fillStyle = outerGlow;
         ctx.beginPath();
-        ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+        ctx.arc(x, y, radius * 4, 0, Math.PI * 2);
         ctx.fill();
         
-        // Inner bright core
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = 'rgba(200, 240, 255, 0.9)';
+        // Middle glow layer
+        const midGlow = ctx.createRadialGradient(x, y, 0, x, y, radius * 2);
+        midGlow.addColorStop(0, 'rgba(120, 200, 255, 0.6)');
+        midGlow.addColorStop(0.5, 'rgba(80, 170, 240, 0.3)');
+        midGlow.addColorStop(1, 'rgba(60, 140, 220, 0)');
+        ctx.fillStyle = midGlow;
         ctx.beginPath();
-        ctx.arc(x, y, dotRadius * 0.4, 0, Math.PI * 2);
+        ctx.arc(x, y, radius * 2, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Core orb with glass-like gradient
+        const coreGradient = ctx.createRadialGradient(
+          x - radius * 0.3, y - radius * 0.3, 0,
+          x, y, radius
+        );
+        coreGradient.addColorStop(0, 'rgba(220, 245, 255, 1)');
+        coreGradient.addColorStop(0.3, 'rgba(150, 210, 255, 0.95)');
+        coreGradient.addColorStop(0.6, 'rgba(100, 180, 250, 0.9)');
+        coreGradient.addColorStop(0.85, 'rgba(70, 150, 230, 0.85)');
+        coreGradient.addColorStop(1, 'rgba(50, 120, 200, 0.7)');
+        ctx.fillStyle = coreGradient;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Highlight specular (glass effect)
+        const specSize = radius * 0.35;
+        const specX = x - radius * 0.35;
+        const specY = y - radius * 0.35;
+        const specGradient = ctx.createRadialGradient(specX, specY, 0, specX, specY, specSize);
+        specGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        specGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
+        specGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = specGradient;
+        ctx.beginPath();
+        ctx.arc(specX, specY, specSize, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
       });
-      
-      // Reset shadow
-      ctx.shadowBlur = 0;
     }
     
     // Draw scan boundaries
