@@ -50,7 +50,24 @@ export function WavetableEditor({
     if (open && wavetableId) {
       const wt = getWavetableById(wavetableId);
       if (wt) {
-        setFrames(wt.frames.map(f => new Float32Array(f)));
+        // Resample frames to match editor's sample count if needed
+        const resampledFrames = wt.frames.map(sourceFrame => {
+          if (sourceFrame.length === SAMPLES_PER_FRAME) {
+            return new Float32Array(sourceFrame);
+          }
+          // Resample from source size to SAMPLES_PER_FRAME using linear interpolation
+          const newFrame = new Float32Array(SAMPLES_PER_FRAME);
+          const ratio = sourceFrame.length / SAMPLES_PER_FRAME;
+          for (let i = 0; i < SAMPLES_PER_FRAME; i++) {
+            const srcPos = i * ratio;
+            const srcIdx = Math.floor(srcPos);
+            const frac = srcPos - srcIdx;
+            const nextIdx = Math.min(srcIdx + 1, sourceFrame.length - 1);
+            newFrame[i] = sourceFrame[srcIdx] * (1 - frac) + sourceFrame[nextIdx] * frac;
+          }
+          return newFrame;
+        });
+        setFrames(resampledFrames);
         // If editing a non-factory wavetable, keep the same ID to allow updates
         if (!wt.isFactory) {
           setEditingWavetableId(wavetableId);
