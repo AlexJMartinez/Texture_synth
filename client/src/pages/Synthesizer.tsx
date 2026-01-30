@@ -2565,8 +2565,9 @@ export default function Synthesizer() {
         const op1DetuneOffset = advFM?.operator1Detune || 0;
         
         // FM8-style modulation index: depth 0-1000 maps to index 0-100
+        // Use carrier frequency for depth calculation so ratio only affects timbre, not intensity
         const fmIndex = osc.fmDepth / 10;
-        const fmDepthHz = fmIndex * modulatorFreq;
+        const fmDepthHz = fmIndex * oscPitchHz; // Use carrier freq, not modulator freq
         
         // Operator 2 calculations
         const op2Freq = op2Settings ? oscPitchHz * op2Settings.ratio : 0;
@@ -2605,10 +2606,19 @@ export default function Synthesizer() {
           }
           
           // Operator 1 self-feedback (creates saw-like harmonics when high)
+          // Feedback in FM adds odd harmonics, making sine waves sound more like saw/square
           if (osc.fmFeedback > 0) {
+            // Create a tiny delay for feedback stability (1 sample = ~0.02ms at 48kHz)
+            const feedbackDelay = ctx.createDelay(0.001);
+            feedbackDelay.delayTime.value = 1 / ctx.sampleRate; // 1 sample delay
+            
             const feedbackGain = ctx.createGain();
-            feedbackGain.gain.value = osc.fmFeedback * modulatorFreq * 2;
-            modOsc.connect(feedbackGain);
+            // Feedback scales with modulator frequency for consistent effect across pitches
+            // Range: 0-1 maps to 0-4x frequency (sweet spot for rich harmonics without noise)
+            feedbackGain.gain.value = osc.fmFeedback * modulatorFreq * 4;
+            
+            modOsc.connect(feedbackDelay);
+            feedbackDelay.connect(feedbackGain);
             feedbackGain.connect(modOsc.frequency);
           }
         }
@@ -2625,9 +2635,14 @@ export default function Synthesizer() {
           
           // Operator 2 self-feedback
           if (op2Settings.feedback > 0) {
+            const op2FeedbackDelay = ctx.createDelay(0.001);
+            op2FeedbackDelay.delayTime.value = 1 / ctx.sampleRate;
+            
             const op2FeedbackGain = ctx.createGain();
-            op2FeedbackGain.gain.value = op2Settings.feedback * op2Freq * 2;
-            op2Osc.connect(op2FeedbackGain);
+            op2FeedbackGain.gain.value = op2Settings.feedback * op2Freq * 4;
+            
+            op2Osc.connect(op2FeedbackDelay);
+            op2FeedbackDelay.connect(op2FeedbackGain);
             op2FeedbackGain.connect(op2Osc.frequency);
           }
           
