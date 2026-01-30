@@ -1,7 +1,7 @@
 # OneShot Synth - Multi-Oscillator One-Shot Generator
 
 ## Overview
-OneShot Synth is a professional web-based one-shot synthesizer built with React and Tone.js. Its primary purpose is to enable music producers to create unique, percussive sounds with an aggressive envelope style, similar to the hyperpop genre and the Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive/Granular), extensive effects processing, and flexible export capabilities (WAV/MP3 formats, 44.1k/48k/96k sample rates). The project aims to provide a powerful tool for generating everything from clean tones to abrasive and impactful sounds.
+OneShot Synth is a professional web-based one-shot synthesizer built with React and Tone.js. Its primary purpose is to enable music producers to create unique, percussive sounds with an aggressive envelope style, similar to the hyperpop genre and the Synplant VST. It features a 3-oscillator architecture, advanced synthesis engines (FM/AM/Modal/Additive), extensive effects processing, and flexible export capabilities (WAV/MP3 formats, 44.1k/48k/96k sample rates). The project aims to provide a powerful tool for generating everything from clean tones to abrasive and impactful sounds.
 
 ## User Preferences
 I want iterative development.
@@ -19,10 +19,9 @@ Core architectural decisions include:
 - **Per-Oscillator Envelopes**: Independent AHD (Attack/Hold/Decay) envelopes for each oscillator, allowing individual amplitude shaping before mixing to master. Stored in localStorage separately from presets. Each oscillator's ENV section has a toggle to enable and A/H/D knobs for timing control.
 - **Click Layer**: A dedicated transient generator with ultra-fast noise, various noise types, filter options, and sample rate reduction.
 - **Sub Oscillator**: A separate layer for low-end, offering sine and triangle waveforms with dedicated envelopes and filtering.
-- **Advanced Synthesis Engines**: Selectable Modal, Additive, and Granular synthesis engines for diverse sound generation.
+- **Advanced Synthesis Engines**: Selectable Modal and Additive synthesis engines for diverse sound generation. Both engines follow the key selector - when the key is changed, their basePitch values update to match the new key frequency.
   - **Modal Synthesis**: Physical modeling with modeCount (1-4 resonant modes), inharmonicity (0-100% quadratic detuning), exciterType (noise burst/sharp impulse/soft mallet/pitched pluck), plus per-mode ratio, decay, and level controls.
   - **Additive Synthesis**: Harmonic stacking with partialCount (1-8 active harmonics), randomness (0-100% pitch and level variation), spread, decay slope, and per-partial level/detune controls.
-  - **Granular Synthesis**: Cloud-based textures with density, grain size, pitch, pitchSpray (pitch randomness), scatter (position jitter), and texture selection (noise/sine/saw/click). Advanced controls include envelope shapes (hanning/gaussian/triangle/trapezoid/rectangular), position jitter, overlap control, reverse grain probability, stereo spread, and freeze mode.
 - **3-Envelope System**: Hard-wired Attack/Hold/Decay (AHD) envelopes for filter cutoff, pitch, and amplitude control.
   - **Amp Envelope**: Extended ranges matching contemporary synths - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for fine control at fast times and long pad tails.
   - **Filter Envelope**: Extended ranges - Attack 0-10s (logarithmic), Hold 0-5s, Decay 0-30s (logarithmic) for sweeping filter movements.
@@ -71,7 +70,7 @@ Core architectural decisions include:
 
 ### Advanced Features (January 2026)
 - **Unison/Super Mode**: Per-oscillator voice stacking (1-8 voices) with detune spread (0-100 cents), stereo width (0-100%), and blend controls. Stored in localStorage. Audio implementation creates multiple oscillators with calculated detuning.
-- **Ring Modulation**: UI panel for oscillator multiplication with source selection (OSC 1/2/3), mix, and output level controls. Settings stored in localStorage. Audio implementation uses amplitude modulation where source2 modulates the gain of source1 via GainNode, creating sum and difference frequencies.
+- **Ring Modulation**: Refactored to use a dedicated modulator oscillator (not existing oscillators) with configurable frequency (20-2000Hz), waveform selection, and depth with AHD envelope for one-shot control. Includes post-filtering (HP/LP) to clean the signal. Proper parallel wet/dry mixing. Settings stored in localStorage.
 - **Sample Layer**: Drag-and-drop audio import with pitch adjustment (-24 to +24 st), attack/decay envelopes, start/end position, reverse, and loop controls. Samples stored as base64 in localStorage.
 - **Multiband Compression**: 3-band compressor with adjustable crossover frequencies (Low X: 20-500Hz, High X: 2k-10kHz), per-band threshold/ratio/attack/release/gain, and mix control. Stored in localStorage.
 - **Phaser/Flanger Effects**: Modulation effects with rate, depth, feedback, and mix controls. Phaser includes stages (2/4/6/8/12). Flanger includes base delay time. Stored in localStorage.

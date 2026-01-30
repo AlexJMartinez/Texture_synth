@@ -3,50 +3,38 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Knob } from "./Knob";
-import type { SynthParameters, GranularTexture, ModalExciterType } from "@shared/schema";
-import { Sparkles, ChevronDown, ChevronRight, Layers } from "lucide-react";
-import type { AdvancedGranularSettings, GrainEnvelopeShape } from "@/lib/advancedSynthSettings";
+import type { SynthParameters, ModalExciterType } from "@shared/schema";
+import { Sparkles } from "lucide-react";
 
 interface SynthEngineSelectorProps {
   modal: SynthParameters["modal"];
   additive: SynthParameters["additive"];
-  granular: SynthParameters["granular"];
   onModalChange: (modal: SynthParameters["modal"]) => void;
   onAdditiveChange: (additive: SynthParameters["additive"]) => void;
-  onGranularChange: (granular: SynthParameters["granular"]) => void;
-  advancedGranular?: AdvancedGranularSettings;
-  onAdvancedGranularChange?: (settings: AdvancedGranularSettings) => void;
 }
 
-type SynthEngineType = "modal" | "additive" | "granular";
+type SynthEngineType = "modal" | "additive";
 
 export function SynthEngineSelector({
   modal,
   additive,
-  granular,
   onModalChange,
   onAdditiveChange,
-  onGranularChange,
-  advancedGranular,
-  onAdvancedGranularChange,
 }: SynthEngineSelectorProps) {
   const [selectedEngine, setSelectedEngine] = useState<SynthEngineType>(() => {
-    if (granular.enabled) return "granular";
     if (additive.enabled) return "additive";
     if (modal.enabled) return "modal";
     return "modal";
   });
 
   useEffect(() => {
-    if (granular.enabled && selectedEngine !== "granular") setSelectedEngine("granular");
-    else if (additive.enabled && selectedEngine !== "additive" && !granular.enabled) setSelectedEngine("additive");
-    else if (modal.enabled && selectedEngine !== "modal" && !additive.enabled && !granular.enabled) setSelectedEngine("modal");
-  }, [modal.enabled, additive.enabled, granular.enabled]);
+    if (additive.enabled && selectedEngine !== "additive") setSelectedEngine("additive");
+    else if (modal.enabled && selectedEngine !== "modal" && !additive.enabled) setSelectedEngine("modal");
+  }, [modal.enabled, additive.enabled]);
 
   const isCurrentEngineEnabled = 
     (selectedEngine === "modal" && modal.enabled) ||
-    (selectedEngine === "additive" && additive.enabled) ||
-    (selectedEngine === "granular" && granular.enabled);
+    (selectedEngine === "additive" && additive.enabled);
 
   const toggleCurrentEngine = (enabled: boolean) => {
     switch (selectedEngine) {
@@ -56,16 +44,12 @@ export function SynthEngineSelector({
       case "additive":
         onAdditiveChange({ ...additive, enabled });
         break;
-      case "granular":
-        onGranularChange({ ...granular, enabled });
-        break;
     }
   };
 
   const engineLabels: Record<SynthEngineType, string> = {
     modal: "Modal",
     additive: "Additive",
-    granular: "Granular",
   };
 
   return (
@@ -87,7 +71,6 @@ export function SynthEngineSelector({
               <SelectContent>
                 <SelectItem value="modal">Modal</SelectItem>
                 <SelectItem value="additive">Additive</SelectItem>
-                <SelectItem value="granular">Granular</SelectItem>
               </SelectContent>
             </Select>
             <Switch
@@ -106,14 +89,6 @@ export function SynthEngineSelector({
           )}
           {selectedEngine === "additive" && (
             <AdditivePanelContent additive={additive} onChange={onAdditiveChange} />
-          )}
-          {selectedEngine === "granular" && (
-            <GranularPanelContent 
-              granular={granular} 
-              onChange={onGranularChange}
-              advancedSettings={advancedGranular}
-              onAdvancedChange={onAdvancedGranularChange}
-            />
           )}
         </div>
       </CardContent>
@@ -194,140 +169,3 @@ function AdditivePanelContent({ additive, onChange }: { additive: SynthParameter
   );
 }
 
-interface GranularPanelProps {
-  granular: SynthParameters["granular"];
-  onChange: (g: SynthParameters["granular"]) => void;
-  advancedSettings?: AdvancedGranularSettings;
-  onAdvancedChange?: (settings: AdvancedGranularSettings) => void;
-}
-
-function GranularPanelContent({ granular, onChange, advancedSettings, onAdvancedChange }: GranularPanelProps) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  
-  return (
-    <div className="space-y-1.5">
-      <div className="flex justify-center gap-1">
-        <Knob value={granular.pitch} min={20} max={2000} step={1} label="Pit" unit="Hz" onChange={(v) => onChange({ ...granular, pitch: v })} logarithmic accentColor="accent" size="xs" data-testid="knob-granular-pitch" />
-        <Knob value={granular.density} min={1} max={100} step={1} label="Den" onChange={(v) => onChange({ ...granular, density: v })} size="xs" data-testid="knob-granular-density" />
-        <Knob value={granular.grainSize} min={5} max={200} step={1} label="Siz" unit="ms" onChange={(v) => onChange({ ...granular, grainSize: v })} size="xs" data-testid="knob-granular-size" />
-      </div>
-      <div className="flex justify-center gap-1">
-        <Knob value={granular.pitchSpray} min={0} max={100} step={1} label="Spr" unit="%" onChange={(v) => onChange({ ...granular, pitchSpray: v })} size="xs" data-testid="knob-granular-spray" />
-        <Knob value={granular.scatter} min={0} max={100} step={1} label="Sct" unit="%" onChange={(v) => onChange({ ...granular, scatter: v })} size="xs" data-testid="knob-granular-scatter" />
-      </div>
-      <Select
-        value={granular.texture}
-        onValueChange={(v) => onChange({ ...granular, texture: v as GranularTexture })}
-      >
-        <SelectTrigger className="h-5 text-[10px]" data-testid="select-granular-texture">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="noise">Noise</SelectItem>
-          <SelectItem value="sine">Sine</SelectItem>
-          <SelectItem value="saw">Saw</SelectItem>
-          <SelectItem value="click">Click</SelectItem>
-        </SelectContent>
-      </Select>
-      
-      {/* Advanced Granular Section */}
-      {advancedSettings && onAdvancedChange && (
-        <div className="border-t border-border/30 pt-1 mt-1">
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen(!advancedOpen)}
-            className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover:text-foreground w-full"
-          >
-            {advancedOpen ? <ChevronDown className="w-2 h-2" /> : <ChevronRight className="w-2 h-2" />}
-            <Layers className="w-2 h-2" />
-            <span>Advanced</span>
-          </button>
-          
-          {advancedOpen && (
-            <div className="space-y-1.5 mt-1">
-              {/* Grain Envelope Shape */}
-              <Select
-                value={advancedSettings.envelopeShape}
-                onValueChange={(v) => onAdvancedChange({ ...advancedSettings, envelopeShape: v as GrainEnvelopeShape })}
-              >
-                <SelectTrigger className="h-5 text-[9px]" data-testid="select-grain-envelope">
-                  <SelectValue placeholder="Grain Envelope" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hanning">Hanning (Smooth)</SelectItem>
-                  <SelectItem value="gaussian">Gaussian (Bell)</SelectItem>
-                  <SelectItem value="triangle">Triangle (Sharp)</SelectItem>
-                  <SelectItem value="trapezoid">Trapezoid (Flat)</SelectItem>
-                  <SelectItem value="rectangular">Rectangular (Punch)</SelectItem>
-                </SelectContent>
-              </Select>
-              
-              {/* Row 1: Position & Overlap */}
-              <div className="flex justify-center gap-1">
-                <Knob
-                  value={advancedSettings.positionJitter}
-                  min={0}
-                  max={100}
-                  step={1}
-                  label="Pos"
-                  unit="%"
-                  onChange={(v) => onAdvancedChange({ ...advancedSettings, positionJitter: v })}
-                  size="xs"
-                  data-testid="knob-granular-position"
-                />
-                <Knob
-                  value={advancedSettings.overlap}
-                  min={0}
-                  max={100}
-                  step={1}
-                  label="Ovlp"
-                  unit="%"
-                  onChange={(v) => onAdvancedChange({ ...advancedSettings, overlap: v })}
-                  size="xs"
-                  data-testid="knob-granular-overlap"
-                />
-              </div>
-              
-              {/* Row 2: Reverse & Stereo */}
-              <div className="flex justify-center gap-1">
-                <Knob
-                  value={advancedSettings.reverseProbability}
-                  min={0}
-                  max={100}
-                  step={1}
-                  label="Rev"
-                  unit="%"
-                  onChange={(v) => onAdvancedChange({ ...advancedSettings, reverseProbability: v })}
-                  size="xs"
-                  data-testid="knob-granular-reverse"
-                />
-                <Knob
-                  value={advancedSettings.stereoSpread}
-                  min={0}
-                  max={100}
-                  step={1}
-                  label="Str"
-                  unit="%"
-                  onChange={(v) => onAdvancedChange({ ...advancedSettings, stereoSpread: v })}
-                  size="xs"
-                  data-testid="knob-granular-stereo"
-                />
-              </div>
-              
-              {/* Freeze Toggle */}
-              <div className="flex items-center justify-center gap-2">
-                <span className="text-[9px] text-muted-foreground">Freeze</span>
-                <Switch
-                  checked={advancedSettings.freeze}
-                  onCheckedChange={(v) => onAdvancedChange({ ...advancedSettings, freeze: v })}
-                  className="scale-50"
-                  data-testid="switch-granular-freeze"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}

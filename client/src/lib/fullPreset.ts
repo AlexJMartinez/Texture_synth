@@ -3,7 +3,6 @@ import type { SynthParameters } from "@shared/schema";
 import type { OscEnvelopes } from "@/components/synth/OscillatorPanel";
 import type { 
   OscAdvancedFMSettings, 
-  AdvancedGranularSettings,
   AdvancedFilterSettings,
   AdvancedWaveshaperSettings,
   LowEndSettings,
@@ -20,7 +19,6 @@ export interface FullSynthSettings {
   convolverSettings?: ConvolverSettings;
   reverbSettings?: ReverbSettings;
   advancedFMSettings?: OscAdvancedFMSettings;
-  advancedGranularSettings?: AdvancedGranularSettings;
   advancedFilterSettings?: AdvancedFilterSettings;
   advancedWaveshaperSettings?: AdvancedWaveshaperSettings;
   lowEndSettings?: LowEndSettings;

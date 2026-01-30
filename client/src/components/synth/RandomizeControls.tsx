@@ -12,15 +12,13 @@ import type { ReverbSettings, ReverbType } from "./EffectsPanel";
 import { getRandomOneShotIR } from "@/lib/builtinIRs";
 import type { 
   OscAdvancedFMSettings, 
-  AdvancedGranularSettings, 
   AdvancedFMSettings,
   AdvancedFilterSettings,
   AdvancedWaveshaperSettings,
   LowEndSettings,
   OscPhaseSettings,
   AdvancedSpectralSettings,
-  FMAlgorithm,
-  GrainEnvelopeShape 
+  FMAlgorithm
 } from "@/lib/advancedSynthSettings";
 import { 
   randomizeAdvancedFilterSettings, 
@@ -80,8 +78,6 @@ interface RandomizeControlsProps {
   onReverbSettingsRandomize?: (settings: ReverbSettings) => void;
   advancedFMSettings?: OscAdvancedFMSettings;
   onAdvancedFMSettingsRandomize?: (settings: OscAdvancedFMSettings) => void;
-  advancedGranularSettings?: AdvancedGranularSettings;
-  onAdvancedGranularSettingsRandomize?: (settings: AdvancedGranularSettings) => void;
   advancedFilterSettings?: AdvancedFilterSettings;
   onAdvancedFilterSettingsRandomize?: (settings: AdvancedFilterSettings) => void;
   advancedWaveshaperSettings?: AdvancedWaveshaperSettings;
@@ -233,8 +229,6 @@ export function RandomizeControls({
   onReverbSettingsRandomize,
   advancedFMSettings,
   onAdvancedFMSettingsRandomize,
-  advancedGranularSettings,
-  onAdvancedGranularSettingsRandomize,
   advancedFilterSettings,
   onAdvancedFilterSettingsRandomize,
   advancedWaveshaperSettings,
@@ -408,13 +402,13 @@ export function RandomizeControls({
         decaySlope: Math.round(randomInRange(0, 60 * chaos)),
       },
       granular: {
-        enabled: Math.random() > 0.8,
-        density: Math.round(randomInRange(5, 50 * chaos + 10)),
-        grainSize: Math.round(randomInRange(10, 100)),
-        pitch: Math.round(randomInRange(100, 800, true)),
-        pitchSpray: Math.round(randomInRange(0, 60 * chaos)),
-        scatter: Math.round(randomInRange(0, 70 * chaos)),
-        texture: (["noise", "sine", "saw", "click"] as const)[Math.floor(Math.random() * 4)],
+        enabled: false,
+        density: 30,
+        grainSize: 50,
+        pitch: 440,
+        pitchSpray: 20,
+        scatter: 30,
+        texture: "noise" as const,
       },
       waveshaper: {
         enabled: Math.random() > 0.6,
@@ -535,19 +529,6 @@ export function RandomizeControls({
         osc1: randomAdvancedFM(),
         osc2: randomAdvancedFM(),
         osc3: randomAdvancedFM(),
-      });
-    }
-    
-    // Randomize advanced granular settings
-    if (onAdvancedGranularSettingsRandomize) {
-      const envelopeShapes: GrainEnvelopeShape[] = ["hanning", "gaussian", "triangle", "trapezoid", "rectangular"];
-      onAdvancedGranularSettingsRandomize({
-        envelopeShape: envelopeShapes[Math.floor(Math.random() * 5)],
-        positionJitter: Math.round(randomInRange(5, 60 * chaos)),
-        overlap: Math.round(randomInRange(20, 80)),
-        reverseProbability: Math.round(randExp(0, 30 * chaos, 2.0)), // Bias toward low reverse probability
-        stereoSpread: Math.round(randomInRange(10, 70)),
-        freeze: false, // Never randomize to freeze mode
       });
     }
     
@@ -797,15 +778,7 @@ export function RandomizeControls({
         multibandMidDrive: Math.round(mutateValue(currentParams.effects.multibandMidDrive, 0, 100)),
         multibandHighDrive: Math.round(mutateValue(currentParams.effects.multibandHighDrive, 0, 100)),
       },
-      granular: {
-        enabled: currentParams.granular.enabled,
-        density: Math.round(mutateValue(currentParams.granular.density, 1, 100)),
-        grainSize: Math.round(mutateValue(currentParams.granular.grainSize, 5, 200)),
-        pitch: Math.round(mutateValue(currentParams.granular.pitch, 20, 2000, true)),
-        pitchSpray: Math.round(mutateValue(currentParams.granular.pitchSpray, 0, 100)),
-        scatter: Math.round(mutateValue(currentParams.granular.scatter, 0, 100)),
-        texture: currentParams.granular.texture,
-      },
+      granular: currentParams.granular,
       waveshaper: {
         enabled: currentParams.waveshaper.enabled,
         curve: Math.random() > 0.9 ? randomWaveshaperCurve() : currentParams.waveshaper.curve,
@@ -931,18 +904,6 @@ export function RandomizeControls({
         osc1: mutateAdvancedFM(advancedFMSettings.osc1),
         osc2: mutateAdvancedFM(advancedFMSettings.osc2),
         osc3: mutateAdvancedFM(advancedFMSettings.osc3),
-      });
-    }
-    
-    // Mutate advanced granular settings
-    if (onAdvancedGranularSettingsRandomize && advancedGranularSettings) {
-      onAdvancedGranularSettingsRandomize({
-        envelopeShape: advancedGranularSettings.envelopeShape, // Keep envelope shape
-        positionJitter: Math.round(mutateValue(advancedGranularSettings.positionJitter, 0, 80)),
-        overlap: Math.round(mutateValue(advancedGranularSettings.overlap, 10, 90)),
-        reverseProbability: Math.round(mutateValue(advancedGranularSettings.reverseProbability, 0, 40)),
-        stereoSpread: Math.round(mutateValue(advancedGranularSettings.stereoSpread, 0, 100)),
-        freeze: advancedGranularSettings.freeze, // Keep freeze state
       });
     }
     

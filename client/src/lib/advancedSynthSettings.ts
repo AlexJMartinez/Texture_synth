@@ -1,4 +1,4 @@
-// Advanced FM and Granular settings - stored in localStorage (not in schema)
+// Advanced FM settings - stored in localStorage (not in schema)
 
 // FM Algorithm types - how operators are routed
 export type FMAlgorithm = "series" | "parallel" | "feedback" | "mixed";
@@ -47,31 +47,8 @@ export const defaultOscAdvancedFMSettings: OscAdvancedFMSettings = {
   osc3: { ...defaultAdvancedFMSettings },
 };
 
-// Granular envelope shape types
-export type GrainEnvelopeShape = "hanning" | "gaussian" | "triangle" | "trapezoid" | "rectangular";
-
-// Advanced granular settings
-export interface AdvancedGranularSettings {
-  envelopeShape: GrainEnvelopeShape;
-  positionJitter: number; // 0-100%, randomize grain start position
-  overlap: number; // 0-100%, grain overlap amount
-  reverseProbability: number; // 0-100%, chance each grain plays backwards
-  stereoSpread: number; // 0-100%, randomize grain panning
-  freeze: boolean; // freeze/loop at current position
-}
-
-export const defaultAdvancedGranularSettings: AdvancedGranularSettings = {
-  envelopeShape: "hanning",
-  positionJitter: 20,
-  overlap: 50,
-  reverseProbability: 0,
-  stereoSpread: 30,
-  freeze: false,
-};
-
 // LocalStorage keys
 const FM_SETTINGS_KEY = "synth-advanced-fm-settings";
-const GRANULAR_SETTINGS_KEY = "synth-advanced-granular-settings";
 
 // FM settings persistence
 export function loadAdvancedFMSettings(): OscAdvancedFMSettings {
@@ -95,38 +72,12 @@ export function saveAdvancedFMSettings(settings: OscAdvancedFMSettings) {
   localStorage.setItem(FM_SETTINGS_KEY, JSON.stringify(settings));
 }
 
-// Granular settings persistence
-export function loadAdvancedGranularSettings(): AdvancedGranularSettings {
-  try {
-    const stored = localStorage.getItem(GRANULAR_SETTINGS_KEY);
-    if (stored) {
-      return { ...defaultAdvancedGranularSettings, ...JSON.parse(stored) };
-    }
-  } catch {
-    // Fall through to default
-  }
-  return { ...defaultAdvancedGranularSettings };
-}
-
-export function saveAdvancedGranularSettings(settings: AdvancedGranularSettings) {
-  localStorage.setItem(GRANULAR_SETTINGS_KEY, JSON.stringify(settings));
-}
-
 // Algorithm descriptions for UI
 export const fmAlgorithmDescriptions: Record<FMAlgorithm, string> = {
   series: "Op2 → Op1 → Carrier (cascaded modulation)",
   parallel: "Op1 + Op2 → Carrier (summed modulation)",
   feedback: "Op1 ↔ Op2 → Carrier (cross-modulation)",
   mixed: "Op2 → Op1, Op1 → Carrier, Op2 → Carrier",
-};
-
-// Grain envelope shape descriptions
-export const grainEnvelopeDescriptions: Record<GrainEnvelopeShape, string> = {
-  hanning: "Smooth, natural fade (most common)",
-  gaussian: "Bell-shaped, very smooth transitions",
-  triangle: "Linear fade in/out, sharper transients",
-  trapezoid: "Flat sustain with short fades",
-  rectangular: "No fade, maximum punch (may click)",
 };
 
 // ============ ADVANCED FILTER SETTINGS ============

@@ -7,7 +7,6 @@ import { FilterPanel } from "@/components/synth/FilterPanel";
 import { EffectsPanel, ReverbSettings, loadReverbSettings, saveReverbSettings, defaultReverbSettings } from "@/components/synth/EffectsPanel";
 import { 
   type OscAdvancedFMSettings, 
-  type AdvancedGranularSettings,
   type AdvancedFilterSettings,
   type AdvancedWaveshaperSettings,
   type LowEndSettings,
@@ -15,8 +14,6 @@ import {
   type AdvancedSpectralSettings,
   loadAdvancedFMSettings, 
   saveAdvancedFMSettings,
-  loadAdvancedGranularSettings,
-  saveAdvancedGranularSettings,
   loadAdvancedFilterSettings,
   saveAdvancedFilterSettings,
   loadAdvancedWaveshaperSettings,
@@ -32,7 +29,6 @@ import {
   randomizeLowEndSettings,
   randomizeAdvancedSpectralSettings,
   defaultOscAdvancedFMSettings,
-  defaultAdvancedGranularSettings,
   defaultAdvancedFilterSettings,
   defaultAdvancedWaveshaperSettings,
   defaultLowEndSettings,
@@ -655,7 +651,6 @@ export default function Synthesizer() {
   const [convolverSettings, setConvolverSettings] = useState<ConvolverSettings>(loadConvolverSettings);
   const [reverbSettings, setReverbSettings] = useState<ReverbSettings>(loadReverbSettings);
   const [advancedFMSettings, setAdvancedFMSettings] = useState<OscAdvancedFMSettings>(loadAdvancedFMSettings);
-  const [advancedGranularSettings, setAdvancedGranularSettings] = useState<AdvancedGranularSettings>(loadAdvancedGranularSettings);
   const [advancedFilterSettings, setAdvancedFilterSettings] = useState<AdvancedFilterSettings>(loadAdvancedFilterSettings);
   const [advancedWaveshaperSettings, setAdvancedWaveshaperSettings] = useState<AdvancedWaveshaperSettings>(loadAdvancedWaveshaperSettings);
   const [lowEndSettings, setLowEndSettings] = useState<LowEndSettings>(loadLowEndSettings);
@@ -782,6 +777,14 @@ export default function Synthesizer() {
           pitch: updatePitchToHz(prev.oscillators.osc3.pitch, newOsc3Hz),
         },
       },
+      modal: {
+        ...prev.modal,
+        basePitch: newOsc1Hz,
+      },
+      additive: {
+        ...prev.additive,
+        basePitch: newOsc1Hz,
+      },
     }));
   }, [params.oscillators]);
 
@@ -802,9 +805,6 @@ export default function Synthesizer() {
     }
     if (settings.advancedFMSettings) {
       setAdvancedFMSettings(settings.advancedFMSettings);
-    }
-    if (settings.advancedGranularSettings) {
-      setAdvancedGranularSettings(settings.advancedGranularSettings);
     }
     if (settings.advancedFilterSettings) {
       setAdvancedFilterSettings(settings.advancedFilterSettings);
@@ -834,7 +834,6 @@ export default function Synthesizer() {
     convolverSettings,
     reverbSettings,
     advancedFMSettings,
-    advancedGranularSettings,
     advancedFilterSettings,
     advancedWaveshaperSettings,
     lowEndSettings,
@@ -3235,72 +3234,6 @@ export default function Synthesizer() {
       });
     }
 
-    if (params.granular.enabled) {
-      const granular = params.granular;
-      const grainCount = Math.round(granular.density);
-      const grainDuration = granular.grainSize / 1000;
-      const totalDuration = (params.envelopes.env3.attack + params.envelopes.env3.hold + params.envelopes.env3.decay) / 1000;
-      const timeSpread = totalDuration * (granular.scatter / 100);
-      
-      for (let i = 0; i < grainCount; i++) {
-        // Fix 6: Use seeded random for granular timing and pitch
-        const grainOffset = (i / grainCount) * totalDuration + (seededRandom() - 0.5) * timeSpread;
-        const grainStart = Math.max(0, now + grainOffset);
-        
-        const pitchVariation = 1 + (seededRandom() - 0.5) * 2 * (granular.pitchSpray / 100);
-        const grainPitch = granular.pitch * pitchVariation;
-        
-        const grainGain = ctx.createGain();
-        triggerAHD(grainGain.gain, grainStart, {
-          attack: grainDuration * 0.1,
-          hold: grainDuration * 0.4,
-          decay: grainDuration * 0.5
-        }, 0.15, { startFromCurrent: false });
-        
-        if (granular.texture === "noise") {
-          const noiseLength = Math.max(0.01, grainDuration);
-          const noiseBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * noiseLength), ctx.sampleRate);
-          const noiseData = noiseBuffer.getChannelData(0);
-          for (let j = 0; j < noiseData.length; j++) {
-            noiseData[j] = (seededRandom() * 2 - 1) * 0.8; // Fix 6: Use seeded random
-          }
-          const noiseSource = ctx.createBufferSource();
-          noiseSource.buffer = noiseBuffer;
-          
-          const bandpass = ctx.createBiquadFilter();
-          bandpass.type = "bandpass";
-          bandpass.frequency.value = grainPitch;
-          bandpass.Q.value = 5;
-          
-          noiseSource.connect(bandpass);
-          bandpass.connect(grainGain);
-          grainGain.connect(masterGain);
-          noiseSource.start(grainStart);
-          noiseSource.stop(grainStart + grainDuration);
-        } else if (granular.texture === "click") {
-          const clickLength = 0.002;
-          const clickBuffer = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * clickLength), ctx.sampleRate);
-          const clickData = clickBuffer.getChannelData(0);
-          for (let j = 0; j < clickData.length; j++) {
-            clickData[j] = (j < clickData.length / 2) ? 1 : -1;
-          }
-          const clickSource = ctx.createBufferSource();
-          clickSource.buffer = clickBuffer;
-          clickSource.connect(grainGain);
-          grainGain.connect(masterGain);
-          clickSource.start(grainStart);
-        } else {
-          const grainOsc = ctx.createOscillator();
-          grainOsc.type = granular.texture === "saw" ? "sawtooth" : "sine";
-          grainOsc.frequency.value = grainPitch;
-          grainOsc.connect(grainGain);
-          grainGain.connect(masterGain);
-          grainOsc.start(grainStart);
-          grainOsc.stop(grainStart + grainDuration);
-        }
-      }
-    }
-
     const ampEnv = params.envelopes.env3;
     const volume = Math.max(EPS, params.output.volume / 100);
 
@@ -3718,11 +3651,6 @@ export default function Synthesizer() {
                 setAdvancedFMSettings(settings);
                 saveAdvancedFMSettings(settings);
               }}
-              advancedGranularSettings={advancedGranularSettings}
-              onAdvancedGranularSettingsRandomize={(settings) => {
-                setAdvancedGranularSettings(settings);
-                saveAdvancedGranularSettings(settings);
-              }}
               advancedFilterSettings={advancedFilterSettings}
               onAdvancedFilterSettingsRandomize={(settings) => {
                 setAdvancedFilterSettings(settings);
@@ -3988,15 +3916,8 @@ export default function Synthesizer() {
                 <SynthEngineSelector
                   modal={params.modal}
                   additive={params.additive}
-                  granular={params.granular}
                   onModalChange={(modal) => setParams({ ...params, modal })}
                   onAdditiveChange={(additive) => setParams({ ...params, additive })}
-                  onGranularChange={(granular) => setParams({ ...params, granular })}
-                  advancedGranular={advancedGranularSettings}
-                  onAdvancedGranularChange={(settings) => {
-                    setAdvancedGranularSettings(settings);
-                    saveAdvancedGranularSettings(settings);
-                  }}
                 />
               </div>
             </div>
