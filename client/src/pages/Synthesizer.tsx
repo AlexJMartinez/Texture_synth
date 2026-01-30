@@ -3517,7 +3517,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings, unisonSettings]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
