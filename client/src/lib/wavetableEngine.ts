@@ -197,49 +197,80 @@ export function createUnisonWavetableOscillators(
 }
 
 // Apply wavetable position modulation from envelope
+// This creates an envelope that sweeps the wavetable position over time
 export function applyWavetablePositionModulation(
-  audioContext: AudioContext,
+  audioContext: AudioContext | OfflineAudioContext,
   wavetableResult: UnisonWavetableResult | WavetableOscillatorResult,
   wavetable: WavetableData,
   settings: OscWavetableSettings,
   startTime: number,
   duration: number,
-  envelopeAmount: number, // -100 to 100
+  envelopeAmount: number, // -100 to 100 (modulation depth)
   envelopeAttack: number, // seconds
   envelopeDecay: number // seconds
 ): void {
   if (Math.abs(envelopeAmount) < 1) return;
+  if (!wavetableResult.setPosition) return;
   
-  const now = startTime;
   const basePosition = settings.position;
-  const modDepth = envelopeAmount; // How much position changes
+  const modDepth = envelopeAmount;
   
   // Calculate modulation positions over time
-  const steps = 20; // Number of updates during the envelope
-  const totalTime = Math.min(duration, envelopeAttack + envelopeDecay);
-  const stepTime = totalTime / steps;
+  // Use more steps for longer durations, fewer for short sounds
+  const totalModTime = Math.min(duration, envelopeAttack + envelopeDecay);
+  const steps = Math.max(10, Math.min(50, Math.ceil(totalModTime * 30))); // ~30 updates per second
+  const stepTime = totalModTime / steps;
   
-  for (let i = 0; i <= steps; i++) {
-    const t = i * stepTime;
-    let envValue = 0;
-    
-    if (t < envelopeAttack) {
-      // Attack phase
-      envValue = t / envelopeAttack;
-    } else {
-      // Decay phase
-      const decayTime = t - envelopeAttack;
-      envValue = 1 - Math.min(1, decayTime / envelopeDecay);
-    }
-    
-    const position = Math.max(0, Math.min(100, basePosition + modDepth * envValue));
-    
-    // Schedule position update
-    setTimeout(() => {
-      if (wavetableResult.setPosition) {
-        wavetableResult.setPosition(position);
+  // For offline context, we need to schedule all changes before rendering starts
+  // Use requestAnimationFrame for live context, or pre-calculate for offline
+  const isOffline = audioContext instanceof OfflineAudioContext;
+  
+  if (isOffline) {
+    // For offline rendering, pre-calculate all position changes
+    // Schedule them relative to the context's timeline
+    for (let i = 0; i <= steps; i++) {
+      const t = i * stepTime;
+      let envValue = 0;
+      
+      if (t < envelopeAttack) {
+        envValue = envelopeAttack > 0 ? t / envelopeAttack : 1;
+      } else {
+        const decayTime = t - envelopeAttack;
+        envValue = envelopeDecay > 0 ? 1 - Math.min(1, decayTime / envelopeDecay) : 0;
       }
-    }, t * 1000);
+      
+      const position = Math.max(0, Math.min(100, basePosition + modDepth * envValue));
+      
+      // For offline rendering, we can't change PeriodicWave dynamically
+      // Instead, we set the initial position only (modulation is for live playback)
+    }
+    // Note: Full wavetable modulation during offline export would require
+    // creating multiple oscillators that crossfade, which is complex.
+    // For now, offline export uses the static position.
+  } else {
+    // Live playback: use setTimeout for real-time updates
+    const scheduleUpdate = (delayMs: number, position: number) => {
+      setTimeout(() => {
+        if (wavetableResult.setPosition) {
+          wavetableResult.setPosition(position);
+        }
+      }, delayMs);
+    };
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = i * stepTime;
+      let envValue = 0;
+      
+      if (t < envelopeAttack) {
+        envValue = envelopeAttack > 0 ? t / envelopeAttack : 1;
+      } else {
+        const decayTime = t - envelopeAttack;
+        envValue = envelopeDecay > 0 ? 1 - Math.min(1, decayTime / envelopeDecay) : 0;
+      }
+      
+      const position = Math.max(0, Math.min(100, basePosition + modDepth * envValue));
+      scheduleUpdate(t * 1000, position);
+    }
   }
 }
 

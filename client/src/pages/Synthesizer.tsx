@@ -173,6 +173,7 @@ import {
   createUnisonWavetableOscillators,
   getPeriodicWaveAtPosition,
   initializeWavetableEngine,
+  applyWavetablePositionModulation,
 } from "@/lib/wavetableEngine";
 import { getWavetableById, registerCustomWavetable } from "@/lib/factoryWavetables";
 import { WavetableEditor } from "@/components/synth/WavetableEditor";
@@ -2504,6 +2505,23 @@ export default function Synthesizer() {
             frequencyParam = wtResult.oscillators[0]?.frequency || null;
             sourceNode = wtResult.oscillators[0]; // Track first osc for stopping
             oscAlreadyStarted = true; // Wavetable oscillators are already started in createUnisonWavetableOscillators
+            
+            // Apply wavetable position modulation if enabled
+            // Uses the amp envelope (env1) timing to sweep through wavetable frames
+            if (Math.abs(wtSettings.positionModDepth) >= 1) {
+              const ampEnv = params.envelopes.env1; // Amp envelope
+              applyWavetablePositionModulation(
+                ctx,
+                wtResult,
+                wavetable,
+                wtSettings,
+                now,
+                durationSec,
+                wtSettings.positionModDepth,
+                ampEnv.attack / 1000, // Convert ms to seconds
+                ampEnv.decay / 1000   // Convert ms to seconds
+              );
+            }
             
             // Register all additional oscillators for cleanup (first is tracked via sourceNode)
             if (sourcesCollector && wtResult.oscillators.length > 1) {
