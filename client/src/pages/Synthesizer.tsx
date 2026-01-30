@@ -4326,6 +4326,8 @@ export default function Synthesizer() {
                 onCapture={handleGranularCapture}
                 onClearSample={() => setGranularBuffer(null)}
                 isCapturing={isCapturingGranular}
+                isPlaying={isGranularPlaying}
+                onTogglePlayback={toggleGranularPlayback}
               />
               <div className="md:col-span-2">
                 <SynthEngineSelector

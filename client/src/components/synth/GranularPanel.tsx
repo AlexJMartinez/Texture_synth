@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import { Layers, Upload, Mic, Trash2 } from "lucide-react";
+import { Layers, Upload, Mic, Trash2, Play, Square } from "lucide-react";
 import type { 
   GranularSettings, 
   GranularMode, 
@@ -28,6 +28,8 @@ interface GranularPanelProps {
   onCapture: () => void;
   onClearSample: () => void;
   isCapturing?: boolean;
+  isPlaying?: boolean;
+  onTogglePlayback?: () => void;
 }
 
 export function GranularPanel({ 
@@ -37,7 +39,9 @@ export function GranularPanel({
   onSampleLoad,
   onCapture,
   onClearSample,
-  isCapturing = false
+  isCapturing = false,
+  isPlaying = false,
+  onTogglePlayback
 }: GranularPanelProps) {
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -527,22 +531,37 @@ export function GranularPanel({
             <Upload className="w-3 h-3" />
           </Button>
           {sampleBuffer && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-5 px-1"
-              onClick={onClearSample}
-              disabled={!settings.enabled}
-              data-testid="button-granular-clear"
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            <>
+              <Button
+                size="sm"
+                variant={isPlaying ? "default" : "ghost"}
+                className={`h-5 px-1 ${isPlaying ? 'bg-primary/80' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePlayback?.();
+                }}
+                disabled={!settings.enabled}
+                data-testid="button-granular-play"
+              >
+                {isPlaying ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-5 px-1"
+                onClick={onClearSample}
+                disabled={!settings.enabled}
+                data-testid="button-granular-clear"
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </>
           )}
         </div>
         
         {sampleBuffer && (
           <div className="text-[9px] text-muted-foreground truncate">
-            {sampleBuffer.name} ({sampleBuffer.duration.toFixed(2)}s)
+            {sampleBuffer.name} ({sampleBuffer.duration.toFixed(2)}s) {isPlaying && '▶'}
           </div>
         )}
         
