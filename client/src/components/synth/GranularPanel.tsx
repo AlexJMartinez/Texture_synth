@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
 import { Layers, Upload, Mic, Trash2 } from "lucide-react";
-import WaveSurfer from "wavesurfer.js";
 import type { 
   GranularSettings, 
   GranularMode, 
@@ -129,37 +128,99 @@ export function GranularPanel({
     setIsDragging(false);
   };
   
-  // WaveSurfer.js waveform visualization
-  const waveformRef = useRef<HTMLDivElement>(null);
-  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  // Canvas-based waveform visualization (matches terrain display style)
+  const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const grainOverlayRef = useRef<HTMLCanvasElement>(null);
   const [grainPositions, setGrainPositions] = useState<number[]>([]);
   
-  // Initialize WaveSurfer
-  useEffect(() => {
-    if (!waveformRef.current) return;
+  // Draw bar-style waveform on canvas (matches main terrain display)
+  const drawBarWaveform = useCallback((canvas: HTMLCanvasElement, data: Float32Array | null) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
-    // Create WaveSurfer instance with accurate waveform display (not bars)
-    const ws = WaveSurfer.create({
-      container: waveformRef.current,
-      height: 64,
-      waveColor: 'rgba(143, 188, 143, 0.7)',
-      progressColor: 'rgba(143, 188, 143, 0.9)',
-      cursorColor: 'transparent',
-      normalize: true,
-      interact: false,
-      hideScrollbar: true,
-      fillParent: true,
-      minPxPerSec: 50, // Higher resolution display
-    });
+    const width = canvas.width;
+    const height = canvas.height;
+    ctx.clearRect(0, 0, width, height);
     
-    wavesurferRef.current = ws;
+    const barWidth = 2;
+    const gap = 1;
+    const totalBarWidth = barWidth + gap;
+    const numBars = Math.floor(width / totalBarWidth);
+    const centerY = height / 2;
     
-    return () => {
-      ws.destroy();
-      wavesurferRef.current = null;
-    };
+    // Colors matching the terrain display
+    const waveColor = "hsl(145, 45%, 55%)";
+    const dimColor = "hsl(145, 25%, 25%)";
+    
+    if (data && data.length > 0) {
+      // Draw waveform bars
+      for (let i = 0; i < numBars; i++) {
+        const dataIndex = Math.floor((i / numBars) * data.length);
+        const amplitude = Math.abs(data[dataIndex] || 0);
+        
+        // Scale amplitude for visibility
+        const maxBarHeight = (height / 2) * 0.9;
+        const barHeight = Math.max(2, amplitude * maxBarHeight * 3);
+        
+        const x = i * totalBarWidth;
+        ctx.fillStyle = waveColor;
+        
+        // Draw mirrored bar (top and bottom)
+        ctx.beginPath();
+        ctx.roundRect(x, centerY - barHeight, barWidth, barHeight, 1);
+        ctx.roundRect(x, centerY, barWidth, barHeight, 1);
+        ctx.fill();
+      }
+      
+      // Draw center line
+      ctx.strokeStyle = dimColor;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.stroke();
+    } else {
+      // Draw idle state - subtle animated bars
+      const time = Date.now() / 1000;
+      for (let i = 0; i < numBars; i++) {
+        const x = i * totalBarWidth;
+        const phase = (i / numBars) * Math.PI * 4 + time * 0.5;
+        const amplitude = Math.sin(phase) * 0.3 + 0.3;
+        const barHeight = 4 + amplitude * 12;
+        
+        ctx.fillStyle = dimColor;
+        ctx.beginPath();
+        ctx.roundRect(x, centerY - barHeight, barWidth, barHeight, 1);
+        ctx.roundRect(x, centerY, barWidth, barHeight, 1);
+        ctx.fill();
+      }
+      
+      // Center line
+      ctx.strokeStyle = "hsl(145, 15%, 18%)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, centerY);
+      ctx.lineTo(width, centerY);
+      ctx.stroke();
+    }
   }, []);
+  
+  // Redraw waveform when sample buffer changes
+  useEffect(() => {
+    const canvas = waveformCanvasRef.current;
+    if (!canvas) return;
+    
+    // Set canvas size based on container
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * window.devicePixelRatio;
+    canvas.height = rect.height * window.devicePixelRatio;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    
+    drawBarWaveform(canvas, sampleBuffer?.data || null);
+  }, [sampleBuffer?.data, drawBarWaveform]);
   
   // Helper to convert Float32Array to WAV ArrayBuffer (defined before use)
   const audioBufferToWav = useCallback((samples: Float32Array, sampleRate: number): ArrayBuffer => {
@@ -203,23 +264,6 @@ export function GranularPanel({
     return arrayBuffer;
   }, []);
   
-  // Load sample into WaveSurfer when buffer changes
-  useEffect(() => {
-    const ws = wavesurferRef.current;
-    if (!ws || !sampleBuffer?.data) {
-      // Clear waveform if no sample
-      if (ws) {
-        ws.empty();
-      }
-      return;
-    }
-    
-    // Convert to WAV and load
-    const wavBuffer = audioBufferToWav(sampleBuffer.data, sampleBuffer.sampleRate);
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-    ws.loadBlob(blob);
-    
-  }, [sampleBuffer?.data, sampleBuffer?.sampleRate, audioBufferToWav]);
   
   // Simulate grain positions for visualization (updates periodically when enabled)
   useEffect(() => {
@@ -435,11 +479,11 @@ export function GranularPanel({
           data-testid="drop-zone-granular"
           style={{ background: 'linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(15,15,15,1) 100%)' }}
         >
-          {/* WaveSurfer waveform container */}
-          <div 
-            ref={waveformRef} 
+          {/* Bar-style waveform canvas (matches main terrain display) */}
+          <canvas
+            ref={waveformCanvasRef}
             className="w-full h-16"
-            style={{ opacity: sampleBuffer?.data ? 1 : 0 }}
+            style={{ opacity: 1 }}
           />
           {/* Grain overlay canvas */}
           <canvas
