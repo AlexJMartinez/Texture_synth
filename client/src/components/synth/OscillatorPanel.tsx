@@ -491,8 +491,7 @@ export function OscillatorPanel({
                               min={0}
                               max={1000}
                               step={10}
-                              label="Depth"
-                              unit="Hz"
+                              label="Index"
                               onChange={(v) => onAdvancedFMChange({
                                 ...advancedFM,
                                 operator2: { ...advancedFM.operator2, depth: v }

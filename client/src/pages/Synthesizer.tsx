@@ -2601,22 +2601,31 @@ export default function Synthesizer() {
           const op1Active = osc.fmEnabled && osc.fmDepth > 0 && osc.fmWaveform !== "noise";
           const op2Active = osc.fmEnabled && op2Settings?.enabled && op2Settings.depth > 0;
           
-          // FM Synthesis: Use modulation index scaling for consistent timbre across pitches
+          // FM Synthesis following FM8 architecture:
+          // - Each operator has ratio (frequency = carrier * ratio), depth (modulation index)
+          // - Modulation gain = index * modulatorFreq (creates sidebands at carrier ± n*modulator)
+          // - Algorithms define routing: series (Op2→Op1→Carrier), parallel (both→Carrier), etc.
           if (op1Active || op2Active) {
-            // Operator 1 setup (always created if FM enabled, even at 0 depth for algorithm routing)
             const modulatorFreq = oscPitchHz * osc.fmRatio;
             const op1DetuneOffset = advFM?.operator1Detune || 0;
             
-            // FM8-style modulation index: depth 0-100 maps to index 0-10
-            const fmIndex = osc.fmDepth / 10;
+            // FM8-style modulation index: depth 0-1000 maps to index 0-100
+            // Typical useful range: 0-20 for most sounds, up to 100 for extreme effects
+            const fmIndex = osc.fmDepth / 10; // 0-1000 -> 0-100
             let fmDepthHz = fmIndex * modulatorFreq;
-            fmDepthHz = Math.min(fmDepthHz, oscPitchHz * 15);
             
-            // Only create Op1 oscillator if it has depth or if needed for algorithm routing
+            // Operator 2 calculations
+            const op2Freq = op2Settings ? oscPitchHz * op2Settings.ratio : 0;
+            const op2Index = op2Settings ? op2Settings.depth / 10 : 0; // 0-1000 -> 0-100
+            const op2DepthHz = op2Index * op2Freq;
+            
             let modOsc: OscillatorNode | null = null;
             let modGain: GainNode | null = null;
             
-            if (op1Active || (op2Active && (algorithm === "series" || algorithm === "feedback" || algorithm === "mixed"))) {
+            // Create Op1 if needed for any algorithm that uses it
+            const needsOp1 = op1Active || (op2Active && algorithm !== "parallel");
+            
+            if (needsOp1) {
               modOsc = ctx.createOscillator();
               modOsc.type = osc.fmWaveform as OscillatorType;
               modOsc.frequency.value = modulatorFreq;
@@ -2624,8 +2633,14 @@ export default function Synthesizer() {
               
               modGain = ctx.createGain();
               
-              if (osc.indexEnvEnabled && osc.indexEnvDepth > 0 && fmDepthHz > 0) {
-                const baseDepth = Math.max(EPS, fmDepthHz);
+              // For series/feedback/mixed: when Op2 is active but Op1 depth is 0,
+              // Op1 acts as a "through" modulator - its frequency is modulated by Op2,
+              // and it passes that modulation to the carrier with a base gain
+              const effectiveFmDepthHz = op1Active ? fmDepthHz : 
+                (op2Active ? modulatorFreq * 1.0 : 0); // Base index of 1 when acting as through
+              
+              if (osc.indexEnvEnabled && osc.indexEnvDepth > 0 && effectiveFmDepthHz > 0) {
+                const baseDepth = Math.max(EPS, effectiveFmDepthHz);
                 const peakMultiplier = 1 + (osc.indexEnvDepth / 20);
                 const peakDepth = baseDepth * peakMultiplier;
                 triggerAHD(modGain.gain, now, {
@@ -2634,12 +2649,13 @@ export default function Synthesizer() {
                   decay: osc.indexEnvDecay / 1000
                 }, peakDepth, { startFromCurrent: false });
               } else {
-                modGain.gain.value = fmDepthHz;
+                modGain.gain.value = effectiveFmDepthHz;
               }
               
               // Operator 1 self-feedback (creates saw-like harmonics when high)
-              if (osc.fmFeedback > 0 && fmDepthHz > 0) {
+              if (osc.fmFeedback > 0) {
                 const feedbackGain = ctx.createGain();
+                // Feedback amount: 0-1 maps to 0-2x modulator frequency
                 feedbackGain.gain.value = osc.fmFeedback * modulatorFreq * 2;
                 modOsc.connect(feedbackGain);
                 feedbackGain.connect(modOsc.frequency);
@@ -2650,15 +2666,11 @@ export default function Synthesizer() {
             if (op2Active && op2Settings) {
               const op2Osc = ctx.createOscillator();
               op2Osc.type = op2Settings.waveform as OscillatorType;
-              const op2Freq = oscPitchHz * op2Settings.ratio;
               op2Osc.frequency.value = op2Freq;
               op2Osc.detune.value = op2Settings.ratioDetune;
               
               const op2Gain = ctx.createGain();
-              // FM8-style: depth 0-1000 maps to index 0-20
-              const op2Index = op2Settings.depth / 50;
-              const op2DepthHz = op2Index * op2Freq;
-              op2Gain.gain.value = Math.min(op2DepthHz, oscPitchHz * 20);
+              op2Gain.gain.value = op2DepthHz;
               
               // Operator 2 self-feedback
               if (op2Settings.feedback > 0) {
@@ -2670,61 +2682,65 @@ export default function Synthesizer() {
               
               op2Osc.connect(op2Gain);
               
-              // Algorithm routing with Op1 and Op2
+              // Algorithm routing - FM8 style
               if (modOsc && modGain) {
                 switch (algorithm) {
                   case "series":
-                    // Op2 -> Op1 -> Carrier
+                    // Op2 modulates Op1's frequency, Op1 modulates Carrier
+                    // Creates complex sidebands as Op2's FM is passed through Op1
                     op2Gain.connect(modOsc.frequency);
                     modOsc.connect(modGain);
                     modGain.connect(primaryOsc.frequency);
                     break;
                     
                   case "parallel":
-                    // Op1 -> Carrier, Op2 -> Carrier (independent)
+                    // Both operators modulate carrier independently
+                    // Creates sum of two FM spectra
                     modOsc.connect(modGain);
                     modGain.connect(primaryOsc.frequency);
                     op2Gain.connect(primaryOsc.frequency);
                     break;
                     
                   case "feedback": {
-                    // Op1 <-> Op2 cross-feedback
+                    // Cross-modulation: Op2→Op1 and Op1→Op2
+                    // Creates chaotic, metallic timbres
                     op2Gain.connect(modOsc.frequency);
-                    const crossFeedbackGain = ctx.createGain();
-                    crossFeedbackGain.gain.value = Math.max(fmDepthHz, op2DepthHz) * 0.7;
-                    modOsc.connect(crossFeedbackGain);
-                    crossFeedbackGain.connect(op2Osc.frequency);
+                    const crossFbGain = ctx.createGain();
+                    crossFbGain.gain.value = fmDepthHz > 0 ? fmDepthHz : modulatorFreq;
+                    modOsc.connect(crossFbGain);
+                    crossFbGain.connect(op2Osc.frequency);
                     modOsc.connect(modGain);
                     modGain.connect(primaryOsc.frequency);
                     break;
                   }
                     
                   case "mixed": {
-                    // Op2 -> Op1 -> Carrier + Op2 -> Carrier
+                    // Op2→Op1→Carrier plus Op2→Carrier directly
+                    // Rich harmonics from both serial and parallel paths
                     op2Gain.connect(modOsc.frequency);
                     modOsc.connect(modGain);
                     modGain.connect(primaryOsc.frequency);
+                    // Direct path from Op2 to carrier
                     const directGain = ctx.createGain();
-                    directGain.gain.value = op2DepthHz * 0.7;
+                    directGain.gain.value = op2DepthHz * 0.5;
                     op2Osc.connect(directGain);
                     directGain.connect(primaryOsc.frequency);
                     break;
                   }
                 }
               } else {
-                // Op2 only (no Op1) - direct modulation to carrier
+                // Op2 only, parallel mode default - direct to carrier
                 op2Gain.connect(primaryOsc.frequency);
               }
               
               op2Osc.start(now);
               op2Osc.stop(stopAt);
             } else if (modOsc && modGain) {
-              // Op1 only - direct modulation to carrier
+              // Op1 only - simple 2-operator FM
               modOsc.connect(modGain);
               modGain.connect(primaryOsc.frequency);
             }
             
-            // Start Op1 if created
             if (modOsc) {
               modOsc.start(now);
               modOsc.stop(stopAt);
