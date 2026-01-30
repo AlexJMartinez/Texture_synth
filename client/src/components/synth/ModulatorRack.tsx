@@ -91,17 +91,14 @@ const MODULATION_TARGETS: ModulationTarget[] = [
   { path: "oscillators.osc1.level", label: "OSC1 Level", category: "Oscillators" },
   { path: "oscillators.osc1.detune", label: "OSC1 Detune", category: "Oscillators" },
   { path: "oscillators.osc1.fmDepth", label: "OSC1 FM Depth", category: "Oscillators" },
-  { path: "oscillators.osc1.pmDepth", label: "OSC1 PM Depth", category: "Oscillators" },
   { path: "oscillators.osc1.drift", label: "OSC1 Drift", category: "Oscillators" },
   { path: "oscillators.osc2.level", label: "OSC2 Level", category: "Oscillators" },
   { path: "oscillators.osc2.detune", label: "OSC2 Detune", category: "Oscillators" },
   { path: "oscillators.osc2.fmDepth", label: "OSC2 FM Depth", category: "Oscillators" },
-  { path: "oscillators.osc2.pmDepth", label: "OSC2 PM Depth", category: "Oscillators" },
   { path: "oscillators.osc2.drift", label: "OSC2 Drift", category: "Oscillators" },
   { path: "oscillators.osc3.level", label: "OSC3 Level", category: "Oscillators" },
   { path: "oscillators.osc3.detune", label: "OSC3 Detune", category: "Oscillators" },
   { path: "oscillators.osc3.fmDepth", label: "OSC3 FM Depth", category: "Oscillators" },
-  { path: "oscillators.osc3.pmDepth", label: "OSC3 PM Depth", category: "Oscillators" },
   { path: "oscillators.osc3.drift", label: "OSC3 Drift", category: "Oscillators" },
   
   // Effects - Delay

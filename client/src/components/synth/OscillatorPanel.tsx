@@ -7,7 +7,7 @@ import { CollapsiblePanel } from "./CollapsiblePanel";
 import { WavetableSelector } from "./WavetableSelector";
 import type { Oscillator, WaveformType, ModRatioPreset, PitchState, PitchModeType, EnvelopeCurve } from "@shared/schema";
 import { Waves } from "./WaveformIcons";
-import { ChevronDown, ChevronRight, Radio, Zap, CircleDot, Timer, Shuffle, Volume2, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, Radio, Zap, Timer, Shuffle, Volume2, Layers } from "lucide-react";
 import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
 import type { OscWavetableSettings } from "@/lib/wavetableSettings";
 import type { UnisonSettings } from "@/lib/unisonSettings";
@@ -60,10 +60,6 @@ function randomizeOscillator(): Partial<Oscillator> {
     amEnabled: Math.random() > 0.7,
     amRatio: [0.5, 1, 2, 3, 4][Math.floor(Math.random() * 5)],
     amDepth: Math.floor(Math.random() * 80),
-    pmEnabled: Math.random() > 0.6,
-    pmRatio: [1, 2, 3, 4, 6, 8][Math.floor(Math.random() * 6)],
-    pmDepth: Math.floor(Math.random() * 40),
-    pmFeedback: Math.random() * 0.4,
     indexEnvEnabled: Math.random() > 0.5,
     indexEnvDecay: Math.floor(5 + Math.random() * 50),
     indexEnvDepth: Math.floor(Math.random() * 40),
@@ -107,7 +103,6 @@ export function OscillatorPanel({
   const [fmOpen, setFmOpen] = useState(oscillator.fmEnabled);
   const [fmAdvancedOpen, setFmAdvancedOpen] = useState(false);
   const [amOpen, setAmOpen] = useState(oscillator.amEnabled);
-  const [pmOpen, setPmOpen] = useState(oscillator.pmEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
   const [oscEnvOpen, setOscEnvOpen] = useState(envelope?.enabled ?? false);
   const [wavetableOpen, setWavetableOpen] = useState(wavetableSettings?.enabled ?? false);
@@ -204,81 +199,6 @@ export function OscillatorPanel({
             />
           </div>
         )}
-
-        <div className="flex items-center gap-1 mb-1">
-          <span className="text-[9px] text-muted-foreground">Pitch:</span>
-          <div className="flex gap-0.5">
-            {(["hz", "st", "oct"] as PitchModeType[]).map((mode) => (
-              <Button
-                key={mode}
-                size="sm"
-                variant={pitch.mode === mode ? "default" : "ghost"}
-                onClick={() => handlePitchModeChange(mode)}
-                className="text-[8px] px-1.5 py-0"
-                data-testid={`btn-pitch-mode-${mode}-${index}`}
-              >
-                {mode === "hz" ? "Hz" : mode === "st" ? "ST" : "Oct"}
-              </Button>
-            ))}
-          </div>
-        </div>
-        <div className="flex justify-center gap-1">
-          <Knob
-            value={pitchKnobValue}
-            min={pitchConfig.min}
-            max={pitchConfig.max}
-            step={pitchConfig.step}
-            label="Pitch"
-            unit={pitch.mode === "hz" ? "Hz" : pitch.mode === "st" ? "st" : "oct"}
-            onChange={onPitchKnobChange}
-            logarithmic={pitchConfig.logarithmic}
-            accentColor="accent"
-            size="xs"
-          />
-          <Knob
-            value={pitch.cents}
-            min={-100}
-            max={100}
-            step={1}
-            label="Cents"
-            unit="ct"
-            onChange={onCentsChange}
-            size="xs"
-          />
-          <Knob
-            value={oscillator.detune}
-            min={-100}
-            max={100}
-            step={1}
-            label="Det"
-            unit="ct"
-            onChange={(v) => updateOscillator("detune", v)}
-            size="xs"
-            modulationPath={`oscillators.osc${index}.detune`}
-          />
-          <Knob
-            value={oscillator.drift}
-            min={0}
-            max={100}
-            step={1}
-            label="Dft"
-            unit="%"
-            onChange={(v) => updateOscillator("drift", v)}
-            size="xs"
-          />
-          <Knob
-            value={oscillator.level}
-            min={0}
-            max={100}
-            step={1}
-            label="Lvl"
-            unit="%"
-            onChange={(v) => updateOscillator("level", v)}
-            accentColor="primary"
-            size="xs"
-            modulationPath={`oscillators.osc${index}.level`}
-          />
-        </div>
 
         <div className={`rounded border border-border/50 transition-opacity ${!oscillator.fmEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
           <div className="flex items-center justify-between px-1.5 py-0.5">
@@ -523,6 +443,53 @@ export function OscillatorPanel({
           )}
         </div>
 
+        <div className={`rounded border border-border/50 transition-opacity ${!oscillator.indexEnvEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
+          <div className="flex items-center justify-between px-1.5 py-0.5">
+            <button
+              type="button"
+              onClick={() => setIndexEnvOpen(!indexEnvOpen)}
+              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              {indexEnvOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+              <Timer className="w-2.5 h-2.5 text-orange-400" />
+              Idx Env
+            </button>
+            <Switch
+              checked={oscillator.indexEnvEnabled}
+              onCheckedChange={(v) => updateOscillator("indexEnvEnabled", v)}
+              className="scale-50"
+              data-testid={`switch-index-env-${index}`}
+            />
+          </div>
+          {indexEnvOpen && (
+            <div className="px-1.5 pb-1.5">
+              <div className="flex justify-center gap-1">
+                <Knob
+                  value={oscillator.indexEnvDecay}
+                  min={2}
+                  max={100}
+                  step={1}
+                  label="Decay"
+                  unit="ms"
+                  onChange={(v) => updateOscillator("indexEnvDecay", v)}
+                  accentColor="primary"
+                  size="xs"
+                />
+                <Knob
+                  value={oscillator.indexEnvDepth}
+                  min={0}
+                  max={60}
+                  step={1}
+                  label="Depth"
+                  onChange={(v) => updateOscillator("indexEnvDepth", v)}
+                  accentColor="primary"
+                  size="xs"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className={`rounded border border-border/50 transition-opacity ${!oscillator.amEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
           <div className="flex items-center justify-between px-1.5 py-0.5">
             <button
@@ -585,152 +552,74 @@ export function OscillatorPanel({
           )}
         </div>
 
-        <div className={`rounded border border-border/50 transition-opacity ${!oscillator.pmEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <button
-              type="button"
-              onClick={() => setPmOpen(!pmOpen)}
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-            >
-              {pmOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
-              <CircleDot className="w-2.5 h-2.5 text-cyan-400" />
-              PM
-            </button>
-            <Switch
-              checked={oscillator.pmEnabled}
-              onCheckedChange={(v) => updateOscillator("pmEnabled", v)}
-              className="scale-50"
-              data-testid={`switch-pm-${index}`}
-            />
-          </div>
-          {pmOpen && (
-            <div className="px-1.5 pb-1.5 space-y-1">
-              <Select
-                value={oscillator.pmWaveform}
-                onValueChange={(v) => updateOscillator("pmWaveform", v as WaveformType)}
-                disabled={!oscillator.pmEnabled}
+        {unisonSettings && onUnisonChange && (
+          <div className={`rounded border border-border/50 transition-opacity ${!unisonSettings.enabled ? 'opacity-50 bg-muted/10' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
+            <div className="flex items-center justify-between px-1.5 py-0.5">
+              <button
+                type="button"
+                onClick={() => setUnisonOpen(!unisonOpen)}
+                className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
               >
-                <SelectTrigger className="h-5 text-[10px]" data-testid={`select-pm-waveform-${index}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sine">Sine</SelectItem>
-                  <SelectItem value="triangle">Triangle</SelectItem>
-                  <SelectItem value="sawtooth">Sawtooth</SelectItem>
-                  <SelectItem value="square">Square</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={oscillator.pmRatioPreset}
-                onValueChange={(v) => {
-                  const preset = v as ModRatioPreset;
-                  if (preset !== "custom") {
-                    updateOscillator("pmRatio", parseFloat(preset));
-                  }
-                  updateOscillator("pmRatioPreset", preset);
-                }}
-                disabled={!oscillator.pmEnabled}
-              >
-                <SelectTrigger className="h-5 text-[10px]" data-testid={`select-pm-ratio-${index}`}>
-                  <SelectValue placeholder="Ratio" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0.5">0.5x</SelectItem>
-                  <SelectItem value="1">1x</SelectItem>
-                  <SelectItem value="2">2x</SelectItem>
-                  <SelectItem value="3">3x</SelectItem>
-                  <SelectItem value="4">4x</SelectItem>
-                  <SelectItem value="6">6x</SelectItem>
-                  <SelectItem value="8">8x</SelectItem>
-                  <SelectItem value="custom">Custom</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex justify-center gap-1">
-                {oscillator.pmRatioPreset === "custom" && (
+                {unisonOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
+                <Layers className="w-2.5 h-2.5 text-cyan-400" />
+                Unison
+              </button>
+              <Switch
+                checked={unisonSettings.enabled}
+                onCheckedChange={(v) => onUnisonChange({ ...unisonSettings, enabled: v })}
+                className="scale-50"
+                data-testid={`switch-unison-${index}`}
+              />
+            </div>
+            {unisonOpen && (
+              <div className="px-1.5 pb-1.5">
+                <div className="flex justify-center gap-1">
                   <Knob
-                    value={oscillator.pmRatio}
-                    min={0.25}
-                    max={16}
-                    step={0.25}
-                    label="Ratio"
-                    onChange={(v) => updateOscillator("pmRatio", v)}
+                    value={unisonSettings.voices}
+                    min={1}
+                    max={8}
+                    step={1}
+                    label="Voices"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, voices: v })}
                     accentColor="accent"
                     size="xs"
                   />
-                )}
-                <Knob
-                  value={oscillator.pmDepth}
-                  min={0}
-                  max={60}
-                  step={1}
-                  label="Index"
-                  onChange={(v) => updateOscillator("pmDepth", v)}
-                  accentColor="accent"
-                  size="xs"
-                  modulationPath={`oscillators.osc${index}.pmDepth`}
-                />
-                <Knob
-                  value={oscillator.pmFeedback * 100}
-                  min={0}
-                  max={100}
-                  step={1}
-                  label="FB"
-                  unit="%"
-                  onChange={(v) => updateOscillator("pmFeedback", v / 100)}
-                  accentColor="accent"
-                  size="xs"
-                />
+                  <Knob
+                    value={unisonSettings.detune}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Detune"
+                    unit="ct"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, detune: v })}
+                    size="xs"
+                  />
+                  <Knob
+                    value={unisonSettings.spread}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Spread"
+                    unit="%"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, spread: v })}
+                    size="xs"
+                  />
+                  <Knob
+                    value={unisonSettings.blend}
+                    min={0}
+                    max={100}
+                    step={1}
+                    label="Blend"
+                    unit="%"
+                    onChange={(v) => onUnisonChange({ ...unisonSettings, blend: v })}
+                    accentColor="primary"
+                    size="xs"
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        <div className={`rounded border border-border/50 transition-opacity ${!oscillator.indexEnvEnabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
-          <div className="flex items-center justify-between px-1.5 py-0.5">
-            <button
-              type="button"
-              onClick={() => setIndexEnvOpen(!indexEnvOpen)}
-              className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-            >
-              {indexEnvOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
-              <Timer className="w-2.5 h-2.5 text-orange-400" />
-              Idx Env
-            </button>
-            <Switch
-              checked={oscillator.indexEnvEnabled}
-              onCheckedChange={(v) => updateOscillator("indexEnvEnabled", v)}
-              className="scale-50"
-              data-testid={`switch-index-env-${index}`}
-            />
+            )}
           </div>
-          {indexEnvOpen && (
-            <div className="px-1.5 pb-1.5">
-              <div className="flex justify-center gap-1">
-                <Knob
-                  value={oscillator.indexEnvDecay}
-                  min={2}
-                  max={100}
-                  step={1}
-                  label="Decay"
-                  unit="ms"
-                  onChange={(v) => updateOscillator("indexEnvDecay", v)}
-                  accentColor="primary"
-                  size="xs"
-                />
-                <Knob
-                  value={oscillator.indexEnvDepth}
-                  min={0}
-                  max={60}
-                  step={1}
-                  label="Depth"
-                  onChange={(v) => updateOscillator("indexEnvDepth", v)}
-                  accentColor="primary"
-                  size="xs"
-                />
-              </div>
-            </div>
-          )}
-        </div>
+        )}
 
         {envelope && onEnvelopeChange && (
           <div className={`rounded border border-border/50 transition-opacity ${!envelope.enabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
@@ -811,74 +700,80 @@ export function OscillatorPanel({
           </div>
         )}
 
-        {unisonSettings && onUnisonChange && (
-          <div className={`rounded border border-border/50 transition-opacity ${!unisonSettings.enabled ? 'opacity-50 bg-muted/10' : 'bg-cyan-500/10 border-cyan-500/30'}`}>
-            <div className="flex items-center justify-between px-1.5 py-0.5">
-              <button
-                type="button"
-                onClick={() => setUnisonOpen(!unisonOpen)}
-                className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+        <div className="flex items-center gap-1 mb-1">
+          <span className="text-[9px] text-muted-foreground">Pitch:</span>
+          <div className="flex gap-0.5">
+            {(["hz", "st", "oct"] as PitchModeType[]).map((mode) => (
+              <Button
+                key={mode}
+                size="sm"
+                variant={pitch.mode === mode ? "default" : "ghost"}
+                onClick={() => handlePitchModeChange(mode)}
+                className="text-[8px] px-1.5 py-0"
+                data-testid={`btn-pitch-mode-${mode}-${index}`}
               >
-                {unisonOpen ? <ChevronDown className="w-2.5 h-2.5" /> : <ChevronRight className="w-2.5 h-2.5" />}
-                <Layers className="w-2.5 h-2.5 text-cyan-400" />
-                Unison
-              </button>
-              <Switch
-                checked={unisonSettings.enabled}
-                onCheckedChange={(v) => onUnisonChange({ ...unisonSettings, enabled: v })}
-                className="scale-50"
-                data-testid={`switch-unison-${index}`}
-              />
-            </div>
-            {unisonOpen && (
-              <div className="px-1.5 pb-1.5">
-                <div className="flex justify-center gap-1">
-                  <Knob
-                    value={unisonSettings.voices}
-                    min={1}
-                    max={8}
-                    step={1}
-                    label="Voices"
-                    onChange={(v) => onUnisonChange({ ...unisonSettings, voices: v })}
-                    accentColor="accent"
-                    size="xs"
-                  />
-                  <Knob
-                    value={unisonSettings.detune}
-                    min={0}
-                    max={100}
-                    step={1}
-                    label="Detune"
-                    unit="ct"
-                    onChange={(v) => onUnisonChange({ ...unisonSettings, detune: v })}
-                    size="xs"
-                  />
-                  <Knob
-                    value={unisonSettings.spread}
-                    min={0}
-                    max={100}
-                    step={1}
-                    label="Spread"
-                    unit="%"
-                    onChange={(v) => onUnisonChange({ ...unisonSettings, spread: v })}
-                    size="xs"
-                  />
-                  <Knob
-                    value={unisonSettings.blend}
-                    min={0}
-                    max={100}
-                    step={1}
-                    label="Blend"
-                    unit="%"
-                    onChange={(v) => onUnisonChange({ ...unisonSettings, blend: v })}
-                    accentColor="primary"
-                    size="xs"
-                  />
-                </div>
-              </div>
-            )}
+                {mode === "hz" ? "Hz" : mode === "st" ? "ST" : "Oct"}
+              </Button>
+            ))}
           </div>
-        )}
+        </div>
+        <div className="flex justify-center gap-1">
+          <Knob
+            value={pitchKnobValue}
+            min={pitchConfig.min}
+            max={pitchConfig.max}
+            step={pitchConfig.step}
+            label="Pitch"
+            unit={pitch.mode === "hz" ? "Hz" : pitch.mode === "st" ? "st" : "oct"}
+            onChange={onPitchKnobChange}
+            logarithmic={pitchConfig.logarithmic}
+            accentColor="accent"
+            size="xs"
+          />
+          <Knob
+            value={pitch.cents}
+            min={-100}
+            max={100}
+            step={1}
+            label="Cents"
+            unit="ct"
+            onChange={onCentsChange}
+            size="xs"
+          />
+          <Knob
+            value={oscillator.detune}
+            min={-100}
+            max={100}
+            step={1}
+            label="Det"
+            unit="ct"
+            onChange={(v) => updateOscillator("detune", v)}
+            size="xs"
+            modulationPath={`oscillators.osc${index}.detune`}
+          />
+          <Knob
+            value={oscillator.drift}
+            min={0}
+            max={100}
+            step={1}
+            label="Dft"
+            unit="%"
+            onChange={(v) => updateOscillator("drift", v)}
+            size="xs"
+          />
+          <Knob
+            value={oscillator.level}
+            min={0}
+            max={100}
+            step={1}
+            label="Lvl"
+            unit="%"
+            onChange={(v) => updateOscillator("level", v)}
+            accentColor="primary"
+            size="xs"
+            modulationPath={`oscillators.osc${index}.level`}
+          />
+        </div>
       </div>
     </CollapsiblePanel>
   );

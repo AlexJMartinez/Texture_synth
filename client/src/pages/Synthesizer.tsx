@@ -2766,42 +2766,6 @@ export default function Synthesizer() {
             }
           }
 
-          // PM (Linear FM): Uses carrier-relative scaling for pitch-stable modulation
-          if (osc.pmEnabled && osc.pmDepth > 0 && osc.pmWaveform !== "noise") {
-            const pmModOsc = ctx.createOscillator();
-            pmModOsc.type = osc.pmWaveform as OscillatorType;
-            const pmModulatorFreq = oscPitchHz * osc.pmRatio;
-            pmModOsc.frequency.value = pmModulatorFreq;
-            
-            const pmModGain = ctx.createGain();
-            const pmDepthHz = (osc.pmDepth / 100) * oscPitchHz;
-            
-            if (osc.indexEnvEnabled && osc.indexEnvDepth > 0) {
-              const basePmDepth = Math.max(EPS, pmDepthHz);
-              const peakMultiplier = 1 + (osc.indexEnvDepth / 15);
-              const peakPmDepth = basePmDepth * peakMultiplier;
-              triggerAHD(pmModGain.gain, now, {
-                attack: 0.0005,
-                hold: 0,
-                decay: osc.indexEnvDecay / 1000
-              }, peakPmDepth, { startFromCurrent: false });
-            } else {
-              pmModGain.gain.value = pmDepthHz;
-            }
-            
-            pmModOsc.connect(pmModGain);
-            pmModGain.connect(primaryOsc.frequency);
-            
-            if (osc.pmFeedback > 0) {
-              const pmFeedbackGain = ctx.createGain();
-              pmFeedbackGain.gain.value = osc.pmFeedback * pmDepthHz * 0.2;
-              pmModOsc.connect(pmFeedbackGain);
-              pmFeedbackGain.connect(pmModOsc.frequency);
-            }
-            
-            pmModOsc.start(now);
-            pmModOsc.stop(stopAt);
-          }
           
           sourceNode = primaryOsc;
         } else {

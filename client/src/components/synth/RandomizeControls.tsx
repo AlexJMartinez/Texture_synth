@@ -271,7 +271,6 @@ export function RandomizeControls({
 
   const randomizeOsc = (current: Oscillator, chaos: number, forceEnabled?: boolean): Oscillator => {
     const fmPreset = randomRatioPreset();
-    const pmPreset = randomRatioPreset();
     const minLevel = forceEnabled ? 60 : 30;
     
     const fmEnabled = Math.random() > 0.7;
@@ -296,12 +295,6 @@ export function RandomizeControls({
       amRatio: Math.round(randomInRange(0.5, 8) * 4) / 4,
       amDepth: Math.round(randomInRange(20, 80 * chaos)),
       amWaveform: randomWaveform(),
-      pmEnabled: Math.random() > 0.6,
-      pmRatio: pmPreset === "custom" ? Math.round(randomInRange(0.5, 8) * 4) / 4 : parseFloat(pmPreset),
-      pmRatioPreset: pmPreset,
-      pmDepth: Math.round(randomInRange(1, 30 * chaos)),
-      pmWaveform: randomWaveform(),
-      pmFeedback: Math.random() > 0.7 ? Math.round(randomInRange(0, 0.4 * chaos) * 100) / 100 : 0,
       indexEnvEnabled,
       indexEnvDecay: Math.round(randomInRange(5, 50 * chaos + 10)),
       indexEnvDepth: Math.round(randomInRange(5, 40 * chaos)),
@@ -700,12 +693,6 @@ export function RandomizeControls({
         amRatio: Math.round(mutateValue(osc.amRatio, 0.25, 16) * 4) / 4,
         amDepth: Math.round(mutateValue(osc.amDepth, 0, 100)),
         amWaveform: Math.random() > 0.9 ? randomWaveform() : osc.amWaveform,
-        pmEnabled: osc.pmEnabled,
-        pmRatio: Math.round(mutateValue(osc.pmRatio, 0.25, 16) * 4) / 4,
-        pmRatioPreset: osc.pmRatioPreset,
-        pmDepth: Math.round(mutateValue(osc.pmDepth, 0, 60)),
-        pmWaveform: Math.random() > 0.9 ? randomWaveform() : osc.pmWaveform,
-        pmFeedback: Math.round(mutateValue(osc.pmFeedback, 0, 1) * 100) / 100,
         indexEnvEnabled,
         indexEnvDecay: Math.round(mutateValue(osc.indexEnvDecay, 2, 100)),
         indexEnvDepth: Math.round(mutateValue(osc.indexEnvDepth, 0, 60)),
