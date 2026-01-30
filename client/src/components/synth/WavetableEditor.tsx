@@ -75,6 +75,30 @@ export function WavetableEditor({
     }
   }, [open, wavetableId]);
   
+  // Track canvas size to avoid unnecessary resizing
+  const canvasSizeRef = useRef({ width: 0, height: 0 });
+  
+  const setupCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return false;
+    
+    const dpr = window.devicePixelRatio || 1;
+    const rect = container.getBoundingClientRect();
+    const displayWidth = Math.floor(rect.width);
+    const displayHeight = Math.floor(rect.height);
+    
+    // Only resize if dimensions actually changed (with tolerance for rounding)
+    if (Math.abs(canvasSizeRef.current.width - displayWidth) > 1 || 
+        Math.abs(canvasSizeRef.current.height - displayHeight) > 1) {
+      canvasSizeRef.current = { width: displayWidth, height: displayHeight };
+      canvas.width = displayWidth * dpr;
+      canvas.height = displayHeight * dpr;
+      return true;
+    }
+    return false;
+  }, []);
+  
   const drawWaveform = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -83,29 +107,16 @@ export function WavetableEditor({
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     
-    // Get device pixel ratio for high DPI rendering
+    // Setup canvas size if needed
+    setupCanvas();
+    
     const dpr = window.devicePixelRatio || 1;
-    const rect = container.getBoundingClientRect();
+    const width = canvasSizeRef.current.width || LOGICAL_WIDTH;
+    const height = canvasSizeRef.current.height || LOGICAL_HEIGHT;
     
-    // Set canvas dimensions for high DPI
-    const displayWidth = rect.width;
-    const displayHeight = rect.height;
-    
-    // Only resize if dimensions changed to avoid flicker
-    if (canvas.width !== Math.floor(displayWidth * dpr) || 
-        canvas.height !== Math.floor(displayHeight * dpr)) {
-      canvas.width = Math.floor(displayWidth * dpr);
-      canvas.height = Math.floor(displayHeight * dpr);
-      canvas.style.width = `${displayWidth}px`;
-      canvas.style.height = `${displayHeight}px`;
-    }
-    
-    // Scale context for high DPI
+    // Reset transform and scale for high DPI
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     
-    // Use display dimensions for drawing (logical pixels)
-    const width = displayWidth;
-    const height = displayHeight;
     const frame = frames[currentFrame];
     if (!frame) return;
     
@@ -171,34 +182,27 @@ export function WavetableEditor({
     ctx.lineTo(width, height / 2);
     ctx.closePath();
     ctx.fill();
-  }, [frames, currentFrame, showGrid]);
+  }, [frames, currentFrame, showGrid, setupCanvas]);
   
   useEffect(() => {
     drawWaveform();
   }, [drawWaveform]);
   
-  // Handle resize for responsive high DPI rendering
+  // Handle initial setup when dialog opens
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container || !open) return;
+    if (!open) return;
     
-    const resizeObserver = new ResizeObserver(() => {
-      // Small delay to let layout settle
-      requestAnimationFrame(() => {
-        drawWaveform();
-      });
-    });
-    
-    resizeObserver.observe(container);
+    // Reset size tracking when dialog opens
+    canvasSizeRef.current = { width: 0, height: 0 };
     
     // Initial draw after dialog animation settles
-    const timer = setTimeout(() => drawWaveform(), 100);
+    const timer = setTimeout(() => {
+      setupCanvas();
+      drawWaveform();
+    }, 150);
     
-    return () => {
-      resizeObserver.disconnect();
-      clearTimeout(timer);
-    };
-  }, [open, drawWaveform]);
+    return () => clearTimeout(timer);
+  }, [open, setupCanvas, drawWaveform]);
   
   const saveUndoState = useCallback(() => {
     setUndoStack(prev => [...prev.slice(-20), frames.map(f => new Float32Array(f))]);
@@ -213,11 +217,10 @@ export function WavetableEditor({
   
   const getCanvasPointFromPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>): { x: number; y: number } | null => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return null;
+    if (!canvas) return null;
     
-    const rect = container.getBoundingClientRect();
-    // Normalize to 0-1 range based on container size
+    const rect = canvas.getBoundingClientRect();
+    // Normalize to 0-1 range based on canvas display size
     const normalizedX = (e.clientX - rect.left) / rect.width;
     const normalizedY = (e.clientY - rect.top) / rect.height;
     
@@ -522,18 +525,20 @@ export function WavetableEditor({
           
           <div 
             ref={containerRef}
-            className="relative border border-border rounded-lg overflow-hidden bg-black touch-none"
-            style={{ aspectRatio: "2/1" }}
+            className="relative border border-border rounded-lg overflow-hidden bg-black select-none"
+            style={{ aspectRatio: "2/1", touchAction: "none" }}
+            onTouchStart={(e) => e.preventDefault()}
           >
             <canvas
               ref={canvasRef}
-              className="w-full h-full"
+              className="w-full h-full block"
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              style={{ touchAction: "none" }}
+              onTouchStart={(e) => e.preventDefault()}
+              style={{ touchAction: "none", userSelect: "none" }}
               data-testid="canvas-wavetable-editor"
             />
           </div>
