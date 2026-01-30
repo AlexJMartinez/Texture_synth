@@ -292,34 +292,43 @@ export function GranularPanel({
     ctx.fillStyle = regionGradient;
     ctx.fillRect(scanStartX, 0, scanEndX - scanStartX, height);
     
-    // Draw grain visualization (Phaseplant-style with glow effect)
+    // Draw grain visualization (Phaseplant-style: small circular dots scattered on waveform)
     if (grainPositions.length > 0 && settings.enabled) {
-      const grainSizeMs = settings.grainSizeMs;
-      const grainWidthPx = Math.max(3, Math.min(12, grainSizeMs / 3));
+      // Phaseplant uses small dots - size based on grain size but kept subtle
+      const dotRadius = Math.max(3, Math.min(6, settings.grainSizeMs / 8));
       
-      grainPositions.forEach((pos) => {
+      grainPositions.forEach((pos, index) => {
         const x = pos * width;
-        const grainHeight = height * 0.85;
-        const yOffset = (height - grainHeight) / 2;
+        // Scatter dots vertically across the waveform area with some randomness
+        const yVariation = Math.sin(index * 2.7 + pos * 10) * (height * 0.35);
+        const y = height / 2 + yVariation;
         
-        // Outer glow
-        const glowGradient = ctx.createRadialGradient(x, height / 2, 0, x, height / 2, grainWidthPx * 3);
-        glowGradient.addColorStop(0, 'rgba(144, 238, 144, 0.4)');
-        glowGradient.addColorStop(0.5, 'rgba(144, 238, 144, 0.15)');
-        glowGradient.addColorStop(1, 'rgba(144, 238, 144, 0)');
-        ctx.fillStyle = glowGradient;
-        ctx.fillRect(x - grainWidthPx * 3, 0, grainWidthPx * 6, height);
+        // Outer glow (subtle)
+        ctx.shadowColor = 'rgba(100, 200, 255, 0.8)';
+        ctx.shadowBlur = 8;
         
-        // Inner bright bar
-        const barGradient = ctx.createLinearGradient(x - grainWidthPx / 2, 0, x + grainWidthPx / 2, 0);
-        barGradient.addColorStop(0, 'rgba(144, 238, 144, 0.1)');
-        barGradient.addColorStop(0.5, 'rgba(180, 255, 180, 0.9)');
-        barGradient.addColorStop(1, 'rgba(144, 238, 144, 0.1)');
-        ctx.fillStyle = barGradient;
+        // Gradient fill for the dot (Phaseplant uses blue/cyan tones)
+        const dotGradient = ctx.createRadialGradient(x, y, 0, x, y, dotRadius);
+        dotGradient.addColorStop(0, 'rgba(150, 220, 255, 1)');
+        dotGradient.addColorStop(0.4, 'rgba(100, 180, 255, 0.95)');
+        dotGradient.addColorStop(0.7, 'rgba(70, 150, 230, 0.8)');
+        dotGradient.addColorStop(1, 'rgba(50, 120, 200, 0.4)');
+        
+        ctx.fillStyle = dotGradient;
         ctx.beginPath();
-        ctx.roundRect(x - grainWidthPx / 2, yOffset, grainWidthPx, grainHeight, 2);
+        ctx.arc(x, y, dotRadius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Inner bright core
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = 'rgba(200, 240, 255, 0.9)';
+        ctx.beginPath();
+        ctx.arc(x, y, dotRadius * 0.4, 0, Math.PI * 2);
         ctx.fill();
       });
+      
+      // Reset shadow
+      ctx.shadowBlur = 0;
     }
     
     // Draw scan boundaries
