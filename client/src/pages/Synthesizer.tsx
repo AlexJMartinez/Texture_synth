@@ -80,14 +80,6 @@ import {
   randomizeWavetableSettings,
 } from "@/lib/wavetableSettings";
 import {
-  type OscUnisonSettings,
-  type UnisonSettings,
-  loadUnisonSettings,
-  saveUnisonSettings,
-  defaultOscUnisonSettings,
-  randomizeUnisonSettings,
-} from "@/lib/unisonSettings";
-import {
   type RingModSettings,
   loadRingModSettings,
   saveRingModSettings,
@@ -672,7 +664,6 @@ export default function Synthesizer() {
   const [wavetableSettings, setWavetableSettings] = useState<AllOscWavetableSettings>(loadWavetableSettings);
   const [wavetableEditorOpen, setWavetableEditorOpen] = useState(false);
   const [wavetableEditorOsc, setWavetableEditorOsc] = useState<1 | 2 | 3>(1);
-  const [unisonSettings, setUnisonSettings] = useState<OscUnisonSettings>(loadUnisonSettings);
   const [ringModSettings, setRingModSettings] = useState<RingModSettings>(loadRingModSettings);
   const [sampleLayerSettings, setSampleLayerSettings] = useState<SampleLayerSettings>(loadSampleLayerSettings);
   const [multibandCompSettings, setMultibandCompSettings] = useState<MultibandCompSettings>(loadMultibandCompSettings);
@@ -1590,7 +1581,6 @@ export default function Synthesizer() {
     convSettings?: ConvolverSettings,
     revSettings?: ReverbSettings,
     wtSettingsToUse?: AllOscWavetableSettings,
-    unisonSettingsToUse?: OscUnisonSettings,
     ringModSettingsToUse?: RingModSettings,
     parallelSettingsToUse?: ParallelProcessingSettings,
     advancedFMSettingsToUse?: OscAdvancedFMSettings
@@ -2459,11 +2449,6 @@ export default function Synthesizer() {
       const phaseDegrees = phaseSettings[phaseKey] || 0;
       const phaseSeconds = (phaseDegrees / 360) / oscPitchHz; // Time offset for phase
       
-      // Get unison settings for this oscillator
-      const unisonKey = key as keyof OscUnisonSettings;
-      const unisonSettingsForOsc = unisonSettingsToUse?.[unisonKey];
-      const unisonEnabled = unisonSettingsForOsc?.enabled && unisonSettingsForOsc.voices > 1;
-      
       let sourceNode: AudioScheduledSourceNode;
       let frequencyParam: AudioParam | null = null;
       let oscAlreadyStarted = false; // Track if oscillator was started in unison loop
@@ -2548,66 +2533,28 @@ export default function Synthesizer() {
           sourceNode = oscNode;
         }
       } else {
-        // Unison mode: create multiple detuned oscillators with stereo spread
-        const voiceCount = unisonEnabled ? unisonSettingsForOsc!.voices : 1;
-        const unisonDetune = unisonEnabled ? unisonSettingsForOsc!.detune : 0;
-        const unisonSpread = unisonEnabled ? unisonSettingsForOsc!.spread / 100 : 0;
-        const unisonBlend = unisonEnabled ? unisonSettingsForOsc!.blend / 100 : 1;
-        
-        // Create a merge node for all unison voices
+        // Standard oscillator mode
         const unisonMerge = ctx.createGain();
-        unisonMerge.gain.value = 1 / Math.sqrt(voiceCount); // Normalize volume
+        unisonMerge.gain.value = 1;
         
         let primaryOsc: OscillatorNode | null = null;
-        oscAlreadyStarted = true; // Unison voices are started in the loop below
+        oscAlreadyStarted = true;
         
-        for (let v = 0; v < voiceCount; v++) {
-          const oscNode = ctx.createOscillator();
-          oscNode.type = osc.waveform as OscillatorType;
-          oscNode.frequency.value = oscPitchHz;
-          
-          // Calculate voice-specific detune: spread evenly from -detune to +detune
-          let voiceDetune = osc.detune;
-          if (voiceCount > 1) {
-            const detuneOffset = unisonDetune * ((v / (voiceCount - 1)) * 2 - 1);
-            voiceDetune += detuneOffset;
-          }
-          oscNode.detune.value = voiceDetune;
-          
-          // Calculate stereo pan position: spread evenly from -spread to +spread
-          let voicePan = 0;
-          if (voiceCount > 1 && unisonSpread > 0) {
-            voicePan = unisonSpread * ((v / (voiceCount - 1)) * 2 - 1);
-          }
-          
-          // Create panner for this voice
-          const voicePanner = ctx.createStereoPanner();
-          voicePanner.pan.value = voicePan;
-          
-          // Apply blend (mix between center and spread)
-          const voiceGain = ctx.createGain();
-          voiceGain.gain.value = v === 0 ? 1 : unisonBlend; // First voice always at full
-          
-          oscNode.connect(voiceGain);
-          voiceGain.connect(voicePanner);
-          voicePanner.connect(unisonMerge);
-          
-          // Track first oscillator for frequency param and source node
-          if (v === 0) {
-            primaryOsc = oscNode;
-            frequencyParam = oscNode.frequency;
-          }
-          
-          // Ensure start time is never negative (phase offset could be negative)
-          const oscStartTime = Math.max(0, now + phaseSeconds);
-          oscNode.start(oscStartTime);
-          oscNode.stop(stopAt);
-          
-          // Collect additional voices for cleanup
-          if (v > 0 && sourcesCollector) {
-            sourcesCollector.push(oscNode);
-          }
-        }
+        // Create single oscillator
+        const oscNode = ctx.createOscillator();
+        oscNode.type = osc.waveform as OscillatorType;
+        oscNode.frequency.value = oscPitchHz;
+        oscNode.detune.value = osc.detune;
+        
+        oscNode.connect(unisonMerge);
+        
+        primaryOsc = oscNode;
+        frequencyParam = oscNode.frequency;
+        
+        // Ensure start time is never negative (phase offset could be negative)
+        const oscStartTime = Math.max(0, now + phaseSeconds);
+        oscNode.start(oscStartTime);
+        oscNode.stop(stopAt);
         
         // Apply FM/PM modulation to primary oscillator only (affects perceived pitch)
         if (primaryOsc) {
@@ -3423,7 +3370,7 @@ export default function Synthesizer() {
     try {
       buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, unisonSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings);
+        await generateSound(rawCtx, params, totalDuration, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings);
       }, durationInSeconds);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -3499,7 +3446,7 @@ export default function Synthesizer() {
       activeSourcesRef.current = [];
       activeFadeGainRef.current = null;
     }, totalDuration);
-  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings, unisonSettings]);
+  }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
@@ -3777,11 +3724,6 @@ export default function Synthesizer() {
                 setAdvancedSpectralSettings(newSettings);
                 saveAdvancedSpectralSettings(newSettings);
               }}
-              unisonSettings={unisonSettings}
-              onUnisonSettingsRandomize={(settings) => {
-                setUnisonSettings(settings);
-                saveUnisonSettings(settings);
-              }}
               ringModSettings={ringModSettings}
               onRingModSettingsRandomize={(settings) => {
                 setRingModSettings(settings);
@@ -3869,12 +3811,6 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(1); setWavetableEditorOpen(true); }}
-                      unisonSettings={unisonSettings.osc1}
-                      onUnisonChange={(settings) => {
-                        const newSettings = { ...unisonSettings, osc1: settings };
-                        setUnisonSettings(newSettings);
-                        saveUnisonSettings(newSettings);
-                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc2" className="mt-1">
@@ -3898,12 +3834,6 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(2); setWavetableEditorOpen(true); }}
-                      unisonSettings={unisonSettings.osc2}
-                      onUnisonChange={(settings) => {
-                        const newSettings = { ...unisonSettings, osc2: settings };
-                        setUnisonSettings(newSettings);
-                        saveUnisonSettings(newSettings);
-                      }}
                     />
                   </TabsContent>
                   <TabsContent value="osc3" className="mt-1">
@@ -3927,12 +3857,6 @@ export default function Synthesizer() {
                         saveWavetableSettings(newSettings);
                       }}
                       onOpenWavetableEditor={() => { setWavetableEditorOsc(3); setWavetableEditorOpen(true); }}
-                      unisonSettings={unisonSettings.osc3}
-                      onUnisonChange={(settings) => {
-                        const newSettings = { ...unisonSettings, osc3: settings };
-                        setUnisonSettings(newSettings);
-                        saveUnisonSettings(newSettings);
-                      }}
                     />
                   </TabsContent>
                 </Tabs>

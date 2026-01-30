@@ -30,8 +30,6 @@ import {
   defaultLowEndSettings,
   defaultOscPhaseSettings
 } from "@/lib/advancedSynthSettings";
-import type { OscUnisonSettings } from "@/lib/unisonSettings";
-import { randomizeUnisonSettings } from "@/lib/unisonSettings";
 import type { RingModSettings } from "@/lib/ringModSettings";
 import { randomizeRingModSettings } from "@/lib/ringModSettings";
 import type { MultibandCompSettings } from "@/lib/multibandCompSettings";
@@ -94,8 +92,6 @@ interface RandomizeControlsProps {
   onPhaseSettingsRandomize?: (settings: OscPhaseSettings) => void;
   advancedSpectralSettings?: AdvancedSpectralSettings;
   onAdvancedSpectralSettingsRandomize?: (settings: Partial<AdvancedSpectralSettings>) => void;
-  unisonSettings?: OscUnisonSettings;
-  onUnisonSettingsRandomize?: (settings: OscUnisonSettings) => void;
   ringModSettings?: RingModSettings;
   onRingModSettingsRandomize?: (settings: RingModSettings) => void;
   multibandCompSettings?: MultibandCompSettings;
@@ -249,8 +245,6 @@ export function RandomizeControls({
   onPhaseSettingsRandomize,
   advancedSpectralSettings,
   onAdvancedSpectralSettingsRandomize,
-  unisonSettings,
-  onUnisonSettingsRandomize,
   ringModSettings,
   onRingModSettingsRandomize,
   multibandCompSettings,
@@ -604,11 +598,6 @@ export function RandomizeControls({
     // Randomize advanced spectral settings
     if (onAdvancedSpectralSettingsRandomize) {
       onAdvancedSpectralSettingsRandomize(randomizeAdvancedSpectralSettings(chaosAmount));
-    }
-    
-    // Randomize unison settings (one-shot safe: limit voices to 1-4 for CPU)
-    if (onUnisonSettingsRandomize) {
-      onUnisonSettingsRandomize(randomizeUnisonSettings());
     }
     
     // Randomize ring modulation (metallic/inharmonic textures)
@@ -1063,21 +1052,6 @@ export function RandomizeControls({
           inharmonicCut: Math.round(mutateValue(advancedSpectralSettings.harmonicResynth.inharmonicCut, -48, 0) * 2) / 2,
           harmonicDecay: mutateSpectralValue(advancedSpectralSettings.harmonicResynth.harmonicDecay, 0, 100),
         },
-      });
-    }
-    
-    // Mutate unison settings (subtle changes to voices/detune)
-    if (onUnisonSettingsRandomize && unisonSettings) {
-      const mutateUnison = (u: typeof unisonSettings.osc1) => ({
-        ...u,
-        detune: Math.round(mutateValue(u.detune, 0, 50)), // 0-50 cents for one-shot
-        spread: Math.round(mutateValue(u.spread, 0, 100)),
-        blend: Math.round(mutateValue(u.blend, 50, 100)),
-      });
-      onUnisonSettingsRandomize({
-        osc1: mutateUnison(unisonSettings.osc1),
-        osc2: mutateUnison(unisonSettings.osc2),
-        osc3: mutateUnison(unisonSettings.osc3),
       });
     }
     
