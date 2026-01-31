@@ -3629,9 +3629,17 @@ export default function Synthesizer() {
       }
       // Fade out the gain
       if (granularGainRef.current) {
-        const ctx = Tone.getContext().rawContext as AudioContext;
-        granularGainRef.current.gain.setValueAtTime(granularGainRef.current.gain.value, ctx.currentTime);
-        granularGainRef.current.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+        try {
+          const toneCtx = Tone.getContext();
+          const ctx = (toneCtx as any).rawContext || (toneCtx as any)._context || toneCtx;
+          if (ctx && ctx.currentTime !== undefined) {
+            granularGainRef.current.gain.setValueAtTime(granularGainRef.current.gain.value, ctx.currentTime);
+            granularGainRef.current.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.05);
+          }
+        } catch (e) {
+          // Fallback: just set gain to 0
+          granularGainRef.current.gain.value = 0;
+        }
       }
       isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
@@ -3643,7 +3651,41 @@ export default function Synthesizer() {
     
     try {
       await Tone.start();
-      const ctx = Tone.getContext().rawContext as AudioContext;
+      
+      // Get the native AudioContext from Tone.js
+      // Helper to check if object is a valid AudioContext by structural typing
+      const isAudioContext = (obj: any): obj is AudioContext => {
+        return obj && 
+               typeof obj.sampleRate === 'number' && 
+               typeof obj.createGain === 'function' &&
+               typeof obj.currentTime === 'number';
+      };
+      
+      const toneCtx = Tone.getContext();
+      let ctx: AudioContext | null = null;
+      
+      // Try rawContext first (Tone.js documented property)
+      if (isAudioContext((toneCtx as any).rawContext)) {
+        ctx = (toneCtx as any).rawContext;
+      }
+      // Fallback to _context (internal property)
+      else if (isAudioContext((toneCtx as any)._context)) {
+        ctx = (toneCtx as any)._context;
+      }
+      // Last resort: check if toneCtx itself is an AudioContext
+      else if (isAudioContext(toneCtx)) {
+        ctx = toneCtx as unknown as AudioContext;
+      }
+      
+      if (!ctx) {
+        console.error("Failed to get AudioContext from Tone.js - no valid context found");
+        return;
+      }
+      
+      // Ensure context is running
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
       
       // Initialize worklet if needed (lazy initialization)
       if (!granularWorkletRef.current) {
