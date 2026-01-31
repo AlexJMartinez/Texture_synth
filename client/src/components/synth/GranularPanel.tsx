@@ -509,438 +509,122 @@ export function GranularPanel({
         />
       }
     >
-      <div className="space-y-2">
-        {/* Mode Toggle */}
-        <div className="flex items-center gap-1">
-          <Select
-            value={settings.mode}
-            onValueChange={(v) => handleModeChange(v as GranularMode)}
-            disabled={!settings.enabled}
-          >
-            <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-granular-mode">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cinematic">Cinematic</SelectItem>
-              <SelectItem value="design">Design</SelectItem>
-            </SelectContent>
-          </Select>
-          <span className="text-[9px] text-muted-foreground">
-            {settings.mode === 'cinematic' ? '(guardrails)' : '(full range)'}
-          </span>
-        </div>
-        
-        {/* Sample Drop Zone + Waveform */}
-        <div
-          ref={dropZoneRef}
-          className={`relative border border-dashed rounded-lg overflow-hidden transition-all cursor-pointer ${
-            isDragging ? 'border-primary bg-primary/10 shadow-lg shadow-primary/20' : 'border-muted-foreground/30 hover:border-muted-foreground/50'
-          }`}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => fileInputRef.current?.click()}
-          data-testid="drop-zone-granular"
-          style={{ background: 'linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(15,15,15,1) 100%)' }}
-        >
-          {/* Bar-style waveform canvas (matches main terrain display) */}
-          <canvas
-            ref={waveformCanvasRef}
-            className="w-full h-16"
-            style={{ opacity: 1 }}
-          />
-          {/* Grain overlay canvas */}
-          <canvas
-            ref={grainOverlayRef}
-            className="absolute inset-0 w-full h-16 pointer-events-none"
-          />
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*"
-            className="hidden"
-            onChange={handleFileSelect}
-            data-testid="input-granular-file"
-          />
-        </div>
-        
-        {/* Sample info + buttons */}
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-5 text-[10px] flex-1"
-            onClick={onCapture}
-            disabled={!settings.enabled || isCapturing}
-            data-testid="button-granular-capture"
-          >
-            <Mic className="w-3 h-3 mr-1" />
-            {isCapturing ? 'Capturing...' : 'Capture'}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-5 px-1"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={!settings.enabled}
-            data-testid="button-granular-upload"
-          >
-            <Upload className="w-3 h-3" />
-          </Button>
-          {sampleBuffer && (
-            <>
-              <Button
-                size="sm"
-                variant={isPlaying ? "default" : "ghost"}
-                className={`h-5 px-1 ${isPlaying ? 'bg-primary/80' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePlayback?.();
-                }}
-                disabled={!settings.enabled}
-                data-testid="button-granular-play"
-              >
-                {isPlaying ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-5 px-1"
-                onClick={onClearSample}
-                disabled={!settings.enabled}
-                data-testid="button-granular-clear"
-              >
-                <Trash2 className="w-3 h-3" />
-              </Button>
-            </>
-          )}
-        </div>
-        
-        {sampleBuffer && (
-          <div className="text-[9px] text-muted-foreground truncate">
-            {sampleBuffer.name} ({sampleBuffer.duration.toFixed(2)}s) {isPlaying && '▶'}
-          </div>
-        )}
-        
-        {/* Timing + Density */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Timing</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.grainSizeMs}
-              min={ranges.grainSizeMs.min}
-              max={ranges.grainSizeMs.max}
-              step={1}
-              label="Size"
-              unit="ms"
-              onChange={(v) => update("grainSizeMs", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.grainSizeMs"
-            />
-            <Knob
-              value={settings.densityGps}
-              min={ranges.densityGps.min}
-              max={ranges.densityGps.max}
-              step={1}
-              label="Density"
-              unit="g/s"
-              onChange={(v) => update("densityGps", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.densityGps"
-            />
-            <Knob
-              value={settings.maxVoices}
-              min={ranges.maxVoices.min}
-              max={ranges.maxVoices.max}
-              step={1}
-              label="Voices"
-              unit=""
-              onChange={(v) => update("maxVoices", v)}
-              accentColor="accent"
-              size="xs"
-            />
-          </div>
-        </div>
-        
-        {/* Position / Scan */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Position</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.scanStart * 100}
-              min={0}
-              max={100}
-              step={1}
-              label="Start"
-              unit="%"
-              onChange={(v) => update("scanStart", v / 100)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.scanStart"
-            />
-            <Knob
-              value={settings.scanWidth * 100}
-              min={ranges.scanWidth.min * 100}
-              max={ranges.scanWidth.max * 100}
-              step={1}
-              label="Width"
-              unit="%"
-              onChange={(v) => update("scanWidth", v / 100)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.scanWidth"
-            />
-            <Knob
-              value={settings.scanRateHz}
-              min={ranges.scanRateHz.min}
-              max={ranges.scanRateHz.max}
-              step={0.1}
-              label="Rate"
-              unit="Hz"
-              onChange={(v) => update("scanRateHz", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.scanRateHz"
-            />
-            <Knob
-              value={settings.posJitterMs}
-              min={ranges.posJitterMs.min}
-              max={ranges.posJitterMs.max}
-              step={1}
-              label="Jitter"
-              unit="ms"
-              onChange={(v) => update("posJitterMs", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.posJitterMs"
-            />
-          </div>
-        </div>
-        
-        {/* Pitch */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Pitch</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.pitchST}
-              min={ranges.pitchST.min}
-              max={ranges.pitchST.max}
-              step={1}
-              label="Pitch"
-              unit="st"
-              onChange={(v) => update("pitchST", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.pitchST"
-            />
-            <Knob
-              value={settings.pitchRandST}
-              min={ranges.pitchRandST.min}
-              max={ranges.pitchRandST.max}
-              step={0.5}
-              label="Random"
-              unit="st"
-              onChange={(v) => update("pitchRandST", v)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.pitchRandST"
-            />
-          </div>
-        </div>
-        
-        {/* Window */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Window</div>
-          <div className="flex items-center gap-1 mb-1">
+      {/* Horizontal layout: waveform left, params right */}
+      <div className="flex flex-col md:flex-row gap-2">
+        {/* Left column: Waveform + controls */}
+        <div className="md:w-64 flex-shrink-0 space-y-1.5">
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-1">
             <Select
-              value={settings.windowType}
-              onValueChange={(v) => update("windowType", v as WindowType)}
+              value={settings.mode}
+              onValueChange={(v) => handleModeChange(v as GranularMode)}
               disabled={!settings.enabled}
             >
-              <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-granular-window">
+              <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-granular-mode">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hann">Hann</SelectItem>
-                <SelectItem value="gauss">Gauss</SelectItem>
-                <SelectItem value="blackman">Blackman</SelectItem>
-                {settings.mode === 'design' && (
-                  <SelectItem value="rect">Rect (glitch)</SelectItem>
-                )}
+                <SelectItem value="cinematic">Cinematic</SelectItem>
+                <SelectItem value="design">Design</SelectItem>
               </SelectContent>
             </Select>
+            <span className="text-[9px] text-muted-foreground">
+              {settings.mode === 'cinematic' ? '(guardrails)' : '(full range)'}
+            </span>
           </div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.windowSkew * 100}
-              min={-100}
-              max={100}
-              step={1}
-              label="Skew"
-              unit="%"
-              onChange={(v) => update("windowSkew", v / 100)}
-              accentColor="accent"
-              size="xs"
+          
+          {/* Sample Drop Zone + Waveform */}
+          <div
+            ref={dropZoneRef}
+            className={`relative border border-dashed rounded-lg overflow-hidden transition-all cursor-pointer ${
+              isDragging ? 'border-primary bg-primary/10 shadow-lg shadow-primary/20' : 'border-muted-foreground/30 hover:border-muted-foreground/50'
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => fileInputRef.current?.click()}
+            data-testid="drop-zone-granular"
+            style={{ background: 'linear-gradient(180deg, rgba(20,20,20,1) 0%, rgba(15,15,15,1) 100%)' }}
+          >
+            <canvas
+              ref={waveformCanvasRef}
+              className="w-full h-16"
+              style={{ opacity: 1 }}
             />
-            <Knob
-              value={settings.grainAmpRandDb}
-              min={0}
-              max={9}
-              step={0.5}
-              label="AmpVar"
-              unit="dB"
-              onChange={(v) => update("grainAmpRandDb", v)}
-              accentColor="accent"
-              size="xs"
+            <canvas
+              ref={grainOverlayRef}
+              className="absolute inset-0 w-full h-16 pointer-events-none"
             />
-          </div>
-        </div>
-        
-        {/* Stereo */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Stereo</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.panSpread * 100}
-              min={ranges.panSpread.min * 100}
-              max={ranges.panSpread.max * 100}
-              step={1}
-              label="Spread"
-              unit="%"
-              onChange={(v) => update("panSpread", v / 100)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.panSpread"
-            />
-            <Knob
-              value={settings.stereoLink * 100}
-              min={ranges.stereoLink.min * 100}
-              max={ranges.stereoLink.max * 100}
-              step={1}
-              label="Link"
-              unit="%"
-              onChange={(v) => update("stereoLink", v / 100)}
-              accentColor="accent"
-              size="xs"
-            />
-            <Knob
-              value={settings.widthMs}
-              min={ranges.widthMs.min}
-              max={ranges.widthMs.max}
-              step={0.5}
-              label="Width"
-              unit="ms"
-              onChange={(v) => update("widthMs", v)}
-              accentColor="accent"
-              size="xs"
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              className="hidden"
+              onChange={handleFileSelect}
+              data-testid="input-granular-file"
             />
           </div>
-        </div>
-        
-        {/* Post Bus */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Post Bus</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.postHPHz}
-              min={ranges.postHPHz.min}
-              max={ranges.postHPHz.max}
-              step={10}
-              label="HP"
-              unit="Hz"
-              onChange={(v) => update("postHPHz", v)}
-              accentColor="accent"
-              size="xs"
-              logarithmic
-              modulationPath="granular.postHPHz"
-            />
-            <Knob
-              value={settings.postLPHz}
-              min={ranges.postLPHz.min}
-              max={ranges.postLPHz.max}
-              step={100}
-              label="LP"
-              unit="Hz"
-              onChange={(v) => update("postLPHz", v)}
-              accentColor="accent"
-              size="xs"
-              logarithmic
-              modulationPath="granular.postLPHz"
-            />
-            <Knob
-              value={settings.satDrive * 100}
-              min={ranges.satDrive.min * 100}
-              max={ranges.satDrive.max * 100}
-              step={1}
-              label="Sat"
-              unit="%"
-              onChange={(v) => update("satDrive", v / 100)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.satDrive"
-            />
-            <Knob
-              value={settings.wetMix * 100}
-              min={ranges.wetMix.min * 100}
-              max={ranges.wetMix.max * 100}
-              step={1}
-              label="Mix"
-              unit="%"
-              onChange={(v) => update("wetMix", v / 100)}
-              accentColor="accent"
-              size="xs"
-              modulationPath="granular.wetMix"
-            />
-          </div>
-        </div>
-        
-        {/* Envelope */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
-          <div className="text-[9px] text-muted-foreground mb-1">Envelope (AHD)</div>
-          <div className="flex justify-center gap-1">
-            <Knob
-              value={settings.envAttack}
-              min={0}
-              max={500}
-              step={1}
-              label="A"
-              unit="ms"
-              onChange={(v) => update("envAttack", v)}
-              accentColor="accent"
-              size="xs"
-              logarithmic
-            />
-            <Knob
-              value={settings.envHold}
-              min={0}
-              max={500}
-              step={1}
-              label="H"
-              unit="ms"
-              onChange={(v) => update("envHold", v)}
-              accentColor="accent"
-              size="xs"
-            />
-            <Knob
-              value={settings.envDecay}
-              min={10}
-              max={2000}
-              step={10}
-              label="D"
-              unit="ms"
-              onChange={(v) => update("envDecay", v)}
-              accentColor="accent"
-              size="xs"
-              logarithmic
-            />
-          </div>
-        </div>
-        
-        {/* Seed (for determinism) */}
-        <div className="border-t border-muted-foreground/20 pt-1.5">
+          
+          {/* Sample info + buttons */}
           <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-5 text-[10px] flex-1"
+              onClick={onCapture}
+              disabled={!settings.enabled || isCapturing}
+              data-testid="button-granular-capture"
+            >
+              <Mic className="w-3 h-3 mr-1" />
+              {isCapturing ? 'Capturing...' : 'Capture'}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-5 px-1"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!settings.enabled}
+              data-testid="button-granular-upload"
+            >
+              <Upload className="w-3 h-3" />
+            </Button>
+            {sampleBuffer && (
+              <>
+                <Button
+                  size="sm"
+                  variant={isPlaying ? "default" : "ghost"}
+                  className={`h-5 px-1 ${isPlaying ? 'bg-primary/80' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePlayback?.();
+                  }}
+                  disabled={!settings.enabled}
+                  data-testid="button-granular-play"
+                >
+                  {isPlaying ? <Square className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-5 px-1"
+                  onClick={onClearSample}
+                  disabled={!settings.enabled}
+                  data-testid="button-granular-clear"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </>
+            )}
+          </div>
+          
+          {sampleBuffer && (
+            <div className="text-[9px] text-muted-foreground truncate">
+              {sampleBuffer.name} ({sampleBuffer.duration.toFixed(2)}s) {isPlaying && '▶'}
+            </div>
+          )}
+          
+          {/* Seed */}
+          <div className="flex items-center gap-1 pt-1 border-t border-muted-foreground/20">
             <span className="text-[9px] text-muted-foreground">Seed:</span>
             <input
               type="number"
@@ -960,6 +644,323 @@ export function GranularPanel({
             >
               New
             </Button>
+          </div>
+        </div>
+        
+        {/* Right: Parameter groups in horizontal flow */}
+        <div className="flex-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+          {/* Timing */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Timing</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.grainSizeMs}
+                min={ranges.grainSizeMs.min}
+                max={ranges.grainSizeMs.max}
+                step={1}
+                label="Size"
+                unit="ms"
+                onChange={(v) => update("grainSizeMs", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.grainSizeMs"
+              />
+              <Knob
+                value={settings.densityGps}
+                min={ranges.densityGps.min}
+                max={ranges.densityGps.max}
+                step={1}
+                label="Density"
+                unit="g/s"
+                onChange={(v) => update("densityGps", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.densityGps"
+              />
+              <Knob
+                value={settings.maxVoices}
+                min={ranges.maxVoices.min}
+                max={ranges.maxVoices.max}
+                step={1}
+                label="Voices"
+                unit=""
+                onChange={(v) => update("maxVoices", v)}
+                accentColor="accent"
+                size="xs"
+              />
+            </div>
+          </div>
+          
+          {/* Position */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Position</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.scanStart * 100}
+                min={0}
+                max={100}
+                step={1}
+                label="Start"
+                unit="%"
+                onChange={(v) => update("scanStart", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.scanStart"
+              />
+              <Knob
+                value={settings.scanWidth * 100}
+                min={ranges.scanWidth.min * 100}
+                max={ranges.scanWidth.max * 100}
+                step={1}
+                label="Width"
+                unit="%"
+                onChange={(v) => update("scanWidth", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.scanWidth"
+              />
+              <Knob
+                value={settings.scanRateHz}
+                min={ranges.scanRateHz.min}
+                max={ranges.scanRateHz.max}
+                step={0.1}
+                label="Rate"
+                unit="Hz"
+                onChange={(v) => update("scanRateHz", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.scanRateHz"
+              />
+              <Knob
+                value={settings.posJitterMs}
+                min={ranges.posJitterMs.min}
+                max={ranges.posJitterMs.max}
+                step={1}
+                label="Jitter"
+                unit="ms"
+                onChange={(v) => update("posJitterMs", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.posJitterMs"
+              />
+            </div>
+          </div>
+          
+          {/* Pitch */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Pitch</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.pitchST}
+                min={ranges.pitchST.min}
+                max={ranges.pitchST.max}
+                step={1}
+                label="Pitch"
+                unit="st"
+                onChange={(v) => update("pitchST", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.pitchST"
+              />
+              <Knob
+                value={settings.pitchRandST}
+                min={ranges.pitchRandST.min}
+                max={ranges.pitchRandST.max}
+                step={0.5}
+                label="Random"
+                unit="st"
+                onChange={(v) => update("pitchRandST", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.pitchRandST"
+              />
+            </div>
+          </div>
+          
+          {/* Window */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Window</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Select
+                value={settings.windowType}
+                onValueChange={(v) => update("windowType", v as WindowType)}
+                disabled={!settings.enabled}
+              >
+                <SelectTrigger className="h-5 text-[10px] w-full" data-testid="select-granular-window">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hann">Hann</SelectItem>
+                  <SelectItem value="gauss">Gauss</SelectItem>
+                  <SelectItem value="blackman">Blackman</SelectItem>
+                  {settings.mode === 'design' && (
+                    <SelectItem value="rect">Rect</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+              <Knob
+                value={settings.windowSkew * 100}
+                min={-100}
+                max={100}
+                step={1}
+                label="Skew"
+                unit="%"
+                onChange={(v) => update("windowSkew", v / 100)}
+                accentColor="accent"
+                size="xs"
+              />
+              <Knob
+                value={settings.grainAmpRandDb}
+                min={0}
+                max={9}
+                step={0.5}
+                label="AmpVar"
+                unit="dB"
+                onChange={(v) => update("grainAmpRandDb", v)}
+                accentColor="accent"
+                size="xs"
+              />
+            </div>
+          </div>
+          
+          {/* Stereo */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Stereo</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.panSpread * 100}
+                min={ranges.panSpread.min * 100}
+                max={ranges.panSpread.max * 100}
+                step={1}
+                label="Spread"
+                unit="%"
+                onChange={(v) => update("panSpread", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.panSpread"
+              />
+              <Knob
+                value={settings.stereoLink * 100}
+                min={ranges.stereoLink.min * 100}
+                max={ranges.stereoLink.max * 100}
+                step={1}
+                label="Link"
+                unit="%"
+                onChange={(v) => update("stereoLink", v / 100)}
+                accentColor="accent"
+                size="xs"
+              />
+              <Knob
+                value={settings.widthMs}
+                min={ranges.widthMs.min}
+                max={ranges.widthMs.max}
+                step={0.5}
+                label="Width"
+                unit="ms"
+                onChange={(v) => update("widthMs", v)}
+                accentColor="accent"
+                size="xs"
+              />
+            </div>
+          </div>
+          
+          {/* Post Bus */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Post Bus</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.postHPHz}
+                min={ranges.postHPHz.min}
+                max={ranges.postHPHz.max}
+                step={10}
+                label="HP"
+                unit="Hz"
+                onChange={(v) => update("postHPHz", v)}
+                accentColor="accent"
+                size="xs"
+                logarithmic
+                modulationPath="granular.postHPHz"
+              />
+              <Knob
+                value={settings.postLPHz}
+                min={ranges.postLPHz.min}
+                max={ranges.postLPHz.max}
+                step={100}
+                label="LP"
+                unit="Hz"
+                onChange={(v) => update("postLPHz", v)}
+                accentColor="accent"
+                size="xs"
+                logarithmic
+                modulationPath="granular.postLPHz"
+              />
+              <Knob
+                value={settings.satDrive * 100}
+                min={ranges.satDrive.min * 100}
+                max={ranges.satDrive.max * 100}
+                step={1}
+                label="Sat"
+                unit="%"
+                onChange={(v) => update("satDrive", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.satDrive"
+              />
+              <Knob
+                value={settings.wetMix * 100}
+                min={ranges.wetMix.min * 100}
+                max={ranges.wetMix.max * 100}
+                step={1}
+                label="Mix"
+                unit="%"
+                onChange={(v) => update("wetMix", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.wetMix"
+              />
+            </div>
+          </div>
+          
+          {/* Envelope */}
+          <div className="border border-muted-foreground/20 rounded p-1.5">
+            <div className="text-[9px] text-muted-foreground mb-1 text-center">Envelope</div>
+            <div className="flex flex-col items-center gap-0.5">
+              <Knob
+                value={settings.envAttack}
+                min={0}
+                max={500}
+                step={1}
+                label="A"
+                unit="ms"
+                onChange={(v) => update("envAttack", v)}
+                accentColor="accent"
+                size="xs"
+                logarithmic
+              />
+              <Knob
+                value={settings.envHold}
+                min={0}
+                max={500}
+                step={1}
+                label="H"
+                unit="ms"
+                onChange={(v) => update("envHold", v)}
+                accentColor="accent"
+                size="xs"
+              />
+              <Knob
+                value={settings.envDecay}
+                min={10}
+                max={2000}
+                step={10}
+                label="D"
+                unit="ms"
+                onChange={(v) => update("envDecay", v)}
+                accentColor="accent"
+                size="xs"
+                logarithmic
+              />
+            </div>
           </div>
         </div>
       </div>

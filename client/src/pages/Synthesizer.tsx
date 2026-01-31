@@ -4393,20 +4393,22 @@ export default function Synthesizer() {
                   saveSampleLayerSettings(settings);
                 }}
               />
-              <GranularPanel
-                settings={granularSettings}
-                onChange={(settings) => {
-                  setGranularSettings(settings);
-                  saveGranularSettings(settings);
-                }}
-                sampleBuffer={granularBuffer}
-                onSampleLoad={setGranularBuffer}
-                onCapture={handleGranularCapture}
-                onClearSample={() => setGranularBuffer(null)}
-                isCapturing={isCapturingGranular}
-                isPlaying={isGranularPlaying}
-                onTogglePlayback={toggleGranularPlayback}
-              />
+              <div className="md:col-span-2">
+                <GranularPanel
+                  settings={granularSettings}
+                  onChange={(settings) => {
+                    setGranularSettings(settings);
+                    saveGranularSettings(settings);
+                  }}
+                  sampleBuffer={granularBuffer}
+                  onSampleLoad={setGranularBuffer}
+                  onCapture={handleGranularCapture}
+                  onClearSample={() => setGranularBuffer(null)}
+                  isCapturing={isCapturingGranular}
+                  isPlaying={isGranularPlaying}
+                  onTogglePlayback={toggleGranularPlayback}
+                />
+              </div>
               <div className="md:col-span-2">
                 <SynthEngineSelector
                   modal={params.modal}
