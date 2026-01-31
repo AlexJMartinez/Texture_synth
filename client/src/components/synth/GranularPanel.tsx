@@ -836,6 +836,7 @@ export function GranularPanel({
                 onChange={(v) => update("windowSkew", v / 100)}
                 accentColor="accent"
                 size="xs"
+                modulationPath="granular.windowSkew"
               />
               <Knob
                 value={settings.grainAmpRandDb}
@@ -847,6 +848,7 @@ export function GranularPanel({
                 onChange={(v) => update("grainAmpRandDb", v)}
                 accentColor="accent"
                 size="xs"
+                modulationPath="granular.grainAmpRandDb"
               />
             </div>
           </div>
@@ -877,6 +879,7 @@ export function GranularPanel({
                 onChange={(v) => update("stereoLink", v / 100)}
                 accentColor="accent"
                 size="xs"
+                modulationPath="granular.stereoLink"
               />
               <Knob
                 value={settings.widthMs}
@@ -888,6 +891,7 @@ export function GranularPanel({
                 onChange={(v) => update("widthMs", v)}
                 accentColor="accent"
                 size="xs"
+                modulationPath="granular.widthMs"
               />
             </div>
           </div>
@@ -964,6 +968,7 @@ export function GranularPanel({
                 accentColor="accent"
                 size="xs"
                 logarithmic
+                modulationPath="granular.envAttack"
               />
               <Knob
                 value={settings.envHold}
@@ -975,6 +980,7 @@ export function GranularPanel({
                 onChange={(v) => update("envHold", v)}
                 accentColor="accent"
                 size="xs"
+                modulationPath="granular.envHold"
               />
               <Knob
                 value={settings.envDecay}
@@ -987,6 +993,7 @@ export function GranularPanel({
                 accentColor="accent"
                 size="xs"
                 logarithmic
+                modulationPath="granular.envDecay"
               />
               {/* Advanced toggles - only in design mode */}
               {settings.mode === 'design' && (

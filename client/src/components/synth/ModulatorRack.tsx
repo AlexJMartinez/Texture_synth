@@ -187,6 +187,30 @@ const MODULATION_TARGETS: ModulationTarget[] = [
   { path: "waveshaper.multiband.lowDrive", label: "WS Lo Drive", category: "Shaping" },
   { path: "waveshaper.multiband.midDrive", label: "WS Mid Drive", category: "Shaping" },
   { path: "waveshaper.multiband.highDrive", label: "WS Hi Drive", category: "Shaping" },
+  
+  // Granular Synthesis
+  { path: "granular.grainSizeMs", label: "Grain Size", category: "Granular" },
+  { path: "granular.densityGps", label: "Grain Density", category: "Granular" },
+  { path: "granular.scanStart", label: "Scan Start", category: "Granular" },
+  { path: "granular.scanWidth", label: "Scan Width", category: "Granular" },
+  { path: "granular.scanRateHz", label: "Scan Rate", category: "Granular" },
+  { path: "granular.posJitterMs", label: "Pos Jitter", category: "Granular" },
+  { path: "granular.timingJitterMs", label: "Time Jitter", category: "Granular" },
+  { path: "granular.pitchST", label: "Grain Pitch", category: "Granular" },
+  { path: "granular.pitchRandST", label: "Pitch Random", category: "Granular" },
+  { path: "granular.windowSkew", label: "Window Skew", category: "Granular" },
+  { path: "granular.grainAmpRandDb", label: "Amp Variance", category: "Granular" },
+  { path: "granular.reverseProb", label: "Reverse Prob", category: "Granular" },
+  { path: "granular.panSpread", label: "Pan Spread", category: "Granular" },
+  { path: "granular.stereoLink", label: "Stereo Link", category: "Granular" },
+  { path: "granular.widthMs", label: "Stereo Width", category: "Granular" },
+  { path: "granular.postHPHz", label: "Post HP", category: "Granular" },
+  { path: "granular.postLPHz", label: "Post LP", category: "Granular" },
+  { path: "granular.satDrive", label: "Grain Saturation", category: "Granular" },
+  { path: "granular.wetMix", label: "Granular Mix", category: "Granular" },
+  { path: "granular.envAttack", label: "Grain Env Atk", category: "Granular" },
+  { path: "granular.envHold", label: "Grain Env Hold", category: "Granular" },
+  { path: "granular.envDecay", label: "Grain Env Dec", category: "Granular" },
 ];
 
 function generateId(): string {

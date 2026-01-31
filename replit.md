@@ -24,7 +24,7 @@ Key architectural decisions include:
 - **3-Envelope System**: Dedicated AHD envelopes for filter cutoff, pitch, and amplitude, with extended ranges for precise control. Pitch envelope uses semitone-based modulation.
 - **Advanced Filters**: Nine filter types with enhancements like Filter Drive/Saturation, Dual Filter Mode (series/parallel), Formant Filter, Filter FM, Keytracking, and Self-Oscillation.
 - **Effects Chain**: Integrated Distortion, Bitcrusher, Delay (with beat-sync), Convolution Reverb (with custom IR loading and advanced processing), Algorithmic Reverb (with type-specific early reflections, pre-delay, damping, diffusion, modulation), and Chorus.
-- **Modulation System**: A Phaseplant-style modulator rack offering LFO, ADSR Envelope, Random/S&H, and Macro controls. Features flexible routing to 75+ parameters with visual feedback.
+- **Modulation System**: A Phaseplant-style modulator rack offering LFO, ADSR Envelope, Random/S&H, and Macro controls. Features flexible routing to 95+ parameters including all granular synthesis controls, with visual feedback.
 - **Waveshaper**: A Dent-style waveshaper with 7 curve types and 4x oversampling. Enhanced with Asymmetric Shaping, Multi-Band Waveshaping, Dynamic Shaping, Chebyshev Polynomials, Foldback Iterations, and a Custom Curve Editor.
 - **Spectral Bin Scrambler**: An FFT-based frequency manipulation tool with scramble amount, bin shift, freeze mode, spectral gating, stretch/squeeze, and bin density control. Includes audibility safeguards.
 - **Multi-Stage Saturation Chain**: Three-stage saturation (Tape, Tube, Transistor).
