@@ -1,10 +1,12 @@
 // Granular Synthesis Engine Settings
 // Two modes: Cinematic (guardrails) and Design (full range)
+// Parameter ranges aligned with industry standards: PhasePlant, Quanta
 
 export type GranularMode = 'cinematic' | 'design';
-export type WindowType = 'hann' | 'gauss' | 'blackman' | 'rect';
+export type WindowType = 'hann' | 'gauss' | 'blackman' | 'rect' | 'tukey' | 'trapezoid';
 export type PitchMode = 'semitones' | 'cents' | 'ratio';
 export type OverlapPolicy = 'auto' | 'manual';
+export type SpawnMode = 'rate' | 'sync' | 'density';
 
 // Sample buffer state
 export interface GranularSampleBuffer {
@@ -15,49 +17,58 @@ export interface GranularSampleBuffer {
   channels: 1 | 2;
 }
 
-// Core granular settings
+// Core granular settings - extended to match PhasePlant/Quanta
 export interface GranularSettings {
   enabled: boolean;
   mode: GranularMode;
   
-  // Timing + density
-  grainSizeMs: number;           // 1-80ms (cinematic: 6-45ms)
-  densityGps: number;            // Grains per second: 10-400 (cinematic: 30-120)
-  maxVoices: number;             // Hard cap: 8-64
+  // Timing + density (Quanta: grain size 1-1000ms, up to 100 grains)
+  grainSizeMs: number;           // 1-500ms (cinematic: 6-60ms)
+  densityGps: number;            // Grains per second: 1-500 (cinematic: 20-150)
+  maxVoices: number;             // Hard cap: 8-128
   overlapPolicy: OverlapPolicy;  // auto ties density↔size
+  spawnMode: SpawnMode;          // PhasePlant: rate/sync/density modes
   
   // Position / scan
   scanStart: number;             // 0-1 normalized buffer position
   scanWidth: number;             // 0-1 how much of sample to roam
-  scanRateHz: number;            // 0-20 (0 = static)
-  posJitterMs: number;           // 0-80ms per-grain position jitter
+  scanRateHz: number;            // 0-30 (0 = static/freeze)
+  posJitterMs: number;           // 0-200ms per-grain position jitter (spray)
+  timingJitterMs: number;        // 0-100ms spawn timing randomization
   
-  // Pitch / rate
+  // Pitch / rate (PhasePlant: full pitch control)
   pitchMode: PitchMode;
-  pitchST: number;               // -36 to +36 semitones
-  pitchRandST: number;           // 0-24 per-grain pitch randomization
+  pitchST: number;               // -48 to +48 semitones
+  pitchRandST: number;           // 0-36 per-grain pitch randomization
   quantizeST: 'off' | '1' | '12' | 'scale';
   
-  // Window / shape
+  // Window / shape (Quanta: 10 envelope shapes)
   windowType: WindowType;
   windowSkew: number;            // -1 to +1 (shifts energy front/back)
-  grainAmpRandDb: number;        // 0-9 dB per-grain amplitude variance
+  grainAmpRandDb: number;        // 0-12 dB per-grain amplitude variance
+  
+  // Direction / playback (PhasePlant: reverse probability)
+  reverseProb: number;           // 0-1 probability grain plays backwards
   
   // Stereo / spread
   panSpread: number;             // 0-1 (cinematic: 0.1-0.5)
   stereoLink: number;            // 0-1 (1 = L/R correlated)
-  widthMs: number;               // 0-20ms Haas widening
+  widthMs: number;               // 0-30ms Haas widening
   
   // Post bus (anti-mud)
-  postHPHz: number;              // 100-2000 Hz
-  postLPHz: number;              // 4000-16000 Hz
-  satDrive: number;              // 0-0.6
+  postHPHz: number;              // 20-2000 Hz
+  postLPHz: number;              // 2000-20000 Hz
+  satDrive: number;              // 0-1
   wetMix: number;                // 0-1 blend with dry sample
   
   // Granular layer envelope (AHD)
-  envAttack: number;             // 0-500ms
-  envHold: number;               // 0-500ms
-  envDecay: number;              // 10-2000ms
+  envAttack: number;             // 0-1000ms
+  envHold: number;               // 0-1000ms
+  envDecay: number;              // 10-5000ms
+  
+  // Advanced features (PhasePlant)
+  phaseAlign: boolean;           // Nudge grain start to be in-phase with fundamental
+  warmStart: boolean;            // Grains already running when note strikes
   
   // RNG seed for determinism
   seed: number;
@@ -70,13 +81,15 @@ export const CINEMATIC_DEFAULTS: GranularSettings = {
   
   grainSizeMs: 25,
   densityGps: 60,
-  maxVoices: 24,
+  maxVoices: 32,
   overlapPolicy: 'auto',
+  spawnMode: 'density',
   
   scanStart: 0,
   scanWidth: 0.15,
   scanRateHz: 0.5,
   posJitterMs: 8,
+  timingJitterMs: 0,
   
   pitchMode: 'semitones',
   pitchST: 0,
@@ -86,6 +99,8 @@ export const CINEMATIC_DEFAULTS: GranularSettings = {
   windowType: 'hann',
   windowSkew: 0,
   grainAmpRandDb: 2,
+  
+  reverseProb: 0,
   
   panSpread: 0.3,
   stereoLink: 0.85,
@@ -100,6 +115,9 @@ export const CINEMATIC_DEFAULTS: GranularSettings = {
   envHold: 10,
   envDecay: 300,
   
+  phaseAlign: false,
+  warmStart: false,
+  
   seed: 12345,
 };
 
@@ -110,13 +128,15 @@ export const DESIGN_DEFAULTS: GranularSettings = {
   
   grainSizeMs: 15,
   densityGps: 80,
-  maxVoices: 48,
+  maxVoices: 64,
   overlapPolicy: 'manual',
+  spawnMode: 'density',
   
   scanStart: 0,
   scanWidth: 0.5,
   scanRateHz: 2,
   posJitterMs: 20,
+  timingJitterMs: 5,
   
   pitchMode: 'semitones',
   pitchST: 0,
@@ -126,6 +146,8 @@ export const DESIGN_DEFAULTS: GranularSettings = {
   windowType: 'hann',
   windowSkew: 0,
   grainAmpRandDb: 4,
+  
+  reverseProb: 0,
   
   panSpread: 0.6,
   stereoLink: 0.5,
@@ -140,44 +162,60 @@ export const DESIGN_DEFAULTS: GranularSettings = {
   envHold: 5,
   envDecay: 200,
   
+  phaseAlign: false,
+  warmStart: false,
+  
   seed: 12345,
 };
 
-// Parameter ranges for each mode
+// Parameter ranges for each mode (extended to match PhasePlant/Quanta standards)
 export const CINEMATIC_RANGES = {
-  grainSizeMs: { min: 6, max: 45 },
-  densityGps: { min: 30, max: 120 },
-  maxVoices: { min: 8, max: 32 },
-  scanWidth: { min: 0.02, max: 0.25 },
-  scanRateHz: { min: 0, max: 2 },
-  posJitterMs: { min: 0, max: 15 },
-  pitchST: { min: -12, max: 12 },
-  pitchRandST: { min: 0, max: 7 },
+  grainSizeMs: { min: 6, max: 60 },
+  densityGps: { min: 20, max: 150 },
+  maxVoices: { min: 8, max: 48 },
+  scanWidth: { min: 0.02, max: 0.35 },
+  scanRateHz: { min: 0, max: 5 },
+  posJitterMs: { min: 0, max: 30 },
+  timingJitterMs: { min: 0, max: 20 },
+  pitchST: { min: -24, max: 24 },
+  pitchRandST: { min: 0, max: 12 },
+  reverseProb: { min: 0, max: 0.3 },
   panSpread: { min: 0.1, max: 0.5 },
-  stereoLink: { min: 0.7, max: 1.0 },
-  widthMs: { min: 0, max: 8 },
-  postHPHz: { min: 500, max: 1200 },
-  postLPHz: { min: 8000, max: 14000 },
-  satDrive: { min: 0, max: 0.2 },
-  wetMix: { min: 0.15, max: 0.6 },
+  stereoLink: { min: 0.6, max: 1.0 },
+  widthMs: { min: 0, max: 12 },
+  postHPHz: { min: 200, max: 1500 },
+  postLPHz: { min: 6000, max: 16000 },
+  satDrive: { min: 0, max: 0.3 },
+  wetMix: { min: 0.1, max: 0.7 },
+  grainAmpRandDb: { min: 0, max: 6 },
+  envAttack: { min: 0, max: 500 },
+  envHold: { min: 0, max: 500 },
+  envDecay: { min: 10, max: 2000 },
 };
 
+// Design mode: full range matching Quanta/PhasePlant industry standards
 export const DESIGN_RANGES = {
-  grainSizeMs: { min: 1, max: 80 },
-  densityGps: { min: 10, max: 400 },
-  maxVoices: { min: 8, max: 64 },
+  grainSizeMs: { min: 1, max: 500 },      // Quanta goes to 1000ms
+  densityGps: { min: 1, max: 500 },       // Extended for extreme textures
+  maxVoices: { min: 8, max: 128 },        // Quanta: 100 per voice
   scanWidth: { min: 0, max: 1 },
-  scanRateHz: { min: 0, max: 20 },
-  posJitterMs: { min: 0, max: 80 },
-  pitchST: { min: -36, max: 36 },
-  pitchRandST: { min: 0, max: 24 },
+  scanRateHz: { min: 0, max: 30 },        // Extended for fast scanning
+  posJitterMs: { min: 0, max: 200 },      // Full spray range
+  timingJitterMs: { min: 0, max: 100 },   // Spawn timing randomization
+  pitchST: { min: -48, max: 48 },         // 4 octaves each way
+  pitchRandST: { min: 0, max: 36 },       // Full pitch random range
+  reverseProb: { min: 0, max: 1 },        // Full reverse probability
   panSpread: { min: 0, max: 1 },
   stereoLink: { min: 0, max: 1 },
-  widthMs: { min: 0, max: 20 },
-  postHPHz: { min: 100, max: 2000 },
-  postLPHz: { min: 4000, max: 16000 },
-  satDrive: { min: 0, max: 0.6 },
+  widthMs: { min: 0, max: 30 },           // Extended Haas range
+  postHPHz: { min: 20, max: 2000 },       // Full sub to mid
+  postLPHz: { min: 2000, max: 20000 },    // Full high frequency
+  satDrive: { min: 0, max: 1 },           // Full saturation
   wetMix: { min: 0, max: 1 },
+  grainAmpRandDb: { min: 0, max: 12 },    // Extended amplitude variance
+  envAttack: { min: 0, max: 1000 },
+  envHold: { min: 0, max: 1000 },
+  envDecay: { min: 10, max: 5000 },
 };
 
 // Get ranges based on current mode
@@ -188,24 +226,31 @@ export function getRanges(mode: GranularMode) {
 // Clamp settings to mode-appropriate ranges
 export function clampToMode(settings: GranularSettings): GranularSettings {
   const ranges = getRanges(settings.mode);
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
   
   return {
     ...settings,
-    grainSizeMs: Math.max(ranges.grainSizeMs.min, Math.min(ranges.grainSizeMs.max, settings.grainSizeMs)),
-    densityGps: Math.max(ranges.densityGps.min, Math.min(ranges.densityGps.max, settings.densityGps)),
-    maxVoices: Math.max(ranges.maxVoices.min, Math.min(ranges.maxVoices.max, settings.maxVoices)),
-    scanWidth: Math.max(ranges.scanWidth.min, Math.min(ranges.scanWidth.max, settings.scanWidth)),
-    scanRateHz: Math.max(ranges.scanRateHz.min, Math.min(ranges.scanRateHz.max, settings.scanRateHz)),
-    posJitterMs: Math.max(ranges.posJitterMs.min, Math.min(ranges.posJitterMs.max, settings.posJitterMs)),
-    pitchST: Math.max(ranges.pitchST.min, Math.min(ranges.pitchST.max, settings.pitchST)),
-    pitchRandST: Math.max(ranges.pitchRandST.min, Math.min(ranges.pitchRandST.max, settings.pitchRandST)),
-    panSpread: Math.max(ranges.panSpread.min, Math.min(ranges.panSpread.max, settings.panSpread)),
-    stereoLink: Math.max(ranges.stereoLink.min, Math.min(ranges.stereoLink.max, settings.stereoLink)),
-    widthMs: Math.max(ranges.widthMs.min, Math.min(ranges.widthMs.max, settings.widthMs)),
-    postHPHz: Math.max(ranges.postHPHz.min, Math.min(ranges.postHPHz.max, settings.postHPHz)),
-    postLPHz: Math.max(ranges.postLPHz.min, Math.min(ranges.postLPHz.max, settings.postLPHz)),
-    satDrive: Math.max(ranges.satDrive.min, Math.min(ranges.satDrive.max, settings.satDrive)),
-    wetMix: Math.max(ranges.wetMix.min, Math.min(ranges.wetMix.max, settings.wetMix)),
+    grainSizeMs: clamp(settings.grainSizeMs, ranges.grainSizeMs.min, ranges.grainSizeMs.max),
+    densityGps: clamp(settings.densityGps, ranges.densityGps.min, ranges.densityGps.max),
+    maxVoices: clamp(settings.maxVoices, ranges.maxVoices.min, ranges.maxVoices.max),
+    scanWidth: clamp(settings.scanWidth, ranges.scanWidth.min, ranges.scanWidth.max),
+    scanRateHz: clamp(settings.scanRateHz, ranges.scanRateHz.min, ranges.scanRateHz.max),
+    posJitterMs: clamp(settings.posJitterMs, ranges.posJitterMs.min, ranges.posJitterMs.max),
+    timingJitterMs: clamp(settings.timingJitterMs ?? 0, ranges.timingJitterMs.min, ranges.timingJitterMs.max),
+    pitchST: clamp(settings.pitchST, ranges.pitchST.min, ranges.pitchST.max),
+    pitchRandST: clamp(settings.pitchRandST, ranges.pitchRandST.min, ranges.pitchRandST.max),
+    reverseProb: clamp(settings.reverseProb ?? 0, ranges.reverseProb.min, ranges.reverseProb.max),
+    panSpread: clamp(settings.panSpread, ranges.panSpread.min, ranges.panSpread.max),
+    stereoLink: clamp(settings.stereoLink, ranges.stereoLink.min, ranges.stereoLink.max),
+    widthMs: clamp(settings.widthMs, ranges.widthMs.min, ranges.widthMs.max),
+    postHPHz: clamp(settings.postHPHz, ranges.postHPHz.min, ranges.postHPHz.max),
+    postLPHz: clamp(settings.postLPHz, ranges.postLPHz.min, ranges.postLPHz.max),
+    satDrive: clamp(settings.satDrive, ranges.satDrive.min, ranges.satDrive.max),
+    wetMix: clamp(settings.wetMix, ranges.wetMix.min, ranges.wetMix.max),
+    grainAmpRandDb: clamp(settings.grainAmpRandDb, ranges.grainAmpRandDb.min, ranges.grainAmpRandDb.max),
+    envAttack: clamp(settings.envAttack, ranges.envAttack.min, ranges.envAttack.max),
+    envHold: clamp(settings.envHold, ranges.envHold.min, ranges.envHold.max),
+    envDecay: clamp(settings.envDecay, ranges.envDecay.min, ranges.envDecay.max),
   };
 }
 

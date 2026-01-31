@@ -22,9 +22,12 @@ export type SchedulerParams = {
   posCenter01: number;    // 0..1 scan center (scanStart + scanWidth/2)
   posWidth01: number;     // 0..1 scan width
   posJitterMs: number;    // start position jitter in ms
+  timingJitterMs: number; // spawn timing jitter in ms
   pitchST: number;        // semitones
   pitchRandST: number;    // semitone random range
+  reverseProb: number;    // 0..1 probability of reverse playback
   panSpread: number;      // 0..1
+  ampRandDb: number;      // per-grain amplitude variance in dB
   level: number;          // overall level
   windowType: WindowType;
 };
@@ -53,9 +56,12 @@ export function granularSettingsToSchedulerParams(settings: GranularSettings): S
     posCenter01: settings.scanStart + settings.scanWidth / 2,
     posWidth01: settings.scanWidth,
     posJitterMs: settings.posJitterMs,
+    timingJitterMs: settings.timingJitterMs ?? 0,
     pitchST: settings.pitchST,
     pitchRandST: settings.pitchRandST,
+    reverseProb: settings.reverseProb ?? 0,
     panSpread: settings.panSpread,
+    ampRandDb: settings.grainAmpRandDb ?? 0,
     level: settings.wetMix, // Use wetMix as level
     windowType: settings.windowType,
   };
@@ -94,29 +100,23 @@ export class GrainScheduler {
     this.rng = mulberry32(seed);
 
     // Setup message handling for both node types
+    const handleMessage = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg?.type === "clock") {
+        this.workletNowSample = msg.nowSample | 0;
+      } else if (msg?.type === "bufferInfo") {
+        this.bufferLength = msg.length | 0;
+        if (this.onBufferInfo) {
+          this.onBufferInfo(this.bufferLength);
+        }
+      }
+    };
+
     if (this.isWorklet && (node as AudioWorkletNode).port) {
-      (node as AudioWorkletNode).port.onmessage = (e: MessageEvent) => {
-        const msg = e.data;
-        if (msg?.type === "clock") {
-          this.workletNowSample = msg.nowSample | 0;
-        } else if (msg?.type === "bufferInfo") {
-          this.bufferLength = msg.length | 0;
-          if (this.onBufferInfo) {
-            this.onBufferInfo(this.bufferLength);
-          }
-        }
-      };
-    } else if ((node as any).port?.onmessage !== undefined) {
+      (node as AudioWorkletNode).port.onmessage = handleMessage;
+    } else if ((node as any).port) {
       // ScriptProcessor fallback - set up message handler on simulated port
-      (node as any).port.onmessage = (e: MessageEvent) => {
-        const msg = e.data;
-        if (msg?.type === "bufferInfo") {
-          this.bufferLength = msg.length | 0;
-          if (this.onBufferInfo) {
-            this.onBufferInfo(this.bufferLength);
-          }
-        }
-      };
+      (node as any).port.onmessage = handleMessage;
     }
   }
 
@@ -158,7 +158,10 @@ export class GrainScheduler {
       const periodSamp = Math.max(1, Math.floor(this.sampleRate / Math.max(1e-3, params.density)));
 
       while (this.scheduledThroughSample < targetThrough) {
-        const startSample = this.scheduledThroughSample;
+        // Apply timing jitter to grain start
+        const timingJitSamp = Math.floor((params.timingJitterMs / 1000) * this.sampleRate);
+        const timingOffset = Math.floor((this.rng() * 2 - 1) * timingJitSamp);
+        const startSample = Math.max(0, this.scheduledThroughSample + timingOffset);
 
         // Grain size with jitter
         const baseDur = Math.max(8, Math.floor((params.grainSizeMs / 1000) * this.sampleRate));
@@ -176,15 +179,24 @@ export class GrainScheduler {
         const posOffset01 = posOffsetSamp / Math.max(1, this.bufferLength);
         pos01 = clamp(pos01 + posOffset01, 0, 1);
 
-        // Pitch / playback rate
+        // Pitch / playback rate with reverse probability
         const randST = (this.rng() * 2 - 1) * params.pitchRandST;
-        const rate = stToRate(params.pitchST + randST);
+        let rate = stToRate(params.pitchST + randST);
+        
+        // Apply reverse probability (negative rate = reverse playback)
+        if (params.reverseProb > 0 && this.rng() < params.reverseProb) {
+          rate = -rate;
+        }
+
+        // Amplitude variance in dB
+        const ampVarDb = (this.rng() * 2 - 1) * params.ampRandDb;
+        const ampMult = Math.pow(10, ampVarDb / 20);
 
         // Pan (equal-power panning)
         const pan = (this.rng() * 2 - 1) * clamp(params.panSpread, 0, 1);
         const theta = (pan * 0.5 + 0.5) * (Math.PI / 2);
-        const gL = Math.cos(theta) * params.level;
-        const gR = Math.sin(theta) * params.level;
+        const gL = Math.cos(theta) * params.level * ampMult;
+        const gR = Math.sin(theta) * params.level * ampMult;
 
         events.push({
           startSample,
@@ -691,12 +703,15 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
     
     nowSample += blockLen;
     
-    // Clock updates
+    // Clock updates - send back to scheduler like AudioWorklet does
     if (clockEnabled) {
       clockTimer += blockLen;
       if (clockTimer >= clockIntervalSamples) {
         clockTimer = 0;
-        // Post clock update (if handler exists)
+        // Post clock update to scheduler
+        if ((processor as any).port?.onmessage) {
+          (processor as any).port.onmessage({ data: { type: "clock", nowSample } } as MessageEvent);
+        }
       }
     }
   };
