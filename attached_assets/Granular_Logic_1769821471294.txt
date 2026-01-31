@@ -1,0 +1,479 @@
+Below is a sample-accurate grain scheduler + AudioWorklet granular processor pattern that’s proven in practice:
+	•	Main thread creates a schedule of grain events in absolute output samples and sends them slightly ahead (“lookahead”).
+	•	AudioWorkletProcessor maintains an absolute sample clock and starts grains exactly when event.startSample is reached.
+	•	Each render quantum (typically 128 samples), it:
+	•	activates new grains whose start time falls inside the block,
+	•	advances all active grains sample-by-sample,
+	•	reads from the sample buffer with interpolation,
+	•	applies a window and per-grain gain/pan,
+	•	sums to output.
+
+This gives you deterministic, click-free, sample-accurate grain spawning.
+
+⸻
+
+1) Message protocol
+
+You send to the worklet:
+	•	the sample buffer (Float32Array for each channel)
+	•	a batch of grain events with fields like:
+	•	startSample (absolute sample index in output timeline)
+	•	pos (0..1 normalized into sample buffer)
+	•	dur (samples)
+	•	rate (playback rate, pitch)
+	•	gain + pan or gainL/gainR
+
+⸻
+
+2) Main-thread scheduler (TypeScript)
+
+This version:
+	•	schedules grains in batches every ~20ms,
+	•	keeps a scheduleAheadSec window (e.g. 0.12s),
+	•	uses a seeded RNG so preview/export match,
+	•	computes absolute start sample using the worklet’s clock sync (simple version below).
+
+Note: sample-accurate scheduling needs the worklet to tell you its current absolute sample time. This pattern includes a lightweight clock message.
+
+granularScheduler.ts
+
+type GrainEvent = {
+  startSample: number; // absolute output sample index
+  pos01: number;       // 0..1 buffer position
+  durSamp: number;     // grain length in samples
+  rate: number;        // playback rate
+  gainL: number;
+  gainR: number;
+};
+
+type SchedulerParams = {
+  density: number;        // grains per second
+  grainSizeMs: number;    // average grain size
+  sizeJitter: number;     // 0..1 (fraction)
+  posCenter01: number;    // 0..1 scan center
+  posWidth01: number;     // 0..1 scan width
+  posJitterMs: number;    // start position jitter in ms (mapped to samples in buffer)
+  pitchST: number;        // semitones
+  pitchRandST: number;    // semitone random range
+  panSpread: number;      // 0..1
+  level: number;          // overall
+};
+
+function mulberry32(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+const stToRate = (st: number) => Math.pow(2, st / 12);
+
+export class GrainScheduler {
+  private node: AudioWorkletNode;
+  private sampleRate: number;
+  private seed: number;
+  private rng: () => number;
+
+  private scheduleIntervalMs = 20;
+  private scheduleAheadSec = 0.12;
+
+  private running = false;
+
+  // We keep a running target of what absolute output sample we’ve scheduled up to.
+  private scheduledThroughSample = 0;
+
+  // Worklet clock (absolute output sample index at "now")
+  private workletNowSample = 0;
+
+  // For buffer mapping (length in samples)
+  private bufferLength = 1;
+
+  constructor(node: AudioWorkletNode, sampleRate: number, seed: number) {
+    this.node = node;
+    this.sampleRate = sampleRate;
+    this.seed = seed;
+    this.rng = mulberry32(seed);
+
+    this.node.port.onmessage = (e) => {
+      const msg = e.data;
+      if (msg?.type === "clock") {
+        this.workletNowSample = msg.nowSample | 0;
+      } else if (msg?.type === "bufferInfo") {
+        this.bufferLength = msg.length | 0;
+      }
+    };
+  }
+
+  start(paramsProvider: () => SchedulerParams) {
+    if (this.running) return;
+    this.running = true;
+
+    // Ask worklet for frequent clock updates (optional but helpful)
+    this.node.port.postMessage({ type: "clockStart", intervalMs: 50 });
+
+    // Initialize scheduledThroughSample slightly ahead of now to prevent late scheduling
+    this.scheduledThroughSample = this.workletNowSample + Math.floor(0.02 * this.sampleRate);
+
+    const tick = () => {
+      if (!this.running) return;
+
+      const params = paramsProvider();
+
+      const now = this.workletNowSample;
+      const ahead = Math.floor(this.scheduleAheadSec * this.sampleRate);
+      const targetThrough = now + ahead;
+
+      const events: GrainEvent[] = [];
+      // Grain period (samples) based on density
+      const periodSamp = Math.max(1, Math.floor(this.sampleRate / Math.max(1e-3, params.density)));
+
+      while (this.scheduledThroughSample < targetThrough) {
+        const startSample = this.scheduledThroughSample;
+
+        // size
+        const baseDur = Math.max(8, Math.floor((params.grainSizeMs / 1000) * this.sampleRate));
+        const jitter = (this.rng() * 2 - 1) * params.sizeJitter; // -..+
+        const durSamp = Math.max(8, Math.floor(baseDur * (1 + jitter)));
+
+        // position (normalized)
+        // Cinematic: keep around posCenter with bounded width
+        const w = clamp(params.posWidth01, 0, 1);
+        let pos01 = params.posCenter01 + (this.rng() * 2 - 1) * (w * 0.5);
+        pos01 = clamp(pos01, 0, 1);
+
+        // convert pos jitter from ms to normalized offset in buffer
+        const posJitSamp = Math.floor((params.posJitterMs / 1000) * this.sampleRate);
+        const posOffsetSamp = Math.floor((this.rng() * 2 - 1) * posJitSamp);
+        const posOffset01 = posOffsetSamp / Math.max(1, this.bufferLength);
+        pos01 = clamp(pos01 + posOffset01, 0, 1);
+
+        // pitch / rate
+        const randST = (this.rng() * 2 - 1) * params.pitchRandST;
+        const rate = stToRate(params.pitchST + randST);
+
+        // pan (equal-power)
+        const pan = (this.rng() * 2 - 1) * clamp(params.panSpread, 0, 1);
+        const theta = (pan * 0.5 + 0.5) * (Math.PI / 2);
+        const gL = Math.cos(theta) * params.level;
+        const gR = Math.sin(theta) * params.level;
+
+        events.push({ startSample, pos01, durSamp, rate, gainL: gL, gainR: gR });
+
+        this.scheduledThroughSample += periodSamp;
+      }
+
+      if (events.length) {
+        this.node.port.postMessage({ type: "schedule", events });
+      }
+
+      setTimeout(tick, this.scheduleIntervalMs);
+    };
+
+    tick();
+  }
+
+  stop() {
+    this.running = false;
+    this.node.port.postMessage({ type: "clockStop" });
+  }
+
+  resetSeed(seed: number) {
+    this.seed = seed;
+    this.rng = mulberry32(seed);
+  }
+}
+
+
+Loading the sample buffer into the worklet
+
+
+async function sendSampleToWorklet(node: AudioWorkletNode, buffer: AudioBuffer) {
+  // Copy out channel data (transferable ArrayBuffers)
+  const chans: Float32Array[] = [];
+  for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+    // Copy so we can transfer safely
+    const data = buffer.getChannelData(ch);
+    const copy = new Float32Array(data.length);
+    copy.set(data);
+    chans.push(copy);
+  }
+
+  node.port.postMessage(
+    {
+      type: "setBuffer",
+      channels: chans.map(a => a.buffer),
+      length: buffer.length,
+      numChannels: buffer.numberOfChannels,
+      sampleRate: buffer.sampleRate
+    },
+    chans.map(a => a.buffer) // transfer
+  );
+}
+
+
+3) AudioWorkletProcessor (sample-accurate granular)
+
+Save as granular-processor.js and register it.
+
+granular-processor.js
+
+
+class GranularProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+
+    // Sample buffer storage
+    this.bufL = null;
+    this.bufR = null;
+    this.bufLen = 0;
+
+    // Absolute output sample clock
+    this.nowSample = 0;
+
+    // Scheduled events queue (kept sorted by startSample)
+    this.events = [];
+
+    // Active grain pool
+    this.maxGrains = (options?.processorOptions?.maxGrains) ?? 64;
+    this.grains = new Array(this.maxGrains);
+    for (let i = 0; i < this.maxGrains; i++) this.grains[i] = null;
+
+    // Clock reporting
+    this.clockTimer = 0;
+    this.clockIntervalSamples = Math.floor(0.05 * sampleRate); // 50ms default
+    this.clockEnabled = false;
+
+    this.port.onmessage = (e) => {
+      const msg = e.data;
+
+      if (msg?.type === "setBuffer") {
+        const { channels, length, numChannels } = msg;
+        this.bufLen = length | 0;
+
+        // channels are transferred ArrayBuffers
+        const ch0 = new Float32Array(channels[0]);
+        const ch1 = (numChannels > 1) ? new Float32Array(channels[1]) : null;
+
+        this.bufL = ch0;
+        this.bufR = ch1;
+        this.port.postMessage({ type: "bufferInfo", length: this.bufLen });
+      }
+
+      if (msg?.type === "schedule") {
+        // Append and keep sorted by startSample
+        const incoming = msg.events || [];
+        for (let i = 0; i < incoming.length; i++) {
+          this.events.push(incoming[i]);
+        }
+        this.events.sort((a, b) => a.startSample - b.startSample);
+      }
+
+      if (msg?.type === "clockStart") {
+        this.clockEnabled = true;
+        const ms = msg.intervalMs ?? 50;
+        this.clockIntervalSamples = Math.max(128, Math.floor((ms / 1000) * sampleRate));
+      }
+      if (msg?.type === "clockStop") {
+        this.clockEnabled = false;
+      }
+    };
+  }
+
+  // Hann window
+  windowHann(phase01) {
+    // phase01 in [0..1]
+    return 0.5 - 0.5 * Math.cos(2 * Math.PI * phase01);
+  }
+
+  // Linear interpolation
+  readInterp(buf, idxFloat) {
+    const len = this.bufLen;
+    // clamp to valid range (avoid reading past end)
+    const x = Math.max(0, Math.min(len - 2, idxFloat));
+    const i = x | 0;
+    const frac = x - i;
+    return buf[i] * (1 - frac) + buf[i + 1] * frac;
+  }
+
+  allocGrain(ev) {
+    // Find free slot
+    for (let i = 0; i < this.maxGrains; i++) {
+      if (this.grains[i] === null) {
+        const startPos = ev.pos01 * (this.bufLen - 1);
+        this.grains[i] = {
+          startSample: ev.startSample | 0,
+          dur: ev.durSamp | 0,
+          pos: startPos,
+          phase: 0,            // sample index within grain
+          rate: ev.rate,
+          gainL: ev.gainL,
+          gainR: ev.gainR
+        };
+        return;
+      }
+    }
+    // No free slot: drop grain (or implement “steal quietest”)
+  }
+
+  process(_inputs, outputs) {
+    const out = outputs[0];
+    const outL = out[0];
+    const outR = out[1] || out[0]; // if mono output, mirror
+
+    // If buffer not loaded, output silence but keep clock advancing
+    const hasBuffer = this.bufL && this.bufLen > 1;
+
+    const blockStart = this.nowSample;
+    const blockEnd = this.nowSample + outL.length; // exclusive
+
+    // Activate events that start within this block
+    while (this.events.length && this.events[0].startSample < blockEnd) {
+      const ev = this.events[0];
+      if (ev.startSample >= blockStart) {
+        this.allocGrain(ev);
+      }
+      this.events.shift();
+    }
+
+    // Clear output
+    for (let i = 0; i < outL.length; i++) {
+      outL[i] = 0;
+      if (outR !== outL) outR[i] = 0;
+    }
+
+    if (hasBuffer) {
+      // Render active grains sample-by-sample
+      for (let gi = 0; gi < this.maxGrains; gi++) {
+        const g = this.grains[gi];
+        if (!g) continue;
+
+        // Determine where this grain begins in this block
+        // If grain starts before blockStart (possible if we scheduled earlier), offset in samples:
+        let localStart = g.startSample - blockStart;
+        if (localStart < 0) localStart = 0;
+
+        for (let i = localStart; i < outL.length; i++) {
+          // Grain sample index within grain timeline
+          const k = g.phase;
+          if (k >= g.dur) break;
+
+          const phase01 = k / g.dur;
+          const w = this.windowHann(phase01);
+
+          const srcIdx = g.pos + (k * g.rate);
+          const sL = this.readInterp(this.bufL, srcIdx);
+          const sR = this.bufR ? this.readInterp(this.bufR, srcIdx) : sL;
+
+          outL[i] += sL * w * g.gainL;
+          if (outR !== outL) outR[i] += sR * w * g.gainR;
+
+          g.phase++;
+        }
+
+        // If finished, free slot
+        if (g.phase >= g.dur) this.grains[gi] = null;
+      }
+    }
+
+    // Clock reporting
+    this.nowSample += outL.length;
+
+    if (this.clockEnabled) {
+      this.clockTimer += outL.length;
+      if (this.clockTimer >= this.clockIntervalSamples) {
+        this.clockTimer = 0;
+        this.port.postMessage({ type: "clock", nowSample: this.nowSample });
+      }
+    }
+
+    return true;
+  }
+}
+
+registerProcessor("granular-processor", GranularProcessor);
+
+
+
+4) Hooking it up (main thread)
+
+
+
+// setupGranular.ts
+const ctx = new AudioContext();
+await ctx.audioWorklet.addModule("/granular-processor.js");
+
+const node = new AudioWorkletNode(ctx, "granular-processor", {
+  numberOfInputs: 0,
+  numberOfOutputs: 1,
+  outputChannelCount: [2],
+  processorOptions: { maxGrains: 64 }
+});
+
+node.connect(ctx.destination);
+
+// Load sample
+const res = await fetch("your-sample.wav");
+const arr = await res.arrayBuffer();
+const audioBuf = await ctx.decodeAudioData(arr);
+
+await sendSampleToWorklet(node, audioBuf);
+
+// Start scheduler
+const scheduler = new GrainScheduler(node, ctx.sampleRate, /*seed*/ 12345);
+
+scheduler.start(() => ({
+  density: 80,
+  grainSizeMs: 18,
+  sizeJitter: 0.25,
+  posCenter01: 0.35,
+  posWidth01: 0.15,
+  posJitterMs: 10,
+  pitchST: 0,
+  pitchRandST: 7,
+  panSpread: 0.6,
+  level: 0.25
+}));
+
+
+5) Notes that matter in real projects
+
+A) Preview/export parity
+
+If you want preview to match export perfectly:
+	•	run the same code in an OfflineAudioContext export path.
+	•	AudioWorklet in OfflineAudioContext is supported in modern Chromium-based browsers; Safari support can vary. If you need broad compatibility, keep a fallback offline renderer (non-worklet) for export.
+
+B) Sample rate differences
+
+If the sample buffer sample rate differs from AudioContext sample rate:
+	•	you can resample into the context rate when you load it (best),
+	•	or bake the difference into rate per grain.
+
+C) CPU safety
+	•	maxGrains is your primary CPU limiter.
+	•	density + grainSize should be constrained (especially in cinematic mode):
+	•	tiny grainSize + huge density = noise + CPU melt.
+
+D) Stereo handling
+
+Right now:
+	•	if the sample is mono, it duplicates to stereo
+	•	if stereo, reads both channels
+
+E) Better quality interpolation/window
+	•	Linear interpolation is fine to start.
+	•	Cubic interpolation and more window types are easy upgrades later.
+
+⸻
+
+6) The “scheduler correctness” gotcha (and the fix)
+
+The scheduler relies on the worklet’s nowSample. That’s why we send periodic clock messages.
+
+If you want tighter sync (less drift), you can:
+	•	ask for clock updates more frequently (e.g. 20ms),
+	•	or maintain a running estimate using audioContext.currentTime * sampleRate, then “nudge” toward worklet clock when you receive updates.
