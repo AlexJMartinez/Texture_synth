@@ -3639,10 +3639,25 @@ export default function Synthesizer() {
     const durationSec = durationMs / 1000;
     
     try {
-      // Render using full generateSound to include effects chain
+      // Create params with oscillators disabled for granular-only playback
+      const granularOnlyParams: SynthParameters = {
+        ...params,
+        oscillators: {
+          ...params.oscillators,
+          osc1: { ...params.oscillators.osc1, level: 0 },
+          osc2: { ...params.oscillators.osc2, level: 0 },
+          osc3: { ...params.oscillators.osc3, level: 0 },
+        },
+        clickLayer: { ...params.clickLayer, enabled: false },
+        subOsc: { ...params.subOsc, enabled: false },
+        modal: { ...params.modal, enabled: false },
+        additive: { ...params.additive, enabled: false },
+      };
+      
+      // Render using generateSound with oscillators disabled (granular only)
       const buffer = await Tone.Offline(async (offlineCtx) => {
         const rawCtx = offlineCtx.rawContext as OfflineAudioContext;
-        await generateSound(rawCtx, params, durationMs, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings, granularSettings, granularBuffer);
+        await generateSound(rawCtx, granularOnlyParams, durationMs, seed, undefined, oscEnvelopes, convolverSettings, reverbSettings, wavetableSettings, ringModSettings, parallelProcessingSettings, advancedFMSettings, granularSettings, granularBuffer);
       }, durationSec);
       
       // Check if we were stopped during render (use ref for accurate state)
