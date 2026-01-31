@@ -713,6 +713,14 @@ export default function Synthesizer() {
   
   // Granular effects chain nodes for real-time FX processing
   const granularEffectsChainRef = useRef<{
+    // Post-processing
+    postHP?: BiquadFilterNode;
+    postLP?: BiquadFilterNode;
+    saturation?: WaveShaperNode;
+    widthDelay?: DelayNode;
+    splitter?: ChannelSplitterNode;
+    merger?: ChannelMergerNode;
+    // FX
     delayNode?: DelayNode;
     delayFeedback?: GainNode;
     delayWet?: GainNode;
@@ -3639,6 +3647,7 @@ export default function Synthesizer() {
   // Build/rebuild effects chain for granular playback
   const buildGranularEffectsChain = useCallback((ctx: AudioContext, inputGain: GainNode) => {
     const effectsParams = params.effects;
+    const gs = granularSettings;
     const chain = granularEffectsChainRef.current;
     
     // Stop any existing chorus LFOs
@@ -3648,6 +3657,34 @@ export default function Synthesizer() {
     if (chain.chorusLfo2) {
       try { chain.chorusLfo2.stop(); } catch {}
     }
+    
+    // Disconnect and cleanup existing post-processing nodes
+    if (chain.postHP) {
+      try { chain.postHP.disconnect(); } catch {}
+    }
+    if (chain.postLP) {
+      try { chain.postLP.disconnect(); } catch {}
+    }
+    if (chain.saturation) {
+      try { chain.saturation.disconnect(); } catch {}
+    }
+    if (chain.widthDelay) {
+      try { chain.widthDelay.disconnect(); } catch {}
+    }
+    if (chain.splitter) {
+      try { chain.splitter.disconnect(); } catch {}
+    }
+    if (chain.merger) {
+      try { chain.merger.disconnect(); } catch {}
+    }
+    
+    // Clear old post-processing references
+    chain.postHP = undefined;
+    chain.postLP = undefined;
+    chain.saturation = undefined;
+    chain.widthDelay = undefined;
+    chain.splitter = undefined;
+    chain.merger = undefined;
     
     // Disconnect existing chain
     try { inputGain.disconnect(); } catch {}
@@ -3660,13 +3697,86 @@ export default function Synthesizer() {
     const outputGain = ctx.createGain();
     outputGain.gain.value = 1;
     
-    // Connect dry signal to mixer
+    // === GRANULAR POST-PROCESSING CHAIN ===
+    // inputGain -> HP filter -> LP filter -> saturation -> stereo widener -> dry/FX routing
+    
+    let lastNode: AudioNode = inputGain;
+    
+    // High-pass filter (anti-mud)
+    if (gs.postHPHz > 20) {
+      const hpFilter = ctx.createBiquadFilter();
+      hpFilter.type = 'highpass';
+      hpFilter.frequency.value = gs.postHPHz;
+      hpFilter.Q.value = 0.707; // Butterworth
+      lastNode.connect(hpFilter);
+      lastNode = hpFilter;
+      chain.postHP = hpFilter;
+    }
+    
+    // Low-pass filter
+    if (gs.postLPHz < 20000) {
+      const lpFilter = ctx.createBiquadFilter();
+      lpFilter.type = 'lowpass';
+      lpFilter.frequency.value = gs.postLPHz;
+      lpFilter.Q.value = 0.707;
+      lastNode.connect(lpFilter);
+      lastNode = lpFilter;
+      chain.postLP = lpFilter;
+    }
+    
+    // Saturation (using waveshaper)
+    if (gs.satDrive > 0) {
+      const waveshaper = ctx.createWaveShaper();
+      const drive = gs.satDrive;
+      // Soft saturation curve
+      const samples = 1024;
+      const curve = new Float32Array(samples);
+      for (let i = 0; i < samples; i++) {
+        const x = (i / (samples - 1)) * 2 - 1;
+        // Tanh-based soft saturation with drive control
+        const k = drive * 5 + 1;
+        curve[i] = Math.tanh(x * k) / Math.tanh(k);
+      }
+      waveshaper.curve = curve;
+      waveshaper.oversample = '2x';
+      lastNode.connect(waveshaper);
+      lastNode = waveshaper;
+      chain.saturation = waveshaper;
+    }
+    
+    // Stereo widening (Haas effect via delay on one channel)
+    // This requires a more complex routing using channel splitter/merger
+    // Note: Works with stereo sources; mono will use both channels as left
+    if (gs.widthMs > 0) {
+      // First upmix to stereo if needed by using a gain node
+      const upmixGain = ctx.createGain();
+      upmixGain.gain.value = 1;
+      lastNode.connect(upmixGain);
+      
+      const splitter = ctx.createChannelSplitter(2);
+      const merger = ctx.createChannelMerger(2);
+      const widthDelay = ctx.createDelay(0.03); // Max 30ms
+      widthDelay.delayTime.value = Math.min(gs.widthMs / 1000, 0.03);
+      
+      upmixGain.connect(splitter);
+      splitter.connect(merger, 0, 0); // Left direct
+      splitter.connect(widthDelay, 1); // Right delayed (or duplicated left for mono)
+      widthDelay.connect(merger, 0, 1);
+      
+      lastNode = merger;
+      chain.widthDelay = widthDelay;
+      chain.splitter = splitter;
+      chain.merger = merger;
+    }
+    
+    // === CONNECT TO DRY/FX ROUTING ===
+    // Connect post-processed signal to mixer
     const dryGain = ctx.createGain();
     dryGain.gain.value = 1;
-    inputGain.connect(dryGain);
+    lastNode.connect(dryGain);
     dryGain.connect(effectsMixer);
     
-    // Delay effect
+    // Delay effect (using post-processed signal)
     if (effectsParams.delayEnabled && effectsParams.delayMix > 0) {
       const delayNode = ctx.createDelay(3);
       const delayTimeMs = effectsParams.delaySyncMode === "sync" 
@@ -3680,7 +3790,7 @@ export default function Synthesizer() {
       const delayWet = ctx.createGain();
       delayWet.gain.value = effectsParams.delayMix / 100;
       
-      inputGain.connect(delayNode);
+      lastNode.connect(delayNode);
       delayNode.connect(delayFeedback);
       delayFeedback.connect(delayNode);
       delayNode.connect(delayWet);
@@ -3691,7 +3801,7 @@ export default function Synthesizer() {
       chain.delayWet = delayWet;
     }
     
-    // Reverb effect (algorithmic)
+    // Reverb effect (algorithmic) (using post-processed signal)
     if (effectsParams.reverbEnabled && effectsParams.reverbMix > 0) {
       const convolver = ctx.createConvolver();
       const reverbDuration = 0.5 + (effectsParams.reverbSize / 100) * 3;
@@ -3713,7 +3823,7 @@ export default function Synthesizer() {
       const reverbWet = ctx.createGain();
       reverbWet.gain.value = effectsParams.reverbMix / 100;
       
-      inputGain.connect(convolver);
+      lastNode.connect(convolver);
       convolver.connect(reverbWet);
       reverbWet.connect(effectsMixer);
       
@@ -3751,8 +3861,8 @@ export default function Synthesizer() {
       const chorusWet = ctx.createGain();
       chorusWet.gain.value = effectsParams.chorusMix / 100;
       
-      inputGain.connect(chorusDelay1);
-      inputGain.connect(chorusDelay2);
+      lastNode.connect(chorusDelay1);
+      lastNode.connect(chorusDelay2);
       chorusDelay1.connect(chorusWet);
       chorusDelay2.connect(chorusWet);
       chorusWet.connect(effectsMixer);
@@ -3772,11 +3882,15 @@ export default function Synthesizer() {
     chain.outputGain = outputGain;
     
     console.log("Granular effects chain built:", {
+      postHP: gs.postHPHz > 20,
+      postLP: gs.postLPHz < 20000,
+      saturation: gs.satDrive > 0,
+      widthMs: gs.widthMs > 0,
       delay: effectsParams.delayEnabled && effectsParams.delayMix > 0,
       reverb: effectsParams.reverbEnabled && effectsParams.reverbMix > 0,
       chorus: effectsParams.chorusEnabled && effectsParams.chorusMix > 0
     });
-  }, [params.effects, params.tempo, reverbSettings]);
+  }, [params.effects, params.tempo, reverbSettings, granularSettings]);
   
   // Toggle granular playback using real-time AudioWorklet-based system
   const toggleGranularPlayback = useCallback(async () => {
@@ -3932,13 +4046,13 @@ export default function Synthesizer() {
     toggleGranularPlaybackRef.current = toggleGranularPlayback;
   }, [toggleGranularPlayback]);
   
-  // Rebuild granular effects chain when FX settings change during playback
+  // Rebuild granular effects chain when FX or granular post-processing settings change during playback
   useEffect(() => {
     if (!isGranularPlaying || !granularGainRef.current || !granularContextRef.current) return;
     
     // Rebuild the effects chain with new settings
     buildGranularEffectsChain(granularContextRef.current, granularGainRef.current);
-    console.log("Granular effects chain rebuilt due to FX settings change");
+    console.log("Granular effects chain rebuilt due to settings change");
   }, [
     isGranularPlaying,
     params.effects.delayEnabled,
@@ -3957,6 +4071,11 @@ export default function Synthesizer() {
     params.effects.chorusDepth,
     params.tempo,
     reverbSettings,
+    // Granular post-processing settings
+    granularSettings.postHPHz,
+    granularSettings.postLPHz,
+    granularSettings.satDrive,
+    granularSettings.widthMs,
     buildGranularEffectsChain
   ]);
 

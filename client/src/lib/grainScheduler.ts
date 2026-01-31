@@ -12,6 +12,12 @@ export type GrainEvent = {
   gainL: number;        // left channel gain
   gainR: number;        // right channel gain
   windowType: WindowType;
+  // AHD envelope (in samples)
+  envAttackSamp: number;
+  envHoldSamp: number;
+  envDecaySamp: number;
+  // Window skew (-1 to +1, shifts energy front/back)
+  windowSkew: number;
 };
 
 // Scheduler parameters derived from GranularSettings
@@ -30,6 +36,16 @@ export type SchedulerParams = {
   ampRandDb: number;      // per-grain amplitude variance in dB
   level: number;          // overall level
   windowType: WindowType;
+  // AHD envelope (in ms)
+  envAttackMs: number;
+  envHoldMs: number;
+  envDecayMs: number;
+  // Window skew
+  windowSkew: number;
+  // Scan animation
+  scanRateHz: number;     // Hz rate at which scan position oscillates
+  scanStart: number;      // 0..1 scan start position
+  scanWidth: number;      // 0..1 scan width
 };
 
 // Seeded PRNG (Mulberry32) for deterministic grain scheduling
@@ -64,6 +80,16 @@ export function granularSettingsToSchedulerParams(settings: GranularSettings): S
     ampRandDb: settings.grainAmpRandDb ?? 0,
     level: settings.wetMix, // Use wetMix as level
     windowType: settings.windowType,
+    // AHD envelope
+    envAttackMs: settings.envAttack ?? 0,
+    envHoldMs: settings.envHold ?? 10,
+    envDecayMs: settings.envDecay ?? 300,
+    // Window skew
+    windowSkew: settings.windowSkew ?? 0,
+    // Scan animation
+    scanRateHz: settings.scanRateHz ?? 0,
+    scanStart: settings.scanStart,
+    scanWidth: settings.scanWidth,
   };
 }
 
@@ -91,6 +117,7 @@ export class GrainScheduler {
 
   // Callback for when buffer info is received
   private onBufferInfo: ((length: number) => void) | null = null;
+
 
   constructor(node: AudioWorkletNode | ScriptProcessorNode, sampleRate: number, seed: number) {
     this.node = node;
@@ -168,9 +195,23 @@ export class GrainScheduler {
         const jitter = (this.rng() * 2 - 1) * params.sizeJitter;
         const durSamp = Math.max(8, Math.floor(baseDur * (1 + jitter)));
 
-        // Position (normalized 0..1)
+        // Position (normalized 0..1) with scan animation
+        // scanRateHz > 0 makes the position oscillate through the scan range
+        // Use audio-clock based timing for consistency (nowSample / sampleRate)
+        const elapsedSec = this.workletNowSample / this.sampleRate;
+        let animatedCenter = params.scanStart + params.scanWidth / 2;
+        
+        if (params.scanRateHz > 0 && params.scanWidth > 0) {
+          // Oscillate using triangle wave for smooth back-and-forth scanning
+          const phase = (elapsedSec * params.scanRateHz) % 1;
+          // Triangle wave: 0->1 then 1->0
+          const triangle = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+          // Map to scan range: from scanStart to scanStart+scanWidth
+          animatedCenter = params.scanStart + triangle * params.scanWidth;
+        }
+        
         const w = clamp(params.posWidth01, 0, 1);
-        let pos01 = params.posCenter01 + (this.rng() * 2 - 1) * (w * 0.5);
+        let pos01 = animatedCenter + (this.rng() * 2 - 1) * (w * 0.5);
         pos01 = clamp(pos01, 0, 1);
 
         // Position jitter in samples, converted to normalized offset
@@ -198,6 +239,11 @@ export class GrainScheduler {
         const gL = Math.cos(theta) * params.level * ampMult;
         const gR = Math.sin(theta) * params.level * ampMult;
 
+        // AHD envelope in samples
+        const envAttackSamp = Math.floor((params.envAttackMs / 1000) * this.sampleRate);
+        const envHoldSamp = Math.floor((params.envHoldMs / 1000) * this.sampleRate);
+        const envDecaySamp = Math.floor((params.envDecayMs / 1000) * this.sampleRate);
+
         events.push({
           startSample,
           pos01,
@@ -206,6 +252,10 @@ export class GrainScheduler {
           gainL: gL,
           gainR: gR,
           windowType: params.windowType,
+          envAttackSamp,
+          envHoldSamp,
+          envDecaySamp,
+          windowSkew: params.windowSkew,
         });
 
         this.scheduledThroughSample += periodSamp;
@@ -405,6 +455,40 @@ class GranularProcessor extends AudioWorkletProcessor {
     return a0 * t * t * t + a1 * t * t + a2 * t + y1;
   }
 
+  // AHD envelope: attack ramp up, hold at 1.0, decay ramp down
+  // Automatically scales phases to fit within grain duration
+  getAhdEnvelope(k, attack, hold, decay, dur) {
+    const totalEnv = attack + hold + decay;
+    if (totalEnv <= 0) return 1.0; // No envelope
+    
+    // Scale envelope phases to fit within grain duration if they exceed it
+    const scale = totalEnv > dur ? dur / totalEnv : 1.0;
+    const scaledAttack = attack * scale;
+    const scaledHold = hold * scale;
+    const scaledDecay = decay * scale;
+    
+    if (k < scaledAttack) {
+      // Attack phase: ramp from 0 to 1
+      return scaledAttack > 0 ? k / scaledAttack : 1.0;
+    } else if (k < scaledAttack + scaledHold) {
+      // Hold phase: stay at 1
+      return 1.0;
+    } else {
+      // Decay phase: ramp from 1 to 0
+      const decayPos = k - scaledAttack - scaledHold;
+      return scaledDecay > 0 ? Math.max(0, 1.0 - decayPos / scaledDecay) : 0.0;
+    }
+  }
+
+  // Apply window skew: negative shifts energy to front, positive shifts to back
+  applySkew(p, skew) {
+    if (skew === 0) return p;
+    // Use power function to skew the phase
+    // skew < 0: more weight at start, skew > 0: more weight at end
+    const power = Math.pow(2, -skew);
+    return Math.pow(p, power);
+  }
+
   allocGrain(ev) {
     for (let i = 0; i < this.maxGrains; i++) {
       if (this.grains[i] === null) {
@@ -416,7 +500,11 @@ class GranularProcessor extends AudioWorkletProcessor {
           rate: ev.rate,
           gainL: ev.gainL,
           gainR: ev.gainR,
-          windowType: ev.windowType || this.windowType
+          windowType: ev.windowType || this.windowType,
+          envAttack: ev.envAttackSamp || 0,
+          envHold: ev.envHoldSamp || 0,
+          envDecay: ev.envDecaySamp || 0,
+          windowSkew: ev.windowSkew || 0
         };
         return;
       }
@@ -453,13 +541,21 @@ class GranularProcessor extends AudioWorkletProcessor {
         for (let i = localStart; i < blockLen; i++) {
           const k = g.phase;
           if (k >= g.dur) break;
+          
+          // Apply window skew to phase
           const phase01 = k / g.dur;
-          const w = this.getWindow(phase01, g.windowType);
+          const skewedPhase = this.applySkew(phase01, g.windowSkew);
+          
+          // Get window and AHD envelope (pass dur for scaling)
+          const w = this.getWindow(skewedPhase, g.windowType);
+          const ahd = this.getAhdEnvelope(k, g.envAttack, g.envHold, g.envDecay, g.dur);
+          const envelope = w * ahd;
+          
           const srcIdx = g.pos + (k * g.rate);
           const sL = this.readCubic(this.bufL, srcIdx);
           const sR = this.bufR ? this.readCubic(this.bufR, srcIdx) : sL;
-          outL[i] += sL * w * g.gainL;
-          if (outR !== outL) outR[i] += sR * w * g.gainR;
+          outL[i] += sL * envelope * g.gainL;
+          if (outR !== outL) outR[i] += sR * envelope * g.gainR;
           g.phase++;
         }
         if (g.phase >= g.dur) this.grains[gi] = null;
@@ -561,6 +657,10 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
     gainL: number;
     gainR: number;
     windowType: string;
+    envAttack: number;
+    envHold: number;
+    envDecay: number;
+    windowSkew: number;
   } | null> = new Array(64).fill(null);
   const events: Array<{
     startSample: number;
@@ -570,6 +670,10 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
     gainL: number;
     gainR: number;
     windowType?: string;
+    envAttackSamp?: number;
+    envHoldSamp?: number;
+    envDecaySamp?: number;
+    windowSkew?: number;
   }> = [];
   let nowSample = 0;
   let windowType = 'hann';
@@ -600,6 +704,35 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
       case 'trapezoid': return windowTrapezoid(p);
       default: return windowHann(p);
     }
+  };
+  
+  // AHD envelope: attack ramp up, hold at 1.0, decay ramp down
+  // Automatically scales phases to fit within grain duration
+  const getAhdEnvelope = (k: number, attack: number, hold: number, decay: number, dur: number) => {
+    const totalEnv = attack + hold + decay;
+    if (totalEnv <= 0) return 1.0;
+    
+    // Scale envelope phases to fit within grain duration if they exceed it
+    const scale = totalEnv > dur ? dur / totalEnv : 1.0;
+    const scaledAttack = attack * scale;
+    const scaledHold = hold * scale;
+    const scaledDecay = decay * scale;
+    
+    if (k < scaledAttack) {
+      return scaledAttack > 0 ? k / scaledAttack : 1.0;
+    } else if (k < scaledAttack + scaledHold) {
+      return 1.0;
+    } else {
+      const decayPos = k - scaledAttack - scaledHold;
+      return scaledDecay > 0 ? Math.max(0, 1.0 - decayPos / scaledDecay) : 0.0;
+    }
+  };
+  
+  // Apply window skew
+  const applySkew = (p: number, skew: number) => {
+    if (skew === 0) return p;
+    const power = Math.pow(2, -skew);
+    return Math.pow(p, power);
   };
   
   // Cubic interpolation
@@ -685,7 +818,11 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
               rate: ev.rate,
               gainL: ev.gainL,
               gainR: ev.gainR,
-              windowType: ev.windowType || windowType
+              windowType: ev.windowType || windowType,
+              envAttack: ev.envAttackSamp || 0,
+              envHold: ev.envHoldSamp || 0,
+              envDecay: ev.envDecaySamp || 0,
+              windowSkew: ev.windowSkew || 0
             };
             break;
           }
@@ -710,14 +847,21 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
           const k = g.phase;
           if (k >= g.dur) break;
           
+          // Apply window skew to phase
           const phase01 = k / g.dur;
-          const w = getWindow(phase01, g.windowType);
+          const skewedPhase = applySkew(phase01, g.windowSkew);
+          
+          // Get window and AHD envelope (pass dur for scaling)
+          const w = getWindow(skewedPhase, g.windowType);
+          const ahd = getAhdEnvelope(k, g.envAttack, g.envHold, g.envDecay, g.dur);
+          const envelope = w * ahd;
+          
           const srcIdx = g.pos + (k * g.rate);
           const sL = readCubic(bufL, srcIdx);
           const sR = bufR ? readCubic(bufR, srcIdx) : sL;
           
-          outL[i] += sL * w * g.gainL;
-          outR[i] += sR * w * g.gainR;
+          outL[i] += sL * envelope * g.gainL;
+          outR[i] += sR * envelope * g.gainR;
           g.phase++;
         }
         
