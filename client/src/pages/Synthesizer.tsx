@@ -711,6 +711,22 @@ export default function Synthesizer() {
   const granularContextRef = useRef<AudioContext | null>(null);
   const granularSettingsRef = useRef<GranularSettings>(granularSettings);
   
+  // Granular effects chain nodes for real-time FX processing
+  const granularEffectsChainRef = useRef<{
+    delayNode?: DelayNode;
+    delayFeedback?: GainNode;
+    delayWet?: GainNode;
+    reverbConvolver?: ConvolverNode;
+    reverbWet?: GainNode;
+    chorusDelay1?: DelayNode;
+    chorusDelay2?: DelayNode;
+    chorusLfo1?: OscillatorNode;
+    chorusLfo2?: OscillatorNode;
+    chorusWet?: GainNode;
+    effectsMixer?: GainNode;
+    outputGain?: GainNode;
+  }>({});
+  
   // Keep granularSettingsRef in sync for real-time scheduler
   useEffect(() => {
     granularSettingsRef.current = granularSettings;
@@ -3620,6 +3636,148 @@ export default function Synthesizer() {
     }, totalDuration);
   }, [params, oscEnvelopes, generateSound, applyBitcrusher, applySpectralScrambling, applySafetyFadeout, getTotalDuration, ringModSettings, parallelProcessingSettings, advancedFMSettings, wavetableSettings, convolverSettings, reverbSettings, granularSettings, granularBuffer]);
 
+  // Build/rebuild effects chain for granular playback
+  const buildGranularEffectsChain = useCallback((ctx: AudioContext, inputGain: GainNode) => {
+    const effectsParams = params.effects;
+    const chain = granularEffectsChainRef.current;
+    
+    // Stop any existing chorus LFOs
+    if (chain.chorusLfo1) {
+      try { chain.chorusLfo1.stop(); } catch {}
+    }
+    if (chain.chorusLfo2) {
+      try { chain.chorusLfo2.stop(); } catch {}
+    }
+    
+    // Disconnect existing chain
+    try { inputGain.disconnect(); } catch {}
+    
+    // Create effects mixer
+    const effectsMixer = ctx.createGain();
+    effectsMixer.gain.value = 1;
+    
+    // Create output gain
+    const outputGain = ctx.createGain();
+    outputGain.gain.value = 1;
+    
+    // Connect dry signal to mixer
+    const dryGain = ctx.createGain();
+    dryGain.gain.value = 1;
+    inputGain.connect(dryGain);
+    dryGain.connect(effectsMixer);
+    
+    // Delay effect
+    if (effectsParams.delayEnabled && effectsParams.delayMix > 0) {
+      const delayNode = ctx.createDelay(3);
+      const delayTimeMs = effectsParams.delaySyncMode === "sync" 
+        ? divisionToMs(effectsParams.delayDivision, params.tempo)
+        : effectsParams.delayTime;
+      delayNode.delayTime.value = delayTimeMs / 1000;
+      
+      const delayFeedback = ctx.createGain();
+      delayFeedback.gain.value = effectsParams.delayFeedback / 100;
+      
+      const delayWet = ctx.createGain();
+      delayWet.gain.value = effectsParams.delayMix / 100;
+      
+      inputGain.connect(delayNode);
+      delayNode.connect(delayFeedback);
+      delayFeedback.connect(delayNode);
+      delayNode.connect(delayWet);
+      delayWet.connect(effectsMixer);
+      
+      chain.delayNode = delayNode;
+      chain.delayFeedback = delayFeedback;
+      chain.delayWet = delayWet;
+    }
+    
+    // Reverb effect (algorithmic)
+    if (effectsParams.reverbEnabled && effectsParams.reverbMix > 0) {
+      const convolver = ctx.createConvolver();
+      const reverbDuration = 0.5 + (effectsParams.reverbSize / 100) * 3;
+      const rs = reverbSettings || defaultReverbSettings;
+      const seededRandom = createSeededRandom(Date.now());
+      convolver.buffer = createImpulseResponse(
+        ctx, 
+        reverbDuration, 
+        effectsParams.reverbDecay, 
+        seededRandom,
+        rs.type,
+        rs.damping,
+        rs.diffusion,
+        rs.modulation,
+        rs.predelay,
+        rs.stereoWidth
+      );
+      
+      const reverbWet = ctx.createGain();
+      reverbWet.gain.value = effectsParams.reverbMix / 100;
+      
+      inputGain.connect(convolver);
+      convolver.connect(reverbWet);
+      reverbWet.connect(effectsMixer);
+      
+      chain.reverbConvolver = convolver;
+      chain.reverbWet = reverbWet;
+    }
+    
+    // Chorus effect
+    if (effectsParams.chorusEnabled && effectsParams.chorusMix > 0) {
+      const chorusDelay1 = ctx.createDelay();
+      const chorusDelay2 = ctx.createDelay();
+      chorusDelay1.delayTime.value = 0.02;
+      chorusDelay2.delayTime.value = 0.025;
+      
+      const lfo1 = ctx.createOscillator();
+      const lfo2 = ctx.createOscillator();
+      const safeChorusRate = Math.max(0.1, effectsParams.chorusRate);
+      lfo1.frequency.value = safeChorusRate;
+      lfo2.frequency.value = safeChorusRate * 1.1;
+      
+      const lfoGain1 = ctx.createGain();
+      const lfoGain2 = ctx.createGain();
+      const depth = (effectsParams.chorusDepth / 100) * 0.005;
+      lfoGain1.gain.value = depth;
+      lfoGain2.gain.value = depth;
+      
+      lfo1.connect(lfoGain1);
+      lfoGain1.connect(chorusDelay1.delayTime);
+      lfo2.connect(lfoGain2);
+      lfoGain2.connect(chorusDelay2.delayTime);
+      
+      lfo1.start();
+      lfo2.start();
+      
+      const chorusWet = ctx.createGain();
+      chorusWet.gain.value = effectsParams.chorusMix / 100;
+      
+      inputGain.connect(chorusDelay1);
+      inputGain.connect(chorusDelay2);
+      chorusDelay1.connect(chorusWet);
+      chorusDelay2.connect(chorusWet);
+      chorusWet.connect(effectsMixer);
+      
+      chain.chorusDelay1 = chorusDelay1;
+      chain.chorusDelay2 = chorusDelay2;
+      chain.chorusLfo1 = lfo1;
+      chain.chorusLfo2 = lfo2;
+      chain.chorusWet = chorusWet;
+    }
+    
+    // Connect mixer to output to destination
+    effectsMixer.connect(outputGain);
+    outputGain.connect(ctx.destination);
+    
+    chain.effectsMixer = effectsMixer;
+    chain.outputGain = outputGain;
+    
+    console.log("Granular effects chain built:", {
+      delay: effectsParams.delayEnabled && effectsParams.delayMix > 0,
+      reverb: effectsParams.reverbEnabled && effectsParams.reverbMix > 0,
+      chorus: effectsParams.chorusEnabled && effectsParams.chorusMix > 0
+    });
+  }, [params.effects, params.tempo, reverbSettings]);
+  
   // Toggle granular playback using real-time AudioWorklet-based system
   const toggleGranularPlayback = useCallback(async () => {
     // Stop if currently playing
@@ -3642,6 +3800,17 @@ export default function Synthesizer() {
           granularGainRef.current.gain.value = 0;
         }
       }
+      // Stop any chorus LFOs
+      const chain = granularEffectsChainRef.current;
+      if (chain.chorusLfo1) {
+        try { chain.chorusLfo1.stop(); } catch {}
+      }
+      if (chain.chorusLfo2) {
+        try { chain.chorusLfo2.stop(); } catch {}
+      }
+      // Clear the effects chain ref
+      granularEffectsChainRef.current = {};
+      
       isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
       return;
@@ -3692,10 +3861,10 @@ export default function Synthesizer() {
           granularGainRef.current.gain.value = 0.8;
           console.log("Gain node created");
           
-          // Connect worklet -> gain -> destination
+          // Connect worklet -> gain -> effects chain -> destination
           granularWorkletRef.current.connect(granularGainRef.current);
-          granularGainRef.current.connect(ctx.destination);
-          console.log("Audio graph connected: worklet -> gain -> destination");
+          buildGranularEffectsChain(ctx, granularGainRef.current);
+          console.log("Audio graph connected: worklet -> gain -> effects chain -> destination");
           
           // Create scheduler
           const seed = granularSettings.seed || Date.now();
@@ -3756,12 +3925,40 @@ export default function Synthesizer() {
       isGranularPlayingRef.current = false;
       setIsGranularPlaying(false);
     }
-  }, [granularBuffer, granularSettings]);
+  }, [granularBuffer, granularSettings, buildGranularEffectsChain]);
   
   const toggleGranularPlaybackRef = useRef<() => void>(() => {});
   useEffect(() => {
     toggleGranularPlaybackRef.current = toggleGranularPlayback;
   }, [toggleGranularPlayback]);
+  
+  // Rebuild granular effects chain when FX settings change during playback
+  useEffect(() => {
+    if (!isGranularPlaying || !granularGainRef.current || !granularContextRef.current) return;
+    
+    // Rebuild the effects chain with new settings
+    buildGranularEffectsChain(granularContextRef.current, granularGainRef.current);
+    console.log("Granular effects chain rebuilt due to FX settings change");
+  }, [
+    isGranularPlaying,
+    params.effects.delayEnabled,
+    params.effects.delayMix,
+    params.effects.delayTime,
+    params.effects.delayFeedback,
+    params.effects.delaySyncMode,
+    params.effects.delayDivision,
+    params.effects.reverbEnabled,
+    params.effects.reverbMix,
+    params.effects.reverbSize,
+    params.effects.reverbDecay,
+    params.effects.chorusEnabled,
+    params.effects.chorusMix,
+    params.effects.chorusRate,
+    params.effects.chorusDepth,
+    params.tempo,
+    reverbSettings,
+    buildGranularEffectsChain
+  ]);
 
   const handleExport = useCallback(async () => {
     if (!audioBuffer) {
