@@ -199,6 +199,7 @@ const MODULATION_TARGETS: ModulationTarget[] = [
   { path: "granular.pitchST", label: "Grain Pitch", category: "Granular" },
   { path: "granular.pitchRandST", label: "Pitch Random", category: "Granular" },
   { path: "granular.windowSkew", label: "Window Skew", category: "Granular" },
+  { path: "granular.sizeJitter", label: "Size Jitter", category: "Granular" },
   { path: "granular.grainAmpRandDb", label: "Amp Variance", category: "Granular" },
   { path: "granular.reverseProb", label: "Reverse Prob", category: "Granular" },
   { path: "granular.panSpread", label: "Pan Spread", category: "Granular" },

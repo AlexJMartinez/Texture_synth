@@ -68,7 +68,7 @@ export function granularSettingsToSchedulerParams(settings: GranularSettings): S
   return {
     density: settings.densityGps,
     grainSizeMs: settings.grainSizeMs,
-    sizeJitter: 0.25, // Default grain size jitter (25%)
+    sizeJitter: settings.sizeJitter ?? 0.25, // Use settings or default
     posCenter01: settings.scanStart + settings.scanWidth / 2,
     posWidth01: settings.scanWidth,
     posJitterMs: settings.posJitterMs,

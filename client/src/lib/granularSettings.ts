@@ -45,6 +45,7 @@ export interface GranularSettings {
   // Window / shape (Quanta: 10 envelope shapes)
   windowType: WindowType;
   windowSkew: number;            // -1 to +1 (shifts energy front/back)
+  sizeJitter: number;            // 0-1 grain size randomization (0 = no jitter)
   grainAmpRandDb: number;        // 0-12 dB per-grain amplitude variance
   
   // Direction / playback (PhasePlant: reverse probability)
@@ -98,6 +99,7 @@ export const CINEMATIC_DEFAULTS: GranularSettings = {
   
   windowType: 'hann',
   windowSkew: 0,
+  sizeJitter: 0.15,
   grainAmpRandDb: 2,
   
   reverseProb: 0,
@@ -145,6 +147,7 @@ export const DESIGN_DEFAULTS: GranularSettings = {
   
   windowType: 'hann',
   windowSkew: 0,
+  sizeJitter: 0.25,
   grainAmpRandDb: 4,
   
   reverseProb: 0,
@@ -179,6 +182,7 @@ export const CINEMATIC_RANGES = {
   timingJitterMs: { min: 0, max: 20 },
   pitchST: { min: -24, max: 24 },
   pitchRandST: { min: 0, max: 12 },
+  sizeJitter: { min: 0, max: 0.3 },
   reverseProb: { min: 0, max: 0.3 },
   panSpread: { min: 0.1, max: 0.5 },
   stereoLink: { min: 0.6, max: 1.0 },
@@ -204,6 +208,7 @@ export const DESIGN_RANGES = {
   timingJitterMs: { min: 0, max: 100 },   // Spawn timing randomization
   pitchST: { min: -48, max: 48 },         // 4 octaves each way
   pitchRandST: { min: 0, max: 36 },       // Full pitch random range
+  sizeJitter: { min: 0, max: 1 },         // Full grain size randomization
   reverseProb: { min: 0, max: 1 },        // Full reverse probability
   panSpread: { min: 0, max: 1 },
   stereoLink: { min: 0, max: 1 },
@@ -239,6 +244,7 @@ export function clampToMode(settings: GranularSettings): GranularSettings {
     timingJitterMs: clamp(settings.timingJitterMs ?? 0, ranges.timingJitterMs.min, ranges.timingJitterMs.max),
     pitchST: clamp(settings.pitchST, ranges.pitchST.min, ranges.pitchST.max),
     pitchRandST: clamp(settings.pitchRandST, ranges.pitchRandST.min, ranges.pitchRandST.max),
+    sizeJitter: clamp(settings.sizeJitter ?? 0.25, ranges.sizeJitter.min, ranges.sizeJitter.max),
     reverseProb: clamp(settings.reverseProb ?? 0, ranges.reverseProb.min, ranges.reverseProb.max),
     panSpread: clamp(settings.panSpread, ranges.panSpread.min, ranges.panSpread.max),
     stereoLink: clamp(settings.stereoLink, ranges.stereoLink.min, ranges.stereoLink.max),

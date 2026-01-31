@@ -164,6 +164,7 @@ import {
   loadGranularSettings,
   saveGranularSettings,
   CINEMATIC_DEFAULTS as defaultGranularSettings,
+  DESIGN_RANGES,
   applyAntiMudRules,
   clampToMode,
 } from "@/lib/granularSettings";
@@ -533,6 +534,54 @@ function getModulatedValue(
   return Math.max(min, Math.min(max, modulatedValue));
 }
 
+// Apply modulation to granular settings in real-time
+// Uses DESIGN_RANGES for max modulation range since modulation can push beyond cinematic limits
+function applyGranularModulation(
+  baseSettings: GranularSettings,
+  modulators: SynthParameters["modulators"],
+  routes: SynthParameters["modulationRoutes"],
+  time: number,
+  tempo: number,
+  states: Map<string, ModulatorState>,
+  curveSettings?: CurveModulatorSettings,
+  stepSettings?: StepSequencerSettings
+): GranularSettings {
+  const ranges = DESIGN_RANGES; // Use full ranges for modulation
+  const duration = 10; // Arbitrary long duration for granular (continuous playback)
+  
+  // Helper to modulate a single parameter
+  const mod = (path: string, base: number, min: number, max: number): number => {
+    return getModulatedValue(path, base, min, max, modulators, routes, time, duration, tempo, states, curveSettings, stepSettings);
+  };
+  
+  return {
+    ...baseSettings,
+    grainSizeMs: mod("granular.grainSizeMs", baseSettings.grainSizeMs, ranges.grainSizeMs.min, ranges.grainSizeMs.max),
+    densityGps: mod("granular.densityGps", baseSettings.densityGps, ranges.densityGps.min, ranges.densityGps.max),
+    scanStart: mod("granular.scanStart", baseSettings.scanStart, 0, 1),
+    scanWidth: mod("granular.scanWidth", baseSettings.scanWidth, ranges.scanWidth.min, ranges.scanWidth.max),
+    scanRateHz: mod("granular.scanRateHz", baseSettings.scanRateHz, ranges.scanRateHz.min, ranges.scanRateHz.max),
+    posJitterMs: mod("granular.posJitterMs", baseSettings.posJitterMs, ranges.posJitterMs.min, ranges.posJitterMs.max),
+    timingJitterMs: mod("granular.timingJitterMs", baseSettings.timingJitterMs ?? 0, ranges.timingJitterMs.min, ranges.timingJitterMs.max),
+    pitchST: mod("granular.pitchST", baseSettings.pitchST, ranges.pitchST.min, ranges.pitchST.max),
+    pitchRandST: mod("granular.pitchRandST", baseSettings.pitchRandST, ranges.pitchRandST.min, ranges.pitchRandST.max),
+    windowSkew: mod("granular.windowSkew", baseSettings.windowSkew, -1, 1),
+    sizeJitter: mod("granular.sizeJitter", baseSettings.sizeJitter ?? 0.25, ranges.sizeJitter.min, ranges.sizeJitter.max),
+    grainAmpRandDb: mod("granular.grainAmpRandDb", baseSettings.grainAmpRandDb, ranges.grainAmpRandDb.min, ranges.grainAmpRandDb.max),
+    reverseProb: mod("granular.reverseProb", baseSettings.reverseProb ?? 0, ranges.reverseProb.min, ranges.reverseProb.max),
+    panSpread: mod("granular.panSpread", baseSettings.panSpread, ranges.panSpread.min, ranges.panSpread.max),
+    stereoLink: mod("granular.stereoLink", baseSettings.stereoLink, ranges.stereoLink.min, ranges.stereoLink.max),
+    widthMs: mod("granular.widthMs", baseSettings.widthMs, ranges.widthMs.min, ranges.widthMs.max),
+    postHPHz: mod("granular.postHPHz", baseSettings.postHPHz, ranges.postHPHz.min, ranges.postHPHz.max),
+    postLPHz: mod("granular.postLPHz", baseSettings.postLPHz, ranges.postLPHz.min, ranges.postLPHz.max),
+    satDrive: mod("granular.satDrive", baseSettings.satDrive, ranges.satDrive.min, ranges.satDrive.max),
+    wetMix: mod("granular.wetMix", baseSettings.wetMix, ranges.wetMix.min, ranges.wetMix.max),
+    envAttack: mod("granular.envAttack", baseSettings.envAttack, ranges.envAttack.min, ranges.envAttack.max),
+    envHold: mod("granular.envHold", baseSettings.envHold, ranges.envHold.min, ranges.envHold.max),
+    envDecay: mod("granular.envDecay", baseSettings.envDecay, ranges.envDecay.min, ranges.envDecay.max),
+  };
+}
+
 // Fix 1: Tail padding for reverb/delay decay (in seconds)
 // Increased for heavily processed sounds with reverb/delay
 const TAIL_PAD = 0.35; // 350ms for better FX tail capture
@@ -711,6 +760,15 @@ export default function Synthesizer() {
   const granularContextRef = useRef<AudioContext | null>(null);
   const granularSettingsRef = useRef<GranularSettings>(granularSettings);
   
+  // Granular modulation state
+  const granularPlayStartTimeRef = useRef<number>(0); // Audio context time when granular started
+  const granularModulatorStatesRef = useRef<Map<string, ModulatorState>>(new Map());
+  
+  // Refs for accessing synth params inside callbacks without stale closures
+  const paramsRef = useRef<SynthParameters>(params);
+  const curveModulatorSettingsRef = useRef<CurveModulatorSettings>(curveModulatorSettings);
+  const stepSequencerSettingsRef = useRef<StepSequencerSettings>(stepSequencerSettings);
+  
   // Granular effects chain nodes for real-time FX processing
   const granularEffectsChainRef = useRef<{
     // Post-processing
@@ -739,6 +797,17 @@ export default function Synthesizer() {
   useEffect(() => {
     granularSettingsRef.current = granularSettings;
   }, [granularSettings]);
+  
+  // Keep modulation refs in sync
+  useEffect(() => {
+    paramsRef.current = params;
+  }, [params]);
+  useEffect(() => {
+    curveModulatorSettingsRef.current = curveModulatorSettings;
+  }, [curveModulatorSettings]);
+  useEffect(() => {
+    stepSequencerSettingsRef.current = stepSequencerSettings;
+  }, [stepSequencerSettings]);
   
   // Key selector state - derive initial key from OSC 1's pitch
   const [currentKey, setCurrentKey] = useState<KeyState>(() => {
@@ -4012,9 +4081,13 @@ export default function Synthesizer() {
       const seed = granularSettings.seed || Date.now();
       granularSchedulerRef.current?.resetSeed(seed);
       
+      // Initialize modulation for granular playback
+      granularPlayStartTimeRef.current = ctx.currentTime;
+      granularModulatorStatesRef.current = createModulatorStates(params.modulators);
+      
       // Debug: Log scheduler params
-      const params = granularSettingsToSchedulerParams(granularSettingsRef.current);
-      console.log("Scheduler params:", params);
+      const schedulerParams = granularSettingsToSchedulerParams(granularSettingsRef.current);
+      console.log("Scheduler params:", schedulerParams);
       
       // Fade in the gain
       if (granularGainRef.current) {
@@ -4023,13 +4096,29 @@ export default function Synthesizer() {
         console.log("Gain node connected, fading in to 0.8");
       }
       
-      // Start the scheduler with a params provider that returns current settings
-      console.log("Starting granular scheduler...");
+      // Start the scheduler with a params provider that returns modulated settings
+      console.log("Starting granular scheduler with modulation...");
       granularSchedulerRef.current?.start(() => {
-        // Use ref to get current settings in real-time
-        return granularSettingsToSchedulerParams(granularSettingsRef.current);
+        // Get current settings and apply modulation in real-time
+        const baseSettings = granularSettingsRef.current;
+        const currentTime = granularContextRef.current?.currentTime ?? 0;
+        const elapsedTime = currentTime - granularPlayStartTimeRef.current;
+        
+        // Apply modulation to granular settings
+        const modulatedSettings = applyGranularModulation(
+          baseSettings,
+          paramsRef.current.modulators,
+          paramsRef.current.modulationRoutes,
+          elapsedTime,
+          paramsRef.current.tempo,
+          granularModulatorStatesRef.current,
+          curveModulatorSettingsRef.current,
+          stepSequencerSettingsRef.current
+        );
+        
+        return granularSettingsToSchedulerParams(modulatedSettings);
       });
-      console.log("Granular scheduler started");
+      console.log("Granular scheduler started with modulation");
       
       isGranularPlayingRef.current = true;
       setIsGranularPlaying(true);
