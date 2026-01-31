@@ -445,7 +445,7 @@ function ModulatorCard({
                   <SelectValue placeholder="Select target..." />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation"].map((category) => (
+                  {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation", "Granular"].map((category) => (
                     <SelectGroup key={category}>
                       <SelectLabel className="text-[9px] font-semibold">{category}</SelectLabel>
                       {MODULATION_TARGETS.filter(t => t.category === category).map((target) => (
@@ -541,7 +541,7 @@ function VirtualModulatorCard({
                     <SelectValue placeholder="Target" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation", "Mastering", "Envelopes"].map((category) => (
+                    {["Filter", "Oscillators", "Effects", "Layers", "Shaping", "Saturation", "Mastering", "Envelopes", "Granular"].map((category) => (
                       <SelectGroup key={category}>
                         <SelectLabel className="text-[9px] font-semibold">{category}</SelectLabel>
                         {MODULATION_TARGETS.filter(t => t.category === category).map((target) => (
