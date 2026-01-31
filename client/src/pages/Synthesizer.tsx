@@ -704,10 +704,11 @@ export default function Synthesizer() {
   const isGranularPlayingRef = useRef(false); // Ref to track playback state across async boundaries
   const isRenderingGranularRef = useRef(false); // For legacy render mode
   
-  // AudioWorklet-based real-time granular synthesis
-  const granularWorkletRef = useRef<AudioWorkletNode | null>(null);
+  // AudioWorklet-based real-time granular synthesis (with ScriptProcessor fallback)
+  const granularWorkletRef = useRef<AudioWorkletNode | ScriptProcessorNode | null>(null);
   const granularSchedulerRef = useRef<GrainScheduler | null>(null);
   const granularGainRef = useRef<GainNode | null>(null);
+  const granularContextRef = useRef<AudioContext | null>(null);
   const granularSettingsRef = useRef<GranularSettings>(granularSettings);
   
   // Keep granularSettingsRef in sync for real-time scheduler
@@ -3652,33 +3653,18 @@ export default function Synthesizer() {
     try {
       await Tone.start();
       
-      // Get the native AudioContext from Tone.js
-      // Helper to check if object is a valid AudioContext by structural typing
-      const isAudioContext = (obj: any): obj is AudioContext => {
-        return obj && 
-               typeof obj.sampleRate === 'number' && 
-               typeof obj.createGain === 'function' &&
-               typeof obj.currentTime === 'number';
-      };
-      
-      const toneCtx = Tone.getContext();
-      let ctx: AudioContext | null = null;
-      
-      // Try rawContext first (Tone.js documented property)
-      if (isAudioContext((toneCtx as any).rawContext)) {
-        ctx = (toneCtx as any).rawContext;
+      // Create a dedicated AudioContext for the granular worklet
+      // Using a separate context avoids conflicts with Tone.js's internal worklet handling
+      let ctx: AudioContext;
+      if (!granularContextRef.current) {
+        console.log("Creating dedicated AudioContext for granular worklet...");
+        granularContextRef.current = new AudioContext({ sampleRate: 44100 });
+        console.log("Dedicated granular context created, state:", granularContextRef.current.state);
       }
-      // Fallback to _context (internal property)
-      else if (isAudioContext((toneCtx as any)._context)) {
-        ctx = (toneCtx as any)._context;
-      }
-      // Last resort: check if toneCtx itself is an AudioContext
-      else if (isAudioContext(toneCtx)) {
-        ctx = toneCtx as unknown as AudioContext;
-      }
+      ctx = granularContextRef.current;
       
       if (!ctx) {
-        console.error("Failed to get AudioContext from Tone.js - no valid context found");
+        console.error("Failed to create granular AudioContext");
         return;
       }
       
@@ -3687,18 +3673,29 @@ export default function Synthesizer() {
         await ctx.resume();
       }
       
+      // Log context info for debugging
+      console.log("AudioContext state:", ctx.state, "sampleRate:", ctx.sampleRate);
+      console.log("Worklet ref exists:", !!granularWorkletRef.current);
+      console.log("Scheduler ref exists:", !!granularSchedulerRef.current);
+      console.log("Buffer data exists:", !!granularBuffer?.data, "length:", granularBuffer?.data?.length);
+      
       // Initialize worklet if needed (lazy initialization)
       if (!granularWorkletRef.current) {
+        console.log("Creating new granular worklet...");
         try {
+          console.log("Calling createGranularWorkletNode with ctx.sampleRate:", ctx.sampleRate);
           granularWorkletRef.current = await createGranularWorkletNode(ctx);
+          console.log("Worklet node created successfully");
           
           // Create gain node for output control
           granularGainRef.current = ctx.createGain();
           granularGainRef.current.gain.value = 0.8;
+          console.log("Gain node created");
           
           // Connect worklet -> gain -> destination
           granularWorkletRef.current.connect(granularGainRef.current);
           granularGainRef.current.connect(ctx.destination);
+          console.log("Audio graph connected: worklet -> gain -> destination");
           
           // Create scheduler
           const seed = granularSettings.seed || Date.now();
@@ -3707,35 +3704,49 @@ export default function Synthesizer() {
             ctx.sampleRate,
             seed
           );
+          console.log("Scheduler created with seed:", seed);
         } catch (e) {
           console.error("Failed to initialize granular worklet:", e);
           return;
         }
+      } else {
+        console.log("Using existing granular worklet");
       }
       
       // Send current buffer to worklet
       if (granularBuffer.data) {
+        console.log("Sending buffer to worklet:", granularBuffer.data.length, "samples at", granularBuffer.sampleRate, "Hz");
         await sendSampleToWorklet(granularWorkletRef.current, {
           data: granularBuffer.data,
           sampleRate: granularBuffer.sampleRate
         });
+        console.log("Buffer sent to worklet");
+      } else {
+        console.warn("No granular buffer data to send");
       }
       
       // Reset scheduler seed if needed
       const seed = granularSettings.seed || Date.now();
       granularSchedulerRef.current?.resetSeed(seed);
       
+      // Debug: Log scheduler params
+      const params = granularSettingsToSchedulerParams(granularSettingsRef.current);
+      console.log("Scheduler params:", params);
+      
       // Fade in the gain
       if (granularGainRef.current) {
         granularGainRef.current.gain.setValueAtTime(0, ctx.currentTime);
         granularGainRef.current.gain.linearRampToValueAtTime(0.8, ctx.currentTime + 0.02);
+        console.log("Gain node connected, fading in to 0.8");
       }
       
       // Start the scheduler with a params provider that returns current settings
+      console.log("Starting granular scheduler...");
       granularSchedulerRef.current?.start(() => {
         // Use ref to get current settings in real-time
         return granularSettingsToSchedulerParams(granularSettingsRef.current);
       });
+      console.log("Granular scheduler started");
       
       isGranularPlayingRef.current = true;
       setIsGranularPlaying(true);
