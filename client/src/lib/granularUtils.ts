@@ -82,6 +82,26 @@ export function rectWindow(phase: number): number {
   return 1.0;
 }
 
+// Tukey window (tapered cosine) - flat center with smooth edges
+export function tukeyWindow(phase: number, alpha: number = 0.5): number {
+  if (phase < alpha / 2) {
+    return 0.5 * (1 + Math.cos(Math.PI * (2 * phase / alpha - 1)));
+  } else if (phase > 1 - alpha / 2) {
+    return 0.5 * (1 + Math.cos(Math.PI * (2 * phase / alpha - 2 / alpha + 1)));
+  }
+  return 1.0;
+}
+
+// Trapezoid window - flat top with linear ramps
+export function trapezoidWindow(phase: number, ramp: number = 0.25): number {
+  if (phase < ramp) {
+    return phase / ramp;
+  } else if (phase > 1 - ramp) {
+    return (1 - phase) / ramp;
+  }
+  return 1.0;
+}
+
 // Get window function by type
 export function getWindowFunction(type: WindowType): (phase: number) => number {
   switch (type) {
@@ -89,6 +109,8 @@ export function getWindowFunction(type: WindowType): (phase: number) => number {
     case 'gauss': return gaussWindow;
     case 'blackman': return blackmanWindow;
     case 'rect': return rectWindow;
+    case 'tukey': return tukeyWindow;
+    case 'trapezoid': return trapezoidWindow;
     default: return hannWindow;
   }
 }

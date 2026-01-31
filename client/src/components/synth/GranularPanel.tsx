@@ -688,6 +688,18 @@ export function GranularPanel({
                 accentColor="accent"
                 size="xs"
               />
+              <Knob
+                value={settings.timingJitterMs ?? 0}
+                min={ranges.timingJitterMs.min}
+                max={ranges.timingJitterMs.max}
+                step={1}
+                label="Jitter"
+                unit="ms"
+                onChange={(v) => update("timingJitterMs", v)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.timingJitterMs"
+              />
             </div>
           </div>
           
@@ -774,6 +786,18 @@ export function GranularPanel({
                 size="xs"
                 modulationPath="granular.pitchRandST"
               />
+              <Knob
+                value={(settings.reverseProb ?? 0) * 100}
+                min={ranges.reverseProb.min * 100}
+                max={ranges.reverseProb.max * 100}
+                step={1}
+                label="Rev%"
+                unit="%"
+                onChange={(v) => update("reverseProb", v / 100)}
+                accentColor="accent"
+                size="xs"
+                modulationPath="granular.reverseProb"
+              />
             </div>
           </div>
           
@@ -794,7 +818,11 @@ export function GranularPanel({
                   <SelectItem value="gauss">Gauss</SelectItem>
                   <SelectItem value="blackman">Blackman</SelectItem>
                   {settings.mode === 'design' && (
-                    <SelectItem value="rect">Rect</SelectItem>
+                    <>
+                      <SelectItem value="rect">Rect</SelectItem>
+                      <SelectItem value="tukey">Tukey</SelectItem>
+                      <SelectItem value="trapezoid">Trapezoid</SelectItem>
+                    </>
                   )}
                 </SelectContent>
               </Select>
@@ -811,8 +839,8 @@ export function GranularPanel({
               />
               <Knob
                 value={settings.grainAmpRandDb}
-                min={0}
-                max={9}
+                min={ranges.grainAmpRandDb.min}
+                max={ranges.grainAmpRandDb.max}
                 step={0.5}
                 label="AmpVar"
                 unit="dB"
@@ -927,8 +955,8 @@ export function GranularPanel({
             <div className="flex flex-col items-center gap-0.5">
               <Knob
                 value={settings.envAttack}
-                min={0}
-                max={500}
+                min={ranges.envAttack.min}
+                max={ranges.envAttack.max}
                 step={1}
                 label="A"
                 unit="ms"
@@ -939,8 +967,8 @@ export function GranularPanel({
               />
               <Knob
                 value={settings.envHold}
-                min={0}
-                max={500}
+                min={ranges.envHold.min}
+                max={ranges.envHold.max}
                 step={1}
                 label="H"
                 unit="ms"
@@ -950,8 +978,8 @@ export function GranularPanel({
               />
               <Knob
                 value={settings.envDecay}
-                min={10}
-                max={2000}
+                min={ranges.envDecay.min}
+                max={ranges.envDecay.max}
                 step={10}
                 label="D"
                 unit="ms"
@@ -960,6 +988,25 @@ export function GranularPanel({
                 size="xs"
                 logarithmic
               />
+              {/* Advanced toggles - only in design mode */}
+              {settings.mode === 'design' && (
+                <div className="flex gap-1 mt-1 pt-1 border-t border-muted-foreground/10">
+                  <label 
+                    className="flex items-center gap-0.5 text-[8px] text-muted-foreground cursor-pointer"
+                    title="Warm start: grains begin playing immediately (placeholder)"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={settings.warmStart ?? false}
+                      onChange={(e) => update("warmStart", e.target.checked)}
+                      className="w-2.5 h-2.5"
+                      disabled={!settings.enabled}
+                      data-testid="checkbox-granular-warmstart"
+                    />
+                    Warm
+                  </label>
+                </div>
+              )}
             </div>
           </div>
         </div>

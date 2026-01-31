@@ -369,11 +369,23 @@ class GranularProcessor extends AudioWorkletProcessor {
   windowGauss(p, s = 0.4) { const x = p - 0.5; return Math.exp(-0.5 * Math.pow(x / s, 2)); }
   windowBlackman(p) { return 0.42 - 0.5 * Math.cos(2 * Math.PI * p) + 0.08 * Math.cos(4 * Math.PI * p); }
   windowRect() { return 1.0; }
+  windowTukey(p, a = 0.5) {
+    if (p < a / 2) return 0.5 * (1 + Math.cos(Math.PI * (2 * p / a - 1)));
+    if (p > 1 - a / 2) return 0.5 * (1 + Math.cos(Math.PI * (2 * p / a - 2 / a + 1)));
+    return 1.0;
+  }
+  windowTrapezoid(p, r = 0.25) {
+    if (p < r) return p / r;
+    if (p > 1 - r) return (1 - p) / r;
+    return 1.0;
+  }
   getWindow(p, t) {
     switch (t) {
       case 'gauss': return this.windowGauss(p);
       case 'blackman': return this.windowBlackman(p);
       case 'rect': return this.windowRect();
+      case 'tukey': return this.windowTukey(p);
+      case 'trapezoid': return this.windowTrapezoid(p);
       default: return this.windowHann(p);
     }
   }
@@ -569,11 +581,23 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
   const windowHann = (p: number) => 0.5 - 0.5 * Math.cos(2 * Math.PI * p);
   const windowGauss = (p: number, s = 0.4) => { const x = p - 0.5; return Math.exp(-0.5 * Math.pow(x / s, 2)); };
   const windowBlackman = (p: number) => 0.42 - 0.5 * Math.cos(2 * Math.PI * p) + 0.08 * Math.cos(4 * Math.PI * p);
+  const windowTukey = (p: number, a = 0.5) => {
+    if (p < a / 2) return 0.5 * (1 + Math.cos(Math.PI * (2 * p / a - 1)));
+    if (p > 1 - a / 2) return 0.5 * (1 + Math.cos(Math.PI * (2 * p / a - 2 / a + 1)));
+    return 1.0;
+  };
+  const windowTrapezoid = (p: number, r = 0.25) => {
+    if (p < r) return p / r;
+    if (p > 1 - r) return (1 - p) / r;
+    return 1.0;
+  };
   const getWindow = (p: number, t: string) => {
     switch (t) {
       case 'gauss': return windowGauss(p);
       case 'blackman': return windowBlackman(p);
       case 'rect': return 1.0;
+      case 'tukey': return windowTukey(p);
+      case 'trapezoid': return windowTrapezoid(p);
       default: return windowHann(p);
     }
   };
