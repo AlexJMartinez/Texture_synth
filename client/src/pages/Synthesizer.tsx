@@ -3640,6 +3640,7 @@ export default function Synthesizer() {
     
     try {
       // Create params with oscillators disabled for granular-only playback
+      // Also override the master amp envelope to match granular duration
       const granularOnlyParams: SynthParameters = {
         ...params,
         oscillators: {
@@ -3652,6 +3653,16 @@ export default function Synthesizer() {
         subOsc: { ...params.subOsc, enabled: false },
         modal: { ...params.modal, enabled: false },
         additive: { ...params.additive, enabled: false },
+        // Override amp envelope to be long enough for granular output
+        envelopes: {
+          ...params.envelopes,
+          env3: {
+            ...params.envelopes.env3,
+            attack: 10,  // Quick attack
+            hold: durationMs + 100,  // Hold for full duration
+            decay: 100,  // Quick decay at end
+          }
+        }
       };
       
       // Render using generateSound with oscillators disabled (granular only)
