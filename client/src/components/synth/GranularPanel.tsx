@@ -135,7 +135,9 @@ export function GranularPanel({
   // Canvas-based waveform visualization (matches terrain display style)
   const waveformCanvasRef = useRef<HTMLCanvasElement>(null);
   const grainOverlayRef = useRef<HTMLCanvasElement>(null);
-  const [grainPositions, setGrainPositions] = useState<number[]>([]);
+  const [grainPositions, setGrainPositions] = useState<{x: number, y: number}[]>([]);
+  const targetPositionsRef = useRef<{x: number, y: number}[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
   
   // Draw bar-style waveform on canvas (matches main terrain display)
   const drawBarWaveform = useCallback((canvas: HTMLCanvasElement, data: Float32Array | null, cssWidth: number, cssHeight: number) => {
@@ -272,32 +274,89 @@ export function GranularPanel({
   }, []);
   
   
-  // Simulate grain positions for visualization (updates periodically when enabled)
+  // Simulate grain positions for visualization with smooth interpolation
   useEffect(() => {
     if (!settings.enabled || !sampleBuffer?.data) {
       setGrainPositions([]);
+      targetPositionsRef.current = [];
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
       return;
     }
     
-    const updateGrains = () => {
-      const numGrains = Math.min(Math.floor(settings.densityGps / 8), 16);
-      const positions: number[] = [];
+    const numGrains = Math.min(Math.floor(settings.densityGps / 8), 16);
+    const height = 64; // Canvas height
+    
+    // Initialize positions if needed
+    if (targetPositionsRef.current.length !== numGrains) {
+      const initialPositions: {x: number, y: number}[] = [];
+      for (let i = 0; i < numGrains; i++) {
+        const hash = ((i * 2654435761) >>> 0) % 1000 / 1000;
+        const baseX = settings.scanStart + (i / numGrains) * settings.scanWidth;
+        const y = height / 2 + (hash - 0.5) * (height * 0.6);
+        initialPositions.push({ x: baseX, y });
+      }
+      targetPositionsRef.current = initialPositions;
+      setGrainPositions(initialPositions);
+    }
+    
+    // Update target positions periodically
+    const updateTargets = () => {
       const scanStart = settings.scanStart;
       const scanWidth = settings.scanWidth;
       const jitterNorm = settings.posJitterMs / 80;
       
+      const newTargets: {x: number, y: number}[] = [];
       for (let i = 0; i < numGrains; i++) {
-        const basePos = scanStart + (i / numGrains) * scanWidth;
+        const hash = ((i * 2654435761) >>> 0) % 1000 / 1000;
+        const baseX = scanStart + (i / numGrains) * scanWidth;
         const jitterAmount = (Math.random() - 0.5) * jitterNorm * scanWidth;
-        const pos = Math.max(0, Math.min(1, basePos + jitterAmount));
-        positions.push(pos);
+        const x = Math.max(0, Math.min(1, baseX + jitterAmount));
+        // Small y variation to simulate grain movement
+        const yBase = height / 2 + (hash - 0.5) * (height * 0.6);
+        const yJitter = (Math.random() - 0.5) * 8;
+        const y = Math.max(8, Math.min(height - 8, yBase + yJitter));
+        newTargets.push({ x, y });
       }
-      setGrainPositions(positions);
+      targetPositionsRef.current = newTargets;
     };
     
-    updateGrains();
-    const interval = setInterval(updateGrains, 80);
-    return () => clearInterval(interval);
+    updateTargets();
+    const targetInterval = setInterval(updateTargets, 150); // Update targets every 150ms
+    
+    // Smooth animation loop
+    let lastTime = performance.now();
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+    
+    const animate = (time: number) => {
+      const dt = Math.min(time - lastTime, 50); // Cap delta time
+      lastTime = time;
+      const lerpFactor = 1 - Math.pow(0.05, dt / 16.67); // Smooth easing (~60fps reference)
+      
+      setGrainPositions(prev => {
+        const targets = targetPositionsRef.current;
+        if (prev.length !== targets.length) return targets;
+        
+        return prev.map((pos, i) => ({
+          x: lerp(pos.x, targets[i].x, lerpFactor),
+          y: lerp(pos.y, targets[i].y, lerpFactor)
+        }));
+      });
+      
+      animationFrameRef.current = requestAnimationFrame(animate);
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(animate);
+    
+    return () => {
+      clearInterval(targetInterval);
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, [settings.enabled, settings.densityGps, settings.scanStart, settings.scanWidth, settings.posJitterMs, sampleBuffer?.data]);
   
   // Draw grain overlay on canvas
@@ -343,21 +402,19 @@ export function GranularPanel({
     
     // Draw grain visualization (Phaseplant-style: elegant glowing orbs)
     if (grainPositions.length > 0 && settings.enabled) {
-      // Sort positions for consistent z-layering
-      const sortedPositions = [...grainPositions].sort((a, b) => a - b);
+      // Sort positions for consistent z-layering (by x position)
+      const sortedPositions = [...grainPositions].sort((a, b) => a.x - b.x);
       
       // Base size scales with grain size - keep them small and elegant
       const baseRadius = Math.max(4, Math.min(8, settings.grainSizeMs / 6));
       
       // Draw all grains with layered glow effect
       sortedPositions.forEach((pos, index) => {
-        const x = pos * width;
-        // Use a seeded pseudo-random for vertical position based on index
-        const hash = ((index * 2654435761) >>> 0) % 1000 / 1000;
-        const yVariation = (hash - 0.5) * (height * 0.6);
-        const y = height / 2 + yVariation;
+        const x = pos.x * width;
+        const y = pos.y;
         
-        // Size variation based on position hash
+        // Size variation based on index hash
+        const hash = ((index * 2654435761) >>> 0) % 1000 / 1000;
         const sizeVar = 0.7 + hash * 0.6;
         const radius = baseRadius * sizeVar;
         
