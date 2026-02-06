@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
 import { Dices, Shuffle } from "lucide-react";
 import { useState } from "react";
 import type { SynthParameters, Oscillator, Envelope, WaveformType, EnvelopeCurve, FilterType, EnvelopeTarget, WaveshaperCurve, ModRatioPreset, PitchState, SpectralScrambler } from "@shared/schema";
@@ -304,17 +303,28 @@ export function RandomizeControls({
     const isPitchEnv = target === "pitch";
     
     // Amp: ultra-fast attack for transient; Filter/Pitch: slightly longer but still one-shot friendly
-    const maxAttack = isAmpEnv ? 20 : Math.min(150, 200 * chaos); // Amp: 0-20ms, others: 0-150ms max
-    const maxHold = isAmpEnv ? 40 : Math.min(100, 150 * chaos); // Amp: 0-40ms, others: 0-100ms max
-    const minDecay = isAmpEnv ? 80 : 40; // Minimum decay
-    const maxDecay = isPitchEnv ? 1500 : 2500; // Pitch shorter for snappy 808 drops, others reasonable
-    const envAmount = isAmpEnv ? 100 : Math.round(randomInRange(20, 100)); // Always 100% for amp
-    
+    // Bias punch: when chaos is low/medium, avoid long amp decays that smear the transient.
+    const percussiveBias = isAmpEnv && chaos < 0.6;
+
+    const maxAttack = isAmpEnv ? 20 : Math.min(150, 200 * chaos); // Amp: up to 20ms, but biased lower
+    const maxHold = isAmpEnv ? 40 : Math.min(100, 150 * chaos);
+
+    const minDecay = isAmpEnv ? 80 : 40;
+    const maxDecayBase = isPitchEnv ? 1500 : 2500;
+    const maxDecay = percussiveBias ? Math.min(1200, maxDecayBase) : maxDecayBase;
+
+    const envAmount = isAmpEnv ? 100 : Math.round(randomInRange(20, 100));
+
+    // Use exponential-biased randoms for punch (more weight toward small values)
+    const attackMs = isAmpEnv ? randExp(0, Math.max(1, maxAttack), 3.0) : randomInRange(0, maxAttack);
+    const holdMs = isAmpEnv ? randExp(0, Math.max(1, maxHold), 2.5) : randomInRange(0, maxHold);
+    const decayMs = percussiveBias ? randExp(minDecay, maxDecay, 2.2) : randomInRange(minDecay, maxDecay);
+
     return {
       enabled: forceEnabled !== undefined ? forceEnabled : Math.random() > 0.4,
-      attack: Math.round(randomInRange(0, maxAttack)),
-      hold: Math.round(randomInRange(0, maxHold)),
-      decay: Math.round(randomInRange(minDecay, maxDecay)),
+      attack: Math.round(attackMs),
+      hold: Math.round(holdMs),
+      decay: Math.round(decayMs),
       curve: Math.random() > 0.5 ? current.curve : randomCurve(),
       target: target,
       amount: envAmount,
@@ -323,7 +333,9 @@ export function RandomizeControls({
 
   const randomizeAll = () => {
     const chaos = chaosAmount / 100;
-    
+    // Percussive bias: keep transients clean at lower chaos, allow wetter results only at high chaos
+    const wetChanceScale = 0.25 + 0.75 * chaos; // 0.25..1.0
+
     const filterEnvelope = randomizeEnv(currentParams.envelopes.env2, chaos, "filter");
     const filterEnvEnabled = filterEnvelope.enabled && filterEnvelope.amount !== 0;
     
@@ -334,7 +346,16 @@ export function RandomizeControls({
         osc3: randomizeOsc(currentParams.oscillators.osc3, chaos),
       },
       envelopes: {
-        env1: randomizeEnv(currentParams.envelopes.env1, chaos, "amplitude", true),
+        env1: (() => {
+          const e = randomizeEnv(currentParams.envelopes.env1, chaos, "amplitude", true);
+          if (chaos < 0.6) {
+            // Strong percussive bias: most attacks in 0–5ms, short holds, and avoid long decays.
+            e.attack = Math.round(randExp(0, 5, 3.2));
+            e.hold = Math.min(e.hold, Math.round(randExp(0, 35, 2.4)));
+            e.decay = Math.min(e.decay, Math.round(randExp(80, 1200, 2.0)));
+          }
+          return e;
+        })(),
         env2: filterEnvelope,
         env3: randomizeEnv(currentParams.envelopes.env3, chaos, "pitch"),
       },
@@ -365,13 +386,13 @@ export function RandomizeControls({
         saturation: Math.round(randomInRange(0, 80 * chaos)),
         bitcrusher: Math.round(randomInRange(4, 16)),
         // One-shot delay: short times for transient thickening/slap, low feedback, subtle mix
-        delayEnabled: Math.random() > 0.6,
+        delayEnabled: Math.random() > (0.85 - 0.35 * wetChanceScale),
         delaySyncMode: "ms" as const, // Use ms mode for precise one-shot control
         delayTime: Math.round(randExp(1, 40, 1.5)), // 1-40ms: transient thickening (1-5ms), slap (5-20ms), tight echo (20-40ms)
         delayDivision: (["1/32", "1/16", "1/16T"] as const)[Math.floor(Math.random() * 3)], // Shorter divisions if sync mode used
         delayFeedback: Math.round(randExp(0, 15, 2.0)), // 0-15%: one-shots should decay once, not repeat
         delayMix: Math.round(randExp(3, 20, 1.5)), // 3-20%: delay should support, not announce itself
-        reverbEnabled: Math.random() > 0.6,
+        reverbEnabled: Math.random() > (0.88 - 0.38 * wetChanceScale),
         reverbSize: Math.round(randomInRange(15, 50)), // 15-50%: smaller rooms for tight one-shot tails
         reverbMix: Math.round(randomInRange(8, 30)), // 8-30%: preserve transient clarity
         reverbDecay: Math.round(randomInRange(0.3, 2) * 10) / 10, // 0.3-2s: short tails for one-shots
@@ -432,9 +453,9 @@ export function RandomizeControls({
       },
       convolver: {
         // One-shot convolution: always use built-in IRs, subtle mix
-        enabled: Math.random() > 0.5,
+        enabled: Math.random() > (0.92 - 0.42 * wetChanceScale),
         irName: getRandomOneShotIR(), // Use optimized one-shot IR
-        mix: Math.round(randExp(3, 15, 1.5)), // 3-15%: convolution adds density fast, a little goes a long way
+        mix: Math.round(randExp(2, 10, 1.6)), // 2-10%: convolution adds density fast, a little goes a long way
         useCustomIR: false, // Use built-in one-shot optimized IRs
       },
       spectralScrambler: {
@@ -641,16 +662,19 @@ export function RandomizeControls({
     const strength = variationAmount / 100;
 
     const mutateValue = (current: number, min: number, max: number, log = false): number => {
-      const range = log ? Math.log(max) - Math.log(min) : max - min;
-      const mutation = (Math.random() - 0.5) * 2 * strength * range;
-      
       if (log && min > 0) {
-        const logCurrent = Math.log(current);
+        const logMin = Math.log(min);
+        const logMax = Math.log(max);
+        const logRange = logMax - logMin;
+        const mutation = (Math.random() - 0.5) * 2 * strength * logRange;
+        const logCurrent = Math.log(Math.max(min, current));
         const newLogValue = logCurrent + mutation;
         return Math.max(min, Math.min(max, Math.exp(newLogValue)));
       }
-      
-      return Math.max(min, Math.min(max, current + mutation * (max - min)));
+
+      const range = max - min;
+      const mutation = (Math.random() - 0.5) * 2 * strength * range;
+      return Math.max(min, Math.min(max, current + mutation));
     };
 
     const mutateOsc = (osc: Oscillator): Oscillator => {
