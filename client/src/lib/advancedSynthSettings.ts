@@ -34,6 +34,33 @@ export const defaultAdvancedFMSettings: AdvancedFMSettings = {
   carrierWaveform: "sine", // Classic FM uses sine carrier
 };
 
+function cloneAdvancedFMSettings(src: AdvancedFMSettings = defaultAdvancedFMSettings): AdvancedFMSettings {
+  return {
+    ...src,
+    operator2: { ...src.operator2 },
+  };
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+function sanitizeAdvancedFMSettings(s: AdvancedFMSettings): AdvancedFMSettings {
+  return {
+    algorithm: s.algorithm,
+    operator1Detune: clamp(Number(s.operator1Detune ?? 0), -100, 100),
+    carrierWaveform: s.carrierWaveform,
+    operator2: {
+      enabled: Boolean(s.operator2?.enabled),
+      ratio: clamp(Number(s.operator2?.ratio ?? 2), 0.25, 16),
+      ratioDetune: clamp(Number(s.operator2?.ratioDetune ?? 0), -100, 100),
+      depth: clamp(Number(s.operator2?.depth ?? 200), 0, 1000),
+      waveform: (s.operator2?.waveform ?? 'sine') as FMOperator2['waveform'],
+      feedback: clamp(Number(s.operator2?.feedback ?? 0), 0, 1),
+    },
+  };
+}
+
 // Per-oscillator FM settings map
 export type OscAdvancedFMSettings = {
   osc1: AdvancedFMSettings;
@@ -42,9 +69,9 @@ export type OscAdvancedFMSettings = {
 };
 
 export const defaultOscAdvancedFMSettings: OscAdvancedFMSettings = {
-  osc1: { ...defaultAdvancedFMSettings },
-  osc2: { ...defaultAdvancedFMSettings },
-  osc3: { ...defaultAdvancedFMSettings },
+  osc1: cloneAdvancedFMSettings(),
+  osc2: cloneAdvancedFMSettings(),
+  osc3: cloneAdvancedFMSettings(),
 };
 
 // LocalStorage keys
@@ -55,21 +82,43 @@ export function loadAdvancedFMSettings(): OscAdvancedFMSettings {
   try {
     const stored = localStorage.getItem(FM_SETTINGS_KEY);
     if (stored) {
-      const parsed = JSON.parse(stored);
+      const parsed = JSON.parse(stored) as Partial<OscAdvancedFMSettings>;
+
+      const mergeOne = (p?: Partial<AdvancedFMSettings>): AdvancedFMSettings => {
+        const merged: AdvancedFMSettings = {
+          ...cloneAdvancedFMSettings(),
+          ...(p ?? {}),
+          operator2: {
+            ...defaultAdvancedFMSettings.operator2,
+            ...((p as any)?.operator2 ?? {}),
+          },
+        };
+        return sanitizeAdvancedFMSettings(merged);
+      };
+
       return {
-        osc1: { ...defaultAdvancedFMSettings, ...parsed.osc1 },
-        osc2: { ...defaultAdvancedFMSettings, ...parsed.osc2 },
-        osc3: { ...defaultAdvancedFMSettings, ...parsed.osc3 },
+        osc1: mergeOne((parsed as any)?.osc1),
+        osc2: mergeOne((parsed as any)?.osc2),
+        osc3: mergeOne((parsed as any)?.osc3),
       };
     }
   } catch {
     // Fall through to default
   }
-  return { ...defaultOscAdvancedFMSettings };
+
+  return {
+    osc1: cloneAdvancedFMSettings(),
+    osc2: cloneAdvancedFMSettings(),
+    osc3: cloneAdvancedFMSettings(),
+  };
 }
 
 export function saveAdvancedFMSettings(settings: OscAdvancedFMSettings) {
-  localStorage.setItem(FM_SETTINGS_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(FM_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('Failed to save advanced FM settings:', e);
+  }
 }
 
 // Algorithm descriptions for UI

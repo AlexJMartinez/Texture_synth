@@ -5,47 +5,63 @@ import type { WavetableData, OscWavetableSettings, WavetableInterpolation } from
 import { getFrameAtPosition, frameToPeriodicWave } from "./wavetableSettings";
 import { getFactoryWavetables, getWavetableById, getCustomWavetables } from "./factoryWavetables";
 
-// Cache for PeriodicWave objects to avoid regenerating them
-const periodicWaveCache = new Map<string, PeriodicWave>();
+// Cache for PeriodicWave objects to avoid regenerating them.
+// PeriodicWave instances are tied to the AudioContext they were created in,
+// so we cache per-context to avoid cross-context errors (e.g. live vs OfflineAudioContext).
+let periodicWaveCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
+
+function getContextCache(audioContext: BaseAudioContext): Map<string, PeriodicWave> {
+  let cache = periodicWaveCache.get(audioContext);
+  if (!cache) {
+    cache = new Map<string, PeriodicWave>();
+    periodicWaveCache.set(audioContext, cache);
+  }
+  return cache;
+}
 
 // Generate cache key for a specific wavetable position
 function getCacheKey(wavetableId: string, position: number, interpolation: WavetableInterpolation): string {
+  const clampedPos = Math.max(0, Math.min(100, position));
   // Round position to reduce cache size (every 2% step)
-  const roundedPos = Math.round(position / 2) * 2;
+  const roundedPos = Math.round(clampedPos / 2) * 2;
   return `${wavetableId}-${roundedPos}-${interpolation}`;
 }
 
 // Get or create PeriodicWave for a wavetable at a specific position
 export function getPeriodicWaveAtPosition(
-  audioContext: AudioContext | OfflineAudioContext,
+  audioContext: BaseAudioContext,
   wavetable: WavetableData,
   position: number,
   interpolation: WavetableInterpolation = "linear"
 ): PeriodicWave {
-  const cacheKey = getCacheKey(wavetable.id, position, interpolation);
-  
-  if (periodicWaveCache.has(cacheKey)) {
-    return periodicWaveCache.get(cacheKey)!;
+  const clampedPosition = Math.max(0, Math.min(100, position));
+  const cacheKey = getCacheKey(wavetable.id, clampedPosition, interpolation);
+  const cache = getContextCache(audioContext as BaseAudioContext);
+
+  if (cache.has(cacheKey)) {
+    return cache.get(cacheKey)!;
   }
-  
-  const frame = getFrameAtPosition(wavetable, position, interpolation);
-  const periodicWave = frameToPeriodicWave(audioContext, frame, true);
-  
+
+  const frame = getFrameAtPosition(wavetable, clampedPosition, interpolation);
+  // `frameToPeriodicWave` is typed to accept `AudioContext | OfflineAudioContext`.
+  // We accept `BaseAudioContext` in this module, so cast here to satisfy TS.
+  const periodicWave = frameToPeriodicWave(audioContext as unknown as AudioContext | OfflineAudioContext, frame, true);
+
   // Cache with size limit (clear old entries if too large)
-  if (periodicWaveCache.size > 500) {
-    const keys = Array.from(periodicWaveCache.keys());
-    for (let i = 0; i < 100; i++) {
-      periodicWaveCache.delete(keys[i]);
+  if (cache.size > 500) {
+    const keys = Array.from(cache.keys());
+    for (let i = 0; i < 100 && i < keys.length; i++) {
+      cache.delete(keys[i]);
     }
   }
-  
-  periodicWaveCache.set(cacheKey, periodicWave);
+
+  cache.set(cacheKey, periodicWave);
   return periodicWave;
 }
 
 // Clear cache (useful when loading new wavetables)
 export function clearPeriodicWaveCache(): void {
-  periodicWaveCache.clear();
+  periodicWaveCache = new WeakMap<BaseAudioContext, Map<string, PeriodicWave>>();
 }
 
 // Create a wavetable oscillator node
@@ -55,7 +71,7 @@ export interface WavetableOscillatorResult {
 }
 
 export function createWavetableOscillator(
-  audioContext: AudioContext | OfflineAudioContext,
+  audioContext: BaseAudioContext,
   settings: OscWavetableSettings,
   frequency: number,
   startTime: number,
@@ -107,7 +123,7 @@ export interface UnisonWavetableResult {
 }
 
 export function createUnisonWavetableOscillators(
-  audioContext: AudioContext | OfflineAudioContext,
+  audioContext: BaseAudioContext,
   settings: OscWavetableSettings,
   frequency: number,
   startTime: number,
@@ -199,7 +215,7 @@ export function createUnisonWavetableOscillators(
 // Apply wavetable position modulation from envelope
 // This creates an envelope that sweeps the wavetable position over time
 export function applyWavetablePositionModulation(
-  audioContext: AudioContext | OfflineAudioContext,
+  audioContext: BaseAudioContext,
   wavetableResult: UnisonWavetableResult | WavetableOscillatorResult,
   wavetable: WavetableData,
   settings: OscWavetableSettings,
@@ -282,11 +298,11 @@ export function getAllWavetables(): WavetableData[] {
 }
 
 // Initialize wavetable system (preload common wavetables)
-export function initializeWavetableEngine(audioContext: AudioContext): void {
+export function initializeWavetableEngine(audioContext: BaseAudioContext): void {
   // Pre-cache a few common wavetables at key positions
   const commonWavetables = ["basic-sine-to-saw", "basic-sine-to-square", "digital-pwm"];
   const commonPositions = [0, 25, 50, 75, 100];
-  
+
   for (const id of commonWavetables) {
     const wt = getWavetableById(id);
     if (wt) {

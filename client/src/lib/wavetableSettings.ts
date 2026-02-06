@@ -155,6 +155,12 @@ export function frameToPeriodicWave(
   normalize: boolean = true
 ): PeriodicWave {
   const fftSize = frame.length;
+  
+  // Remove DC offset from the time-domain frame to keep harmonic analysis stable
+  let mean = 0;
+  for (let i = 0; i < fftSize; i++) mean += frame[i];
+  mean /= fftSize;
+  
   const real = new Float32Array(fftSize);
   const imag = new Float32Array(fftSize);
   
@@ -164,11 +170,19 @@ export function frameToPeriodicWave(
     let imagSum = 0;
     for (let n = 0; n < fftSize; n++) {
       const angle = (2 * Math.PI * k * n) / fftSize;
-      realSum += frame[n] * Math.cos(angle);
-      imagSum -= frame[n] * Math.sin(angle);
+      const x = frame[n] - mean;
+      realSum += x * Math.cos(angle);
+      imagSum -= x * Math.sin(angle);
     }
-    real[k] = realSum / fftSize;
-    imag[k] = imagSum / fftSize;
+    if (k === 0) {
+      // DC component (we remove it below)
+      real[k] = realSum / fftSize;
+      imag[k] = imagSum / fftSize;
+    } else {
+      // Harmonic coefficients: scale by 2/N for k>0
+      real[k] = (2 * realSum) / fftSize;
+      imag[k] = (2 * imagSum) / fftSize;
+    }
   }
   
   // DC offset removal

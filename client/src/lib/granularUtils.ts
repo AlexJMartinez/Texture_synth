@@ -119,6 +119,7 @@ export function getWindowFunction(type: WindowType): (phase: number) => number {
 // skew: -1 to +1 (negative = front-loaded, positive = back-loaded)
 export function applyWindowSkew(phase: number, skew: number): number {
   if (skew === 0) return phase;
+  skew = Math.max(-1, Math.min(1, skew));
   
   // Use power curve to skew
   const power = 1 + skew * 0.8; // 0.2 to 1.8
@@ -222,10 +223,14 @@ export function generateGrainSchedule(
   const rng = new SeededRNG(settings.seed);
   const events: GrainEvent[] = [];
   
-  if (bufferDuration === 0) return events;
+  if (bufferDuration <= 0 || renderDuration <= 0) return events;
+  if (settings.densityGps <= 0) return events;
   
   // Compute timing
   const grainSizeSec = settings.grainSizeMs / 1000;
+  if (grainSizeSec <= 0) return events;
+  if (grainSizeSec >= bufferDuration) return events;
+  
   const grainInterval = 1 / settings.densityGps;
   
   // Scan position (smoothly moving through buffer)
@@ -234,8 +239,15 @@ export function generateGrainSchedule(
   
   let time = 0;
   let activeGrains = 0;
+  // Track grain end times to avoid O(n^2) scanning at high density
+  const endTimes: number[] = [];
+  let endHead = 0;
   
   while (time < renderDuration) {
+    // Retire ended grains
+    while (endHead < endTimes.length && endTimes[endHead] < time) endHead++;
+    activeGrains = endTimes.length - endHead;
+    
     // Skip if at max voices
     if (activeGrains >= settings.maxVoices) {
       time += grainInterval;
@@ -293,14 +305,11 @@ export function generateGrainSchedule(
       windowType: settings.windowType,
       windowSkew: settings.windowSkew,
     });
+    endTimes.push(time + grainSizeSec);
     
     // Update state
     activeGrains++;
     scanPhase += scanSpeed * grainInterval * sampleRate;
-    
-    // Simple voice tracking (grains that have ended)
-    const endedGrains = events.filter(e => e.startTime + e.duration < time).length;
-    activeGrains = events.length - endedGrains;
     
     // Move to next grain time (with slight jitter for natural feel)
     time += grainInterval * rng.range(0.8, 1.2);
@@ -404,6 +413,7 @@ export function applySafetyFade(
   fadeMs: number = 10
 ): void {
   const fadeSamples = Math.floor((fadeMs / 1000) * sampleRate);
+  if (fadeSamples <= 0) return;
   const len = buffer.length;
   
   // Fade in
@@ -442,13 +452,13 @@ export function generateAHDEnvelope(
     
     if (i < attackSamples) {
       // Attack phase
-      value = i / attackSamples;
+      value = attackSamples > 0 ? i / attackSamples : 1.0;
     } else if (i < attackSamples + holdSamples) {
       // Hold phase
       value = 1.0;
     } else {
       // Decay phase (exponential)
-      const decayProgress = (i - attackSamples - holdSamples) / decaySamples;
+      const decayProgress = decaySamples > 0 ? (i - attackSamples - holdSamples) / decaySamples : 1;
       value = Math.max(0, Math.exp(-3 * decayProgress));
     }
     

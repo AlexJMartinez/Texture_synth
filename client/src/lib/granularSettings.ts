@@ -197,6 +197,10 @@ export const CINEMATIC_RANGES = {
   envDecay: { min: 10, max: 2000 },
 };
 
+function isGranularMode(v: any): v is GranularMode {
+  return v === 'cinematic' || v === 'design';
+}
+
 // Design mode: full range matching Quanta/PhasePlant industry standards
 export const DESIGN_RANGES = {
   grainSizeMs: { min: 1, max: 500 },      // Quanta goes to 1000ms
@@ -305,7 +309,14 @@ export function loadGranularSettings(): GranularSettings {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      return { ...CINEMATIC_DEFAULTS, ...parsed };
+      const merged: GranularSettings = { ...CINEMATIC_DEFAULTS, ...parsed };
+
+      // Guard against invalid mode coming from storage
+      const mode: GranularMode = isGranularMode((merged as any).mode) ? (merged as any).mode : 'cinematic';
+      const normalized: GranularSettings = { ...merged, mode };
+
+      // Always restore to a sane, mode-appropriate state
+      return applyAntiMudRules(clampToMode(normalized));
     }
   } catch (e) {
     console.warn('Failed to load granular settings:', e);
@@ -348,11 +359,17 @@ export function loadGranularBufferMeta(): GranularBufferMeta | null {
 
 // Convert Float32Array to base64 for storage
 export function float32ToBase64(data: Float32Array): string {
-  const uint8 = new Uint8Array(data.buffer);
+  // Respect views/slices (byteOffset + byteLength), not the entire underlying buffer.
+  const uint8 = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+
+  // Chunk to avoid call stack / performance issues with large arrays.
+  const chunkSize = 0x8000; // 32KB
   let binary = '';
-  for (let i = 0; i < uint8.length; i++) {
-    binary += String.fromCharCode(uint8[i]);
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    const chunk = uint8.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
   }
+
   return btoa(binary);
 }
 
@@ -363,5 +380,13 @@ export function base64ToFloat32(base64: string): Float32Array {
   for (let i = 0; i < binary.length; i++) {
     uint8[i] = binary.charCodeAt(i);
   }
-  return new Float32Array(uint8.buffer);
+
+  // Float32Array requires a byte length multiple of 4.
+  const validLen = uint8.byteLength - (uint8.byteLength % Float32Array.BYTES_PER_ELEMENT);
+  if (validLen !== uint8.byteLength) {
+    console.warn('base64ToFloat32: decoded byte length is not a multiple of 4; truncating.');
+  }
+
+  const buf = uint8.buffer.slice(0, validLen);
+  return new Float32Array(buf);
 }

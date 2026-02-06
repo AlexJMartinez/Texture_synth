@@ -67,14 +67,24 @@ class RingBuffer {
 class AudioPlaybackProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.ringBuffer = new RingBuffer(24000 * 30); // 30s initial capacity
+    this.ringBuffer = new RingBuffer(Math.floor(sampleRate * 30)); // ~30s initial capacity
     this.isPlaying = false;
     this.streamComplete = false;
+    this.fadeSamplesLeft = 0;
+    this.fadeTotalSamples = Math.floor(sampleRate * 0.01); // 10ms
 
     this.port.onmessage = (event) => {
       const { type, samples } = event.data;
       if (type === "audio") {
-        this.ringBuffer.push(samples);
+        // Accept Float32 samples in [-1, 1] or PCM16 (Int16Array) samples
+        let floatSamples = samples;
+        if (samples && samples.BYTES_PER_ELEMENT === 2) {
+          // Likely Int16Array (PCM16)
+          const s = samples;
+          floatSamples = new Float32Array(s.length);
+          for (let i = 0; i < s.length; i++) floatSamples[i] = Math.max(-1, Math.min(1, s[i] / 32768));
+        }
+        this.ringBuffer.push(floatSamples);
         this.isPlaying = true;
       } else if (type === "clear") {
         this.ringBuffer.clear();
@@ -83,8 +93,9 @@ class AudioPlaybackProcessor extends AudioWorkletProcessor {
       } else if (type === "streamComplete") {
         this.streamComplete = true;
       } else if (type === "stop") {
-        this.isPlaying = false;
+        // Fade out quickly to avoid clicks
         this.streamComplete = false;
+        this.fadeSamplesLeft = this.fadeTotalSamples;
       }
     };
   }
@@ -93,20 +104,51 @@ class AudioPlaybackProcessor extends AudioWorkletProcessor {
     const output = outputs[0];
     if (!output || output.length === 0) return true;
 
-    const channel = output[0];
+    const ch0 = output[0];
+
     if (this.isPlaying) {
-      this.ringBuffer.pull(channel);
+      // Pull mono into ch0
+      const hadData = this.ringBuffer.pull(ch0);
+
+      // Duplicate to any additional channels
+      for (let c = 1; c < output.length; c++) {
+        output[c].set(ch0);
+      }
+
+      if (this.fadeSamplesLeft > 0) {
+        const n = ch0.length;
+        for (let i = 0; i < n; i++) {
+          const g = Math.max(0, this.fadeSamplesLeft / this.fadeTotalSamples);
+          ch0[i] *= g;
+          for (let c = 1; c < output.length; c++) output[c][i] *= g;
+          this.fadeSamplesLeft--;
+          if (this.fadeSamplesLeft <= 0) break;
+        }
+        if (this.fadeSamplesLeft <= 0) {
+          this.isPlaying = false;
+          // Optionally clear the buffer when stopping
+          this.ringBuffer.clear();
+        }
+      }
+
+      if (!hadData) {
+        // Optional: could post underrun notifications here (throttled)
+      }
+
       if (this.streamComplete && this.ringBuffer.available() === 0) {
         this.isPlaying = false;
         this.streamComplete = false;
         this.port.postMessage({ type: "ended" });
       }
     } else {
-      channel.fill(0);
+      // Silence all channels
+      for (let c = 0; c < output.length; c++) {
+        output[c].fill(0);
+      }
     }
+
     return true;
   }
 }
 
 registerProcessor("audio-playback-processor", AudioPlaybackProcessor);
-

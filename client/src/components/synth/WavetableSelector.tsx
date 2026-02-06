@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -27,16 +27,21 @@ export function WavetableSelector({
 }: WavetableSelectorProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   
-  const allWavetables = getAllWavetables();
+  const allWavetables = useMemo(() => getAllWavetables(), []);
   
   // Group wavetables by category
-  const wavetablesByCategory = allWavetables.reduce((acc, wt) => {
-    if (!acc[wt.category]) acc[wt.category] = [];
-    acc[wt.category].push(wt);
-    return acc;
-  }, {} as Record<WavetableCategory, typeof allWavetables>);
-  
-  const selectedWavetable = allWavetables.find(wt => wt.id === settings.wavetableId);
+  const wavetablesByCategory = useMemo(() => {
+    return allWavetables.reduce((acc, wt) => {
+      if (!acc[wt.category]) acc[wt.category] = [];
+      acc[wt.category]!.push(wt);
+      return acc;
+    }, {} as Partial<Record<WavetableCategory, typeof allWavetables>>);
+  }, [allWavetables]);
+
+  const selectedWavetable = useMemo(
+    () => allWavetables.find((wt) => wt.id === settings.wavetableId),
+    [allWavetables, settings.wavetableId]
+  );
   
   const updateSetting = <K extends keyof OscWavetableSettings>(
     key: K,
@@ -115,6 +120,7 @@ export function WavetableSelector({
               onChange={(v) => updateSetting("positionModDepth", v)}
               size="xs"
               disabled={disabled}
+              modulationPath={`wavetable.osc${oscIndex}.positionModDepth`}
             />
           </div>
           
@@ -153,6 +159,7 @@ export function WavetableSelector({
               onClick={() => setAdvancedOpen(!advancedOpen)}
               className="flex items-center gap-0.5 text-[9px] text-muted-foreground hover-elevate w-full rounded px-1 py-0.5"
               data-testid={`button-wavetable-advanced-toggle-${oscIndex}`}
+              aria-expanded={advancedOpen}
             >
               {advancedOpen ? <ChevronDown className="w-2 h-2" /> : <ChevronRight className="w-2 h-2" />}
               <span>Advanced</span>

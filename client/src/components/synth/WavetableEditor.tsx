@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { 
   Pencil, Eraser, Waves, ChevronLeft, ChevronRight, 
@@ -324,6 +323,7 @@ export function WavetableEditor({
   }, []);
   
   const addFrame = useCallback(() => {
+    saveUndoState();
     const newFrame = new Float32Array(SAMPLES_PER_FRAME);
     for (let i = 0; i < SAMPLES_PER_FRAME; i++) {
       newFrame[i] = Math.sin((i / SAMPLES_PER_FRAME) * Math.PI * 2);
@@ -332,9 +332,10 @@ export function WavetableEditor({
       setCurrentFrame(prev.length);
       return [...prev, newFrame];
     });
-  }, []);
+  }, [saveUndoState]);
   
   const duplicateFrame = useCallback(() => {
+    saveUndoState();
     setFrames(prev => {
       if (prev.length === 0) return prev;
       const copy = new Float32Array(prev[currentFrame]);
@@ -343,16 +344,17 @@ export function WavetableEditor({
       setCurrentFrame(currentFrame + 1);
       return newFrames;
     });
-  }, [currentFrame]);
+  }, [currentFrame, saveUndoState]);
   
   const deleteFrame = useCallback(() => {
+    saveUndoState();
     setFrames(prev => {
       if (prev.length <= 1) return prev;
       const newFrames = prev.filter((_, i) => i !== currentFrame);
       setCurrentFrame(Math.min(currentFrame, newFrames.length - 1));
       return newFrames;
     });
-  }, [currentFrame]);
+  }, [currentFrame, saveUndoState]);
   
   const resetFrame = useCallback(() => {
     saveUndoState();
@@ -372,7 +374,7 @@ export function WavetableEditor({
       category: "user",
       frameSize: SAMPLES_PER_FRAME as 256,
       frameCount: frames.length,
-      frames: frames,
+      frames: frames.map((f) => new Float32Array(f)),
       isFactory: false,
       createdAt: editingWavetableId ? undefined : Date.now(),
     };
@@ -383,26 +385,28 @@ export function WavetableEditor({
   const handleFileImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     const reader = new FileReader();
     reader.onload = async (event) => {
+      let audioContext: AudioContext | null = null;
+
       try {
         const arrayBuffer = event.target?.result as ArrayBuffer;
-        const audioContext = new AudioContext();
+        audioContext = new AudioContext();
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-        
+
         const channelData = audioBuffer.getChannelData(0);
         const numFrames = Math.min(64, Math.floor(channelData.length / SAMPLES_PER_FRAME));
-        
+
         const importedFrames: Float32Array[] = [];
         for (let f = 0; f < numFrames; f++) {
           const frame = new Float32Array(SAMPLES_PER_FRAME);
           const startSample = f * SAMPLES_PER_FRAME;
-          
+
           for (let i = 0; i < SAMPLES_PER_FRAME; i++) {
             frame[i] = channelData[startSample + i] || 0;
           }
-          
+
           let maxAbs = 0;
           for (let i = 0; i < frame.length; i++) {
             maxAbs = Math.max(maxAbs, Math.abs(frame[i]));
@@ -412,27 +416,29 @@ export function WavetableEditor({
               frame[i] /= maxAbs;
             }
           }
-          
+
           importedFrames.push(frame);
         }
-        
+
         if (importedFrames.length > 0) {
+          saveUndoState();
           setFrames(importedFrames);
           setCurrentFrame(0);
           setWavetableName(file.name.replace(/\.[^/.]+$/, ""));
+          onImport?.(file);
         }
-        
-        audioContext.close();
       } catch (err) {
         console.error("Failed to import wavetable:", err);
+      } finally {
+        audioContext?.close();
       }
     };
     reader.readAsArrayBuffer(file);
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [onImport, saveUndoState]);
   
   const exportWavetable = useCallback(() => {
     if (frames.length === 0) return;

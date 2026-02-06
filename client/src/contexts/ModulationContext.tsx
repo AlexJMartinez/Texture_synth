@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo } from "react";
+import type { ReactNode } from "react";
 import type { Modulator, ModulationRoute, ModulatorType } from "@shared/schema";
 import { MODULATOR_INDICATOR_COLORS } from "@/components/synth/ModulatorRack";
 
@@ -18,7 +19,7 @@ interface ModulationContextValue {
 const ModulationContext = createContext<ModulationContextValue | null>(null);
 
 interface ModulationProviderProps {
-  children: React.ReactNode;
+  children: ReactNode;
   modulators: Modulator[];
   routes: ModulationRoute[];
 }
@@ -28,14 +29,21 @@ export function ModulationProvider({ children, modulators, routes }: ModulationP
     const modulatorMap = new Map<string, Modulator>();
     modulators.forEach(m => modulatorMap.set(m.id, m));
 
+    const routesByTargetPath = new Map<string, ModulationRoute[]>();
+    for (const r of routes) {
+      const arr = routesByTargetPath.get(r.targetPath);
+      if (arr) arr.push(r);
+      else routesByTargetPath.set(r.targetPath, [r]);
+    }
+
     const getModulationsForPath = (path: string): ModulationInfo[] => {
-      const pathRoutes = routes.filter(r => r.targetPath === path);
+      const pathRoutes = routesByTargetPath.get(path) ?? [];
       return pathRoutes
         .map(route => {
           const modulator = modulatorMap.get(route.modulatorId);
           if (!modulator || !modulator.enabled) return null;
           return {
-            color: MODULATOR_INDICATOR_COLORS[modulator.type],
+            color: MODULATOR_INDICATOR_COLORS[modulator.type] ?? "#9CA3AF",
             modulatorType: modulator.type,
             modulatorName: modulator.name,
             depth: route.depth,
@@ -58,12 +66,17 @@ export function ModulationProvider({ children, modulators, routes }: ModulationP
   );
 }
 
-export function useModulation() {
-  return useContext(ModulationContext);
+export function useModulation(): ModulationContextValue {
+  const context = useContext(ModulationContext);
+  if (!context) throw new Error("useModulation must be used within ModulationProvider");
+  return context;
 }
 
 export function useModulationsForPath(path: string): ModulationInfo[] {
-  const context = useContext(ModulationContext);
-  if (!context) return [];
-  return context.getModulationsForPath(path);
+  try {
+    const context = useModulation();
+    return context.getModulationsForPath(path);
+  } catch {
+    return [];
+  }
 }

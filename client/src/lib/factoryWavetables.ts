@@ -64,6 +64,10 @@ function generateSyncFrame(
     const sawMaster = 1 - (masterPhase / Math.PI);
     frame[i] = Math.sin(phase) * (0.5 + 0.5 * sawMaster);
   }
+  // Normalize
+  let max = 0;
+  for (let i = 0; i < size; i++) max = Math.max(max, Math.abs(frame[i]));
+  if (max > 0) for (let i = 0; i < size; i++) frame[i] /= max;
   return frame;
 }
 
@@ -123,12 +127,15 @@ function createMultiMorph(
   const frames: Float32Array[] = [];
   
   for (let seg = 0; seg < keyframes.length - 1; seg++) {
-    for (let i = 0; i < framesPerSegment; i++) {
-      const t = i / framesPerSegment;
+    // For the first segment include i=0; for subsequent segments skip i=0 to avoid duplicating the boundary keyframe
+    const startI = seg === 0 ? 0 : 1;
+    const denom = Math.max(1, framesPerSegment - 1);
+
+    for (let i = startI; i < framesPerSegment; i++) {
+      const t = i / denom; // reaches 1.0 at the end of the segment
       frames.push(interpolateFrames(keyframes[seg], keyframes[seg + 1], t, "linear"));
     }
   }
-  frames.push(keyframes[keyframes.length - 1]); // Add final frame
   
   return {
     id,
@@ -482,10 +489,38 @@ function loadCustomWavetables(): void {
     const stored = localStorage.getItem(CUSTOM_WAVETABLES_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      customWavetables = parsed.map((wt: any) => ({
-        ...wt,
-        frames: wt.frames.map((f: number[]) => new Float32Array(f)),
-      }));
+      const list = Array.isArray(parsed) ? parsed : [];
+      customWavetables = list
+        .map((wt: any) => {
+          const framesIn = Array.isArray(wt?.frames) ? wt.frames : [];
+          const frames: Float32Array[] = framesIn
+            .map((f: any) => {
+              if (!Array.isArray(f)) return null;
+
+              // Coerce to Float32Array and enforce frame size
+              const fa = new Float32Array(f);
+              if (fa.length === FRAME_SIZE) return fa;
+              if (fa.length > FRAME_SIZE) return fa.subarray(0, FRAME_SIZE);
+
+              // Pad short frames with zeros
+              const padded = new Float32Array(FRAME_SIZE);
+              padded.set(fa, 0);
+              return padded;
+            })
+            .filter((x: Float32Array | null): x is Float32Array => x !== null);
+
+          if (frames.length === 0) return null;
+
+          const frameSize: WavetableFrameSize = FRAME_SIZE;
+          return {
+            ...wt,
+            frameSize,
+            frameCount: frames.length,
+            frames,
+            isFactory: false,
+          } as WavetableData;
+        })
+        .filter((x: WavetableData | null): x is WavetableData => x !== null);
     }
   } catch (e) {
     console.warn("Failed to load custom wavetables:", e);

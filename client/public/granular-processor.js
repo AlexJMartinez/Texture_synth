@@ -15,6 +15,7 @@ class GranularProcessor extends AudioWorkletProcessor {
 
     // Scheduled events queue (kept sorted by startSample)
     this.events = [];
+    this.eventsHead = 0;
 
     // Active grain pool
     this.maxGrains = (options?.processorOptions?.maxGrains) ?? 64;
@@ -47,11 +48,19 @@ class GranularProcessor extends AudioWorkletProcessor {
       }
 
       if (msg?.type === "schedule") {
-        // Append incoming grain events and keep sorted by startSample
         const incoming = msg.events || [];
+
+        // Compact consumed events occasionally to keep memory/CPU stable
+        if (this.eventsHead > 0 && this.eventsHead >= 1024) {
+          this.events = this.events.slice(this.eventsHead);
+          this.eventsHead = 0;
+        }
+
         for (let i = 0; i < incoming.length; i++) {
           this.events.push(incoming[i]);
         }
+
+        // Keep queue sorted by startSample
         this.events.sort((a, b) => a.startSample - b.startSample);
       }
 
@@ -72,12 +81,14 @@ class GranularProcessor extends AudioWorkletProcessor {
       if (msg?.type === "clear") {
         // Clear all scheduled events and active grains
         this.events = [];
+        this.eventsHead = 0;
         for (let i = 0; i < this.maxGrains; i++) this.grains[i] = null;
       }
 
       if (msg?.type === "reset") {
         // Full reset including clock
         this.events = [];
+        this.eventsHead = 0;
         for (let i = 0; i < this.maxGrains; i++) this.grains[i] = null;
         this.nowSample = 0;
         this.clockTimer = 0;
@@ -182,12 +193,18 @@ class GranularProcessor extends AudioWorkletProcessor {
     const blockEnd = this.nowSample + blockLen;
 
     // Activate events that start within this block
-    while (this.events.length && this.events[0].startSample < blockEnd) {
-      const ev = this.events[0];
+    while (this.eventsHead < this.events.length && this.events[this.eventsHead].startSample < blockEnd) {
+      const ev = this.events[this.eventsHead];
       if (ev.startSample >= blockStart) {
         this.allocGrain(ev);
       }
-      this.events.shift();
+      this.eventsHead++;
+    }
+
+    // Compact consumed events occasionally to avoid unbounded growth
+    if (this.eventsHead > 0 && this.eventsHead >= 1024) {
+      this.events = this.events.slice(this.eventsHead);
+      this.eventsHead = 0;
     }
 
     // Clear output buffers
@@ -205,6 +222,7 @@ class GranularProcessor extends AudioWorkletProcessor {
         // Determine where this grain begins in this block
         let localStart = g.startSample - blockStart;
         if (localStart < 0) localStart = 0;
+        if (localStart >= blockLen) continue;
 
         for (let i = localStart; i < blockLen; i++) {
           const k = g.phase;

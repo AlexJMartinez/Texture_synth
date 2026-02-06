@@ -304,12 +304,14 @@ function createModulatorStates(modulators: SynthParameters["modulators"]): Map<s
 function evaluateLfo(
   mod: { shape: string; rate: number; rateSync: boolean; rateDivision: string; phase: number; amount: number; bipolar: boolean },
   time: number,
-  tempo: number
+  tempo: number,
+  state?: ModulatorState
 ): number {
   const rateHz = mod.rateSync ? 1 / (divisionToMs(mod.rateDivision, tempo) / 1000) : mod.rate;
+  const safeRateHz = Math.max(0.0001, rateHz);
   const phase = (mod.phase / 360) * Math.PI * 2;
-  const t = time * rateHz * Math.PI * 2 + phase;
-  
+  const t = time * safeRateHz * Math.PI * 2 + phase;
+
   let value: number;
   switch (mod.shape) {
     case "sine":
@@ -324,17 +326,44 @@ function evaluateLfo(
     case "square":
       value = Math.sin(t) >= 0 ? 1 : -1;
       break;
-    case "random":
-      value = Math.sin(t * 7.3) * Math.cos(t * 3.7);
+    case "random": {
+      // Sample-and-hold random per LFO cycle (optionally slewed) using the modulator state.
+      // If no state is provided, fall back to a deterministic pseudo-random waveform.
+      if (!state) {
+        value = Math.sin(t * 7.3) * Math.cos(t * 3.7);
+        break;
+      }
+
+      const period = 1 / safeRateHz;
+      const currentPeriod = Math.floor(time / period);
+      const lastPeriod = Math.floor(state.lastRandomTime / period);
+
+      if (currentPeriod !== lastPeriod) {
+        state.prevRandomValue = state.randomValue;
+        state.randomValue = Math.random();
+        state.lastRandomTime = time;
+      }
+
+      // Slew between values over the first/last 5% of the cycle to avoid zippering.
+      const frac = (time % period) / period;
+      const slew = 0.05;
+      const slewT =
+        frac < slew ? frac / slew :
+        frac > (1 - slew) ? 1 - (1 - frac) / slew :
+        1;
+
+      const u = state.prevRandomValue + (state.randomValue - state.prevRandomValue) * Math.max(0, Math.min(1, slewT));
+      value = u * 2 - 1; // bipolar
       break;
+    }
     default:
       value = 0;
   }
-  
+
   if (!mod.bipolar) {
     value = (value + 1) / 2;
   }
-  
+
   return value * (mod.amount / 100);
 }
 
@@ -343,30 +372,54 @@ function evaluateEnvelope(
   time: number,
   duration: number
 ): number {
-  const attackEnd = mod.attack / 1000;
-  const decayEnd = attackEnd + mod.decay / 1000;
-  const sustainLevel = mod.sustain / 100;
-  const releaseStart = Math.max(0, duration - mod.release / 1000);
-  
+  const attackSec = Math.max(0, mod.attack) / 1000;
+  const decaySec = Math.max(0, mod.decay) / 1000;
+  const releaseSec = Math.max(0, mod.release) / 1000;
+  const sustainLevel = Math.max(0, Math.min(1, mod.sustain / 100));
+
+  const attackEnd = attackSec;
+  const decayEnd = attackEnd + decaySec;
+  const releaseStart = Math.max(0, duration - releaseSec);
+
   let value: number;
-  if (time < attackEnd) {
+
+  // Attack
+  if (attackSec <= 0) {
+    value = 1;
+  } else if (time < attackEnd) {
     value = time / attackEnd;
-  } else if (time < decayEnd) {
-    const decayProgress = (time - attackEnd) / (mod.decay / 1000);
-    value = 1 - decayProgress * (1 - sustainLevel);
-  } else if (time < releaseStart) {
-    value = sustainLevel;
   } else {
-    const releaseProgress = (time - releaseStart) / (mod.release / 1000);
-    value = sustainLevel * (1 - releaseProgress);
+    value = 1;
   }
-  
+
+  // Decay to sustain
+  if (time >= attackEnd) {
+    if (decaySec <= 0) {
+      value = sustainLevel;
+    } else if (time < decayEnd) {
+      const decayProgress = (time - attackEnd) / decaySec;
+      value = 1 - decayProgress * (1 - sustainLevel);
+    } else {
+      value = sustainLevel;
+    }
+  }
+
+  // Release
+  if (time >= releaseStart) {
+    if (releaseSec <= 0) {
+      value = 0;
+    } else {
+      const releaseProgress = (time - releaseStart) / releaseSec;
+      value = sustainLevel * (1 - releaseProgress);
+    }
+  }
+
   value = Math.max(0, Math.min(1, value));
-  
+
   if (mod.bipolar) {
     value = value * 2 - 1;
   }
-  
+
   return value * (mod.amount / 100);
 }
 
@@ -375,28 +428,37 @@ function evaluateRandom(
   time: number,
   state: ModulatorState
 ): number {
-  const period = 1 / mod.rate;
+  const safeRate = Math.max(0.001, mod.rate);
+  const period = 1 / safeRate;
   const currentPeriod = Math.floor(time / period);
   const lastPeriod = Math.floor(state.lastRandomTime / period);
-  
+
   if (currentPeriod !== lastPeriod) {
     state.prevRandomValue = state.randomValue;
     state.randomValue = Math.random();
     state.lastRandomTime = time;
   }
-  
+
   const t = (time % period) / period;
-  const smoothFactor = mod.smooth / 100;
-  const smoothT = t < smoothFactor ? t / smoothFactor * 0.5 : 
-                  t > (1 - smoothFactor) ? 0.5 + (t - (1 - smoothFactor)) / smoothFactor * 0.5 : 
-                  0.5;
-  
+  const smoothFactor = Math.max(0, Math.min(1, mod.smooth / 100));
+
+  // If smoothing is 0, we do classic S&H (hard steps). If >0, crossfade at boundaries.
+  let smoothT: number;
+  if (smoothFactor <= 0) {
+    smoothT = t >= 0.5 ? 1 : 0;
+  } else {
+    smoothT =
+      t < smoothFactor ? (t / smoothFactor) * 0.5 :
+      t > (1 - smoothFactor) ? 0.5 + ((t - (1 - smoothFactor)) / smoothFactor) * 0.5 :
+      0.5;
+  }
+
   let value = state.prevRandomValue + (state.randomValue - state.prevRandomValue) * smoothT;
-  
+
   if (mod.bipolar) {
     value = value * 2 - 1;
   }
-  
+
   return value * (mod.amount / 100);
 }
 
@@ -437,31 +499,50 @@ function evaluateStepSequencer(
   tempo: number
 ): number {
   if (!settings.enabled) return 0;
-  
+
   const beatsPerSecond = tempo / 60;
   const beatDivision = rateToBPMDivision(settings.rate);
   const stepsPerSecond = beatsPerSecond / beatDivision;
-  const stepDuration = 1 / stepsPerSecond;
-  
-  let stepPosition = (time / stepDuration);
-  const stepIndex = Math.floor(stepPosition) % settings.stepCount;
-  const stepFraction = stepPosition - Math.floor(stepPosition);
-  
-  // Apply swing to odd steps
-  if (settings.swing > 0 && stepIndex % 2 === 1) {
-    // Swing delays odd steps
+  const stepDuration = 1 / Math.max(0.0001, stepsPerSecond);
+
+  // Normalize smoothing to 0..1 (supports either 0..1 or 0..100 inputs)
+  const smoothing01 = Math.max(0, Math.min(1, settings.smoothing > 1 ? settings.smoothing / 100 : settings.smoothing));
+
+  // Swing: treat time in pairs of steps so total duration stays consistent.
+  // swing01 = 0..1, mapped to 0..50% timing shift of the offbeat.
+  const swing01 = Math.max(0, Math.min(1, settings.swing / 100));
+  const swingOffset = 0.5 * swing01;
+
+  const pairDuration = stepDuration * 2;
+  const pairIndexBase = Math.floor(time / pairDuration) * 2;
+  const pairPos = ((time % pairDuration) + pairDuration) % pairDuration;
+
+  const firstDur = stepDuration * (1 - swingOffset);
+  const secondDur = stepDuration * (1 + swingOffset);
+
+  let stepIndexInPair: number;
+  let stepFraction: number;
+
+  if (pairPos < firstDur) {
+    stepIndexInPair = 0;
+    stepFraction = firstDur > 0 ? pairPos / firstDur : 0;
+  } else {
+    stepIndexInPair = 1;
+    stepFraction = secondDur > 0 ? (pairPos - firstDur) / secondDur : 0;
   }
-  
+
+  const rawStepIndex = pairIndexBase + stepIndexInPair;
+  const stepIndex = ((rawStepIndex % settings.stepCount) + settings.stepCount) % settings.stepCount;
+
   const currentValue = getStepValue(settings, stepIndex);
   const nextValue = getStepValue(settings, (stepIndex + 1) % settings.stepCount);
-  
-  // Apply smoothing interpolation
-  if (settings.smoothing > 0) {
-    const smoothT = stepFraction;
-    const smoothedValue = currentValue + (nextValue - currentValue) * smoothT * settings.smoothing;
-    return smoothedValue;
+
+  // Smoothing: 0 => hard steps, 1 => full linear ramp across the step
+  if (smoothing01 > 0) {
+    const ramp = currentValue + (nextValue - currentValue) * stepFraction;
+    return currentValue + (ramp - currentValue) * smoothing01;
   }
-  
+
   return currentValue;
 }
 
@@ -473,10 +554,10 @@ function evaluateModulator(
   state: ModulatorState
 ): number {
   if (!mod.enabled) return 0;
-  
+
   switch (mod.type) {
     case "lfo":
-      return evaluateLfo(mod, time, tempo);
+      return evaluateLfo(mod, time, tempo, state);
     case "envelope":
       return evaluateEnvelope(mod, time, duration);
     case "random":
@@ -595,23 +676,27 @@ function createSeededRandom(seed: number) {
   };
 }
 
-function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Array {
+function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Array<ArrayBuffer> {
   const samples = 8192;
-  const curve = new Float32Array(samples);
+  // Allocate with an explicit ArrayBuffer to satisfy WaveShaperNode.curve typing
+  // (avoids Float32Array<ArrayBufferLike> vs Float32Array<ArrayBuffer> mismatch in newer TS libs)
+  const curveBuffer = new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT);
+  const curve = new Float32Array(curveBuffer);
   const amount = (drive / 100) * 10;
-  
+
   for (let i = 0; i < samples; i++) {
     const x = (i * 2) / samples - 1;
-    
+
     switch (type) {
       case "softclip":
         curve[i] = Math.tanh(x * (1 + amount * 2));
         break;
-      case "hardclip":
+      case "hardclip": {
         const threshold = 1 / (1 + amount);
         curve[i] = Math.max(-threshold, Math.min(threshold, x)) * (1 / threshold);
         break;
-      case "foldback":
+      }
+      case "foldback": {
         let folded = x * (1 + amount * 3);
         while (Math.abs(folded) > 1) {
           if (folded > 1) folded = 2 - folded;
@@ -619,13 +704,15 @@ function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Arr
         }
         curve[i] = folded;
         break;
+      }
       case "sinefold":
         curve[i] = Math.sin(x * Math.PI * (1 + amount * 2));
         break;
-      case "chebyshev":
+      case "chebyshev": {
         const order = Math.floor(2 + amount * 8);
         curve[i] = chebyshev(x, order);
         break;
+      }
       case "asymmetric":
         if (x >= 0) {
           curve[i] = Math.tanh(x * (1 + amount * 4));
@@ -633,15 +720,16 @@ function createWaveshaperCurve(type: WaveshaperCurve, drive: number): Float32Arr
           curve[i] = Math.tanh(x * (1 + amount));
         }
         break;
-      case "tube":
+      case "tube": {
         const k = amount * 5 + 1;
         curve[i] = (1 + k) * x / (1 + k * Math.abs(x));
         break;
+      }
       default:
         curve[i] = x;
     }
   }
-  
+
   return curve;
 }
 
@@ -5090,25 +5178,36 @@ async function audioBufferToMp3(buffer: AudioBuffer): Promise<Blob> {
     return int16;
   };
   
-  const mp3Data: Int8Array[] = [];
+  const mp3Data: BlobPart[] = [];
+
+  // Ensure each chunk is backed by a real ArrayBuffer (not ArrayBufferLike/SharedArrayBuffer)
+  // to satisfy newer TS DOM typings for BlobPart.
+  const toBlobChunk = (
+    chunk: Int8Array<ArrayBufferLike> | Uint8Array<ArrayBufferLike>
+  ): Uint8Array<ArrayBuffer> => {
+    // Allocate a fresh ArrayBuffer-backed view for BlobPart typing compatibility.
+    const out = new Uint8Array(new ArrayBuffer(chunk.length));
+    for (let i = 0; i < chunk.length; i++) out[i] = chunk[i] as number;
+    return out;
+  };
   
   if (numChannels === 1) {
     // Mono encoding
     const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, kbps);
     const samples = floatToInt16(buffer.getChannelData(0));
     const blockSize = 1152;
-    
+
     for (let i = 0; i < samples.length; i += blockSize) {
       const sampleChunk = samples.subarray(i, Math.min(i + blockSize, samples.length));
       const mp3buf = mp3encoder.encodeBuffer(sampleChunk);
       if (mp3buf.length > 0) {
-        mp3Data.push(mp3buf);
+        mp3Data.push(toBlobChunk(mp3buf));
       }
     }
-    
+
     const mp3buf = mp3encoder.flush();
     if (mp3buf.length > 0) {
-      mp3Data.push(mp3buf);
+      mp3Data.push(toBlobChunk(mp3buf));
     }
   } else {
     // Stereo encoding
@@ -5116,21 +5215,21 @@ async function audioBufferToMp3(buffer: AudioBuffer): Promise<Blob> {
     const leftSamples = floatToInt16(buffer.getChannelData(0));
     const rightSamples = floatToInt16(buffer.getChannelData(1));
     const blockSize = 1152;
-    
+
     for (let i = 0; i < leftSamples.length; i += blockSize) {
       const leftChunk = leftSamples.subarray(i, Math.min(i + blockSize, leftSamples.length));
       const rightChunk = rightSamples.subarray(i, Math.min(i + blockSize, rightSamples.length));
       const mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
       if (mp3buf.length > 0) {
-        mp3Data.push(mp3buf);
+        mp3Data.push(toBlobChunk(mp3buf));
       }
     }
-    
+
     const mp3buf = mp3encoder.flush();
     if (mp3buf.length > 0) {
-      mp3Data.push(mp3buf);
+      mp3Data.push(toBlobChunk(mp3buf));
     }
   }
-  
-  return new Blob(mp3Data, { type: "audio/mp3" });
+
+  return new Blob(mp3Data, { type: "audio/mpeg" });
 }

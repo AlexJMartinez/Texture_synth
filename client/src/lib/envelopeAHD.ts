@@ -40,20 +40,21 @@ export function triggerAHD(
   const start = startFromCurrent ? Math.max(EPS, param.value) : EPS;
   param.setValueAtTime(start, t0);
 
-  // Use safePeak which is already ensured to be positive
-  // Ensure time constant (A/5) is always positive
-  const attackTimeConstant = Math.max(0.0001, A / 5);
-  param.setTargetAtTime(safePeak, t0, attackTimeConstant);
-
   const tA = t0 + A;
-  param.setValueAtTime(safePeak, tA);
+  // Use a ramp to avoid a hard-set discontinuity at the end of attack.
+  // (Exponential ramp is not safe for all params; linear is broadly safe.)
+  param.linearRampToValueAtTime(safePeak, tA);
 
   const tH = tA + H;
+  const tEnd = tH + D;
   // Ensure decay time constant is always positive
   const decayTimeConstant = Math.max(0.0001, D / 5);
   param.setTargetAtTime(EPS, tH, decayTimeConstant);
 
-  const tEnd = tH + D;
+  // `setTargetAtTime` is asymptotic; pin the value at the nominal end time
+  // so voice-stealing / tail logic can rely on `tEnd`.
+  param.setValueAtTime(EPS, tEnd);
+
   return tEnd;
 }
 
@@ -75,7 +76,11 @@ export function stopWithFade(
   }
   
   param.setTargetAtTime(EPS, t0, timeConstant);
-  return t0 + safeFadeTime;
+
+  const tEnd = t0 + safeFadeTime;
+  // Pin at end time; setTargetAtTime is asymptotic.
+  param.setValueAtTime(EPS, tEnd);
+  return tEnd;
 }
 
 export { EPS };

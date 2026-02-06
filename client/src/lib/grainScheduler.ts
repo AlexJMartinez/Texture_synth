@@ -188,7 +188,7 @@ export class GrainScheduler {
         // Apply timing jitter to grain start
         const timingJitSamp = Math.floor((params.timingJitterMs / 1000) * this.sampleRate);
         const timingOffset = Math.floor((this.rng() * 2 - 1) * timingJitSamp);
-        const startSample = Math.max(0, this.scheduledThroughSample + timingOffset);
+        const startSample = Math.max(now, this.scheduledThroughSample + timingOffset);
 
         // Grain size with jitter
         const baseDur = Math.max(8, Math.floor((params.grainSizeMs / 1000) * this.sampleRate));
@@ -650,6 +650,7 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
   let bufR: Float32Array | null = null;
   let bufLen = 0;
   const grains: Array<{
+    startSample: number;
     pos: number;
     phase: number;
     dur: number;
@@ -796,9 +797,11 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
     }
   };
   
-  processor.onaudioprocess = (e) => {
-    const outL = e.outputBuffer.getChannelData(0);
-    const outR = e.outputBuffer.getChannelData(1);
+// ScriptProcessor is deprecated; avoid referencing deprecated DOM types directly.
+const onAudioProcess = (e: Event) => {
+  const ev = e as unknown as { outputBuffer: AudioBuffer };
+  const outL = ev.outputBuffer.getChannelData(0);
+  const outR = ev.outputBuffer.getChannelData(1);
     const blockLen = outL.length;
     const hasBuffer = bufL && bufLen > 1;
     const blockStart = nowSample;
@@ -812,6 +815,7 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
         for (let i = 0; i < grains.length; i++) {
           if (grains[i] === null) {
             grains[i] = {
+              startSample: ev.startSample | 0,
               pos: ev.pos01 * (bufLen - 1),
               phase: 0,
               dur: ev.durSamp | 0,
@@ -842,29 +846,33 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
       for (let gi = 0; gi < grains.length; gi++) {
         const g = grains[gi];
         if (!g) continue;
-        
-        for (let i = 0; i < blockLen; i++) {
+
+        let localStart = g.startSample - blockStart;
+        if (localStart < 0) localStart = 0;
+        if (localStart >= blockLen) continue;
+
+        for (let i = localStart; i < blockLen; i++) {
           const k = g.phase;
           if (k >= g.dur) break;
-          
+
           // Apply window skew to phase
           const phase01 = k / g.dur;
           const skewedPhase = applySkew(phase01, g.windowSkew);
-          
+
           // Get window and AHD envelope (pass dur for scaling)
           const w = getWindow(skewedPhase, g.windowType);
           const ahd = getAhdEnvelope(k, g.envAttack, g.envHold, g.envDecay, g.dur);
           const envelope = w * ahd;
-          
+
           const srcIdx = g.pos + (k * g.rate);
           const sL = readCubic(bufL, srcIdx);
           const sR = bufR ? readCubic(bufR, srcIdx) : sL;
-          
+
           outL[i] += sL * envelope * g.gainL;
           outR[i] += sR * envelope * g.gainR;
           g.phase++;
         }
-        
+
         if (g.phase >= g.dur) grains[gi] = null;
       }
     }
@@ -877,13 +885,15 @@ function createScriptProcessorFallback(ctx: AudioContext): ScriptProcessorNode {
       if (clockTimer >= clockIntervalSamples) {
         clockTimer = 0;
         // Post clock update to scheduler
-        if ((processor as any).port?.onmessage) {
-          (processor as any).port.onmessage({ data: { type: "clock", nowSample } } as MessageEvent);
-        }
+        const port = (processor as any).port as { onmessage?: (evt: { data: any }) => void } | undefined;
+        port?.onmessage?.({ data: { type: "clock", nowSample } });
       }
     }
   };
-  
+
+  // Use event listener instead of the deprecated `onaudioprocess` property assignment.
+  processor.addEventListener("audioprocess", onAudioProcess as any);
+
   console.log("ScriptProcessor granular node created");
   return processor;
 }

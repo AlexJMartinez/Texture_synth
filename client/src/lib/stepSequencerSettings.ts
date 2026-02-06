@@ -85,6 +85,6 @@ export function randomizeStepSequencerSettings(): StepSequencerSettings {
     rate: rates[Math.floor(Math.random() * rates.length)],
     smoothing: Math.random() * 0.5,
     bipolar: Math.random() > 0.5,
-    swing: Math.random() * 0.3,
+    swing: Math.random() * 30, // percent-based swing (0–30%)
   };
 }
