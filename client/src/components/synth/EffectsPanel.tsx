@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -58,7 +59,11 @@ export function loadReverbSettings(): ReverbSettings {
 }
 
 export function saveReverbSettings(settings: ReverbSettings) {
-  localStorage.setItem(REVERB_SETTINGS_KEY, JSON.stringify(settings));
+  try {
+    localStorage.setItem(REVERB_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Ignore storage failures (quota, private mode, etc.)
+  }
 }
 
 const DELAY_DIVISIONS: { value: DelayDivision; label: string }[] = [
@@ -108,15 +113,25 @@ interface EffectSectionProps {
   title: string;
   enabled: boolean;
   onToggle: (v: boolean) => void;
-  children: React.ReactNode;
+  children: ReactNode;
   testId: string;
 }
 
 function EffectSection({ title, enabled, onToggle, children, testId }: EffectSectionProps) {
   const [isOpen, setIsOpen] = useState(enabled);
+  useEffect(() => {
+  // When disabling, always collapse the section.
+  if (!enabled) setIsOpen(false);
+  // When enabling, auto-open for discoverability.
+  else setIsOpen(true);
+}, [enabled]);
   
   return (
-    <div className={`rounded border border-border/50 transition-opacity ${!enabled ? 'opacity-50 bg-muted/10' : 'bg-muted/30'}`}>
+  <div
+  className={`rounded border border-border/50 transition-opacity ${
+    !enabled ? "opacity-50 bg-muted/10 pointer-events-none" : "bg-muted/30"
+  }`}
+>
       <div className="flex items-center justify-between px-1.5 py-0.5">
         <button
           type="button"
@@ -266,7 +281,27 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
                 <div className="flex flex-col items-center">
                   <Select
                     value={effects.delayDivision}
-                    onValueChange={(v) => updateEffects("delayDivision", v as DelayDivision)}
+                    onValueChange={(v) => {
+  const allowed: DelayDivision[] = [
+    "1/1",
+    "1/2",
+    "1/4",
+    "1/8",
+    "1/16",
+    "1/32",
+    "1/2T",
+    "1/4T",
+    "1/8T",
+    "1/16T",
+    "1/2D",
+    "1/4D",
+    "1/8D",
+    "1/16D",
+  ];
+  if (allowed.includes(v as DelayDivision)) {
+    updateEffects("delayDivision", v as DelayDivision);
+  }
+}}
                   >
                     <SelectTrigger className="h-6 w-14 text-[9px]" data-testid="select-delay-division">
                       <SelectValue />

@@ -65,37 +65,19 @@ export function GranularPanel({
     }));
   };
   
-  // Handle file drop
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
-    
-    await loadAudioFile(file);
-  }, []);
-  
-  // Handle file input
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    await loadAudioFile(file);
-  }, []);
-  
   // Load audio file into buffer
-  const loadAudioFile = async (file: File) => {
+  const loadAudioFile = useCallback(async (file: File) => {
+    let audioContext: AudioContext | null = null;
     try {
       const arrayBuffer = await file.arrayBuffer();
-      const audioContext = new AudioContext();
+      audioContext = new AudioContext();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      
+
       // Convert to mono Float32Array
       const channelData = audioBuffer.getChannelData(0);
       const data = new Float32Array(channelData.length);
       data.set(channelData);
-      
+
       // If stereo, mix to mono
       if (audioBuffer.numberOfChannels > 1) {
         const rightChannel = audioBuffer.getChannelData(1);
@@ -103,7 +85,7 @@ export function GranularPanel({
           data[i] = (data[i] + rightChannel[i]) / 2;
         }
       }
-      
+
       onSampleLoad({
         data,
         sampleRate: audioBuffer.sampleRate,
@@ -111,16 +93,47 @@ export function GranularPanel({
         name: file.name,
         channels: 1,
       });
-      
+
       // Update seed for new sample to ensure deterministic grain generation
       const newSeed = Date.now();
       onChange(applyAntiMudRules({ ...settings, seed: newSeed }));
-      
-      audioContext.close();
     } catch (err) {
-      console.error('Failed to load audio file:', err);
+      console.error("Failed to load audio file:", err);
+    } finally {
+      if (audioContext) {
+        try {
+          await audioContext.close();
+        } catch {
+          // ignore
+        }
+      }
     }
-  };
+  }, [onSampleLoad, onChange, settings]);
+
+  // Handle file drop
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+
+      await loadAudioFile(file);
+    },
+    [loadAudioFile]
+  );
+
+  // Handle file input
+  const handleFileSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      await loadAudioFile(file);
+    },
+    [loadAudioFile]
+  );
   
   // Drag and drop handlers
   const handleDragOver = (e: React.DragEvent) => {
@@ -147,7 +160,7 @@ export function GranularPanel({
     // Use CSS dimensions for drawing (canvas is scaled for devicePixelRatio)
     const width = cssWidth;
     const height = cssHeight;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, width, height);
     
     const barWidth = 2;
     const gap = 1;
@@ -225,8 +238,9 @@ export function GranularPanel({
     canvas.height = cssHeight * window.devicePixelRatio;
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-    }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}
     
     drawBarWaveform(canvas, sampleBuffer?.data || null, cssWidth, cssHeight);
   }, [sampleBuffer?.data, drawBarWaveform]);
@@ -376,6 +390,7 @@ export function GranularPanel({
     canvas.height = height * dpr;
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
     
     ctx.clearRect(0, 0, width, height);
@@ -517,7 +532,9 @@ export function GranularPanel({
           <div className="flex items-center gap-1">
             <Select
               value={settings.mode}
-              onValueChange={(v) => handleModeChange(v as GranularMode)}
+              onValueChange={(v) => {
+  if (v === "cinematic" || v === "design") handleModeChange(v);
+}}
               disabled={!settings.enabled}
             >
               <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-granular-mode">
@@ -629,7 +646,7 @@ export function GranularPanel({
             <input
               type="number"
               value={settings.seed}
-              onChange={(e) => update("seed", parseInt(e.target.value) || 0)}
+              onChange={(e) => update("seed", parseInt(e.target.value, 10) || 0)}
               className="flex-1 h-5 text-[10px] bg-background border rounded px-1"
               disabled={!settings.enabled}
               data-testid="input-granular-seed"
@@ -807,7 +824,18 @@ export function GranularPanel({
             <div className="flex flex-col items-center gap-0.5">
               <Select
                 value={settings.windowType}
-                onValueChange={(v) => update("windowType", v as WindowType)}
+                onValueChange={(v) => {
+  if (
+    v === "hann" ||
+    v === "gauss" ||
+    v === "blackman" ||
+    v === "rect" ||
+    v === "tukey" ||
+    v === "trapezoid"
+  ) {
+    update("windowType", v);
+  }
+}}
                 disabled={!settings.enabled}
               >
                 <SelectTrigger className="h-5 text-[10px] w-full" data-testid="select-granular-window">

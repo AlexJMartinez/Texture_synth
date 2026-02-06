@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,14 @@ import { Waves } from "./WaveformIcons";
 import { ChevronDown, ChevronRight, Radio, Zap, Timer, Shuffle, Volume2, Layers } from "lucide-react";
 import type { AdvancedFMSettings, FMAlgorithm } from "@/lib/advancedSynthSettings";
 import type { OscWavetableSettings } from "@/lib/wavetableSettings";
+
+import {
+  getKnobValue,
+  getKnobConfig,
+  handlePitchKnobChange,
+  normalizePitch,
+  clamp,
+} from "@/lib/pitchUtils";
 
 export interface OscEnvelope {
   enabled: boolean;
@@ -24,15 +32,6 @@ export interface OscEnvelopes {
   osc2: OscEnvelope;
   osc3: OscEnvelope;
 }
-import {
-  pitchToHz,
-  getKnobValue,
-  getKnobConfig,
-  handlePitchKnobChange,
-  normalizePitch,
-  PITCH_RANGES,
-  clamp,
-} from "@/lib/pitchUtils";
 
 function randomizePitch(): PitchState {
   const randomSt = Math.random() * 48 - 24;
@@ -100,7 +99,6 @@ export function OscillatorPanel({
   const [amOpen, setAmOpen] = useState(oscillator.amEnabled);
   const [indexEnvOpen, setIndexEnvOpen] = useState(oscillator.indexEnvEnabled);
   const [oscEnvOpen, setOscEnvOpen] = useState(envelope?.enabled ?? false);
-  const [wavetableOpen, setWavetableOpen] = useState(wavetableSettings?.enabled ?? false);
 
   const updateEnvelope = <K extends keyof OscEnvelope>(key: K, value: OscEnvelope[K]) => {
     if (envelope && onEnvelopeChange) {
@@ -108,6 +106,9 @@ export function OscillatorPanel({
     }
   };
   const prevStRef = useRef(pitch.st);
+  useEffect(() => {
+    prevStRef.current = pitch.st;
+  }, [pitch.st, pitch.mode]);
   
   const updateOscillator = <K extends keyof Oscillator>(
     key: K,
@@ -136,6 +137,36 @@ export function OscillatorPanel({
 
   const pitchConfig = getKnobConfig(pitch.mode);
   const pitchKnobValue = getKnobValue(pitch);
+
+  useEffect(() => {
+    if (!oscillator.enabled) {
+      // Optionally collapse sections when the oscillator is disabled
+      setFmOpen(false);
+      setAmOpen(false);
+      setIndexEnvOpen(false);
+      setOscEnvOpen(false);
+      setFmAdvancedOpen(false);
+    }
+  }, [oscillator.enabled]);
+
+  useEffect(() => {
+    if (!oscillator.fmEnabled) {
+      setFmOpen(false);
+      setFmAdvancedOpen(false);
+    }
+  }, [oscillator.fmEnabled]);
+
+  useEffect(() => {
+    if (!oscillator.amEnabled) setAmOpen(false);
+  }, [oscillator.amEnabled]);
+
+  useEffect(() => {
+    if (!oscillator.indexEnvEnabled) setIndexEnvOpen(false);
+  }, [oscillator.indexEnvEnabled]);
+
+  useEffect(() => {
+    if (!envelope?.enabled) setOscEnvOpen(false);
+  }, [envelope?.enabled]);
 
   return (
     <CollapsiblePanel
@@ -166,7 +197,11 @@ export function OscillatorPanel({
       <div className="space-y-1.5">
         <Select
           value={oscillator.waveform}
-          onValueChange={(v) => updateOscillator("waveform", v as WaveformType)}
+          onValueChange={(v) => {
+            if (v === "sine" || v === "triangle" || v === "sawtooth" || v === "square" || v === "noise") {
+              updateOscillator("waveform", v);
+            }
+          }}
           disabled={!oscillator.enabled}
         >
           <SelectTrigger className="h-5 text-[10px]" data-testid={`select-waveform-${index}`}>
@@ -216,7 +251,11 @@ export function OscillatorPanel({
             <div className="px-1.5 pb-1.5 space-y-1">
               <Select
                 value={oscillator.fmWaveform}
-                onValueChange={(v) => updateOscillator("fmWaveform", v as WaveformType)}
+                onValueChange={(v) => {
+                  if (v === "sine" || v === "triangle" || v === "sawtooth" || v === "square") {
+                    updateOscillator("fmWaveform", v);
+                  }
+                }}
                 disabled={!oscillator.fmEnabled}
               >
                 <SelectTrigger className="h-5 text-[10px]" data-testid={`select-fm-waveform-${index}`}>
@@ -528,7 +567,11 @@ export function OscillatorPanel({
             <div className="px-1.5 pb-1.5 space-y-1">
               <Select
                 value={oscillator.amWaveform}
-                onValueChange={(v) => updateOscillator("amWaveform", v as WaveformType)}
+                onValueChange={(v) => {
+                  if (v === "sine" || v === "triangle" || v === "sawtooth" || v === "square") {
+                    updateOscillator("amWaveform", v);
+                  }
+                }}
                 disabled={!oscillator.amEnabled}
               >
                 <SelectTrigger className="h-5 text-[10px]" data-testid={`select-am-waveform-${index}`}>
@@ -630,7 +673,11 @@ export function OscillatorPanel({
                 </div>
                 <Select
                   value={envelope.curve}
-                  onValueChange={(v) => updateEnvelope("curve", v as EnvelopeCurve)}
+                  onValueChange={(v) => {
+                    if (v === "linear" || v === "exponential" || v === "logarithmic") {
+                      updateEnvelope("curve", v);
+                    }
+                  }}
                   disabled={!envelope.enabled}
                 >
                   <SelectTrigger className="h-5 text-[10px]" data-testid={`select-osc-env-curve-${index}`}>

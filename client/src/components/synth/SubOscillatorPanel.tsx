@@ -2,7 +2,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Knob } from "./Knob";
 import { CollapsiblePanel } from "./CollapsiblePanel";
-import type { SubOscillator, SubWaveformType } from "@shared/schema";
+import type { SubOscillator } from "@shared/schema";
 import { Waves } from "lucide-react";
 
 interface SubOscillatorPanelProps {
@@ -35,7 +35,9 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
         <div className="flex items-center gap-1">
           <Select
             value={subOsc.waveform}
-            onValueChange={(v) => update("waveform", v as SubWaveformType)}
+            onValueChange={(v) => {
+              if (v === "sine" || v === "triangle") update("waveform", v);
+            }}
             disabled={!subOsc.enabled}
           >
             <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-sub-waveform">
@@ -48,7 +50,11 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           </Select>
           <Select
             value={String(subOsc.octave)}
-            onValueChange={(v) => update("octave", parseInt(v))}
+            onValueChange={(v) => {
+              const n = parseInt(v, 10);
+              const clamped = Math.max(-4, Math.min(4, Number.isFinite(n) ? n : 0));
+              update("octave", clamped);
+            }}
             disabled={!subOsc.enabled}
           >
             <SelectTrigger className="h-5 text-[10px] flex-1" data-testid="select-sub-octave">
@@ -68,7 +74,7 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           </Select>
         </div>
 
-        <div className="flex justify-center gap-1">
+        <div className={`flex justify-center gap-1 ${!subOsc.enabled ? "pointer-events-none" : ""}`}>
           <Knob
             value={subOsc.level}
             min={0}
@@ -127,7 +133,7 @@ export function SubOscillatorPanel({ subOsc, onChange }: SubOscillatorPanelProps
           />
         </div>
 
-        <div className={`rounded border border-border/50 p-1.5 ${!subOsc.filterEnabled ? 'opacity-50' : ''}`}>
+        <div className={`rounded border border-border/50 p-1.5 ${!subOsc.filterEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[10px] text-muted-foreground">Filters</span>
             <Switch

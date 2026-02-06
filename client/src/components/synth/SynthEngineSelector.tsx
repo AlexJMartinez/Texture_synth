@@ -30,7 +30,7 @@ export function SynthEngineSelector({
   useEffect(() => {
     if (additive.enabled && selectedEngine !== "additive") setSelectedEngine("additive");
     else if (modal.enabled && selectedEngine !== "modal" && !additive.enabled) setSelectedEngine("modal");
-  }, [modal.enabled, additive.enabled]);
+  }, [modal.enabled, additive.enabled, selectedEngine]);
 
   const isCurrentEngineEnabled = 
     (selectedEngine === "modal" && modal.enabled) ||
@@ -40,9 +40,11 @@ export function SynthEngineSelector({
     switch (selectedEngine) {
       case "modal":
         onModalChange({ ...modal, enabled });
+        if (enabled) onAdditiveChange({ ...additive, enabled: false });
         break;
       case "additive":
         onAdditiveChange({ ...additive, enabled });
+        if (enabled) onModalChange({ ...modal, enabled: false });
         break;
     }
   };
@@ -63,7 +65,9 @@ export function SynthEngineSelector({
           <div className="flex items-center gap-1 shrink-0">
             <Select
               value={selectedEngine}
-              onValueChange={(v) => setSelectedEngine(v as SynthEngineType)}
+              onValueChange={(v) => {
+                if (v === "modal" || v === "additive") setSelectedEngine(v);
+              }}
             >
               <SelectTrigger className="h-5 w-[70px] text-[10px] px-1" data-testid="select-synth-engine">
                 <SelectValue />
@@ -83,7 +87,7 @@ export function SynthEngineSelector({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-2 pb-2 pt-0">
-        <div className={`transition-opacity ${!isCurrentEngineEnabled ? 'opacity-50' : ''}`}>
+        <div className={`transition-opacity ${!isCurrentEngineEnabled ? 'opacity-50 pointer-events-none' : ''}`}>
           {selectedEngine === "modal" && (
             <ModalPanelContent modal={modal} onChange={onModalChange} />
           )}
@@ -168,4 +172,3 @@ function AdditivePanelContent({ additive, onChange }: { additive: SynthParameter
     </div>
   );
 }
-
