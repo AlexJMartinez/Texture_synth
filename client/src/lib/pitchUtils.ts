@@ -48,7 +48,7 @@ export function createDefaultPitchState(baseHz: number = 440): PitchState {
 
 export const PITCH_RANGES = {
   coarse: { minSt: -48, maxSt: 48 },
-  extended: { minSt: -48, maxSt: 48 },
+  extended: { minSt: -96, maxSt: 96 },
   cents: { min: -100, max: 100 },
   hz: { min: 20, max: 20000 },
 };
@@ -62,7 +62,7 @@ type QuantizeOpts = {
 export function quantizeSt(rawSt: number, prevSt: number, opts: QuantizeOpts): number {
   const step =
     opts.stepSt ??
-    (opts.mode === "oct" ? 12 : opts.mode === "st" ? 1 : 0);
+    (opts.mode === "oct" ? 12 : opts.mode === "st" ? 0.1 : 0);
 
   if (opts.mode === "hz" || step === 0) return rawSt;
 
@@ -99,19 +99,19 @@ export function getDisplayValue(p: PitchState): { value: number; unit: string } 
     case "hz":
       return { value: Math.round(pitchToHz(p)), unit: "Hz" };
     case "st":
-      return { value: Math.round(p.st * 10) / 10, unit: "st" };
+      return { value: Math.round(((p.st ?? 0) * 10)) / 10, unit: "st" };
     case "oct":
-      return { value: Math.round((p.st / 12) * 100) / 100, unit: "oct" };
+      return { value: Math.round((((p.st ?? 0) / 12) * 100)) / 100, unit: "oct" };
   }
 }
 
-export function getKnobConfig(mode: PitchMode | undefined, range = PITCH_RANGES.coarse) {
+export function getKnobConfig(mode: PitchMode | undefined, range = PITCH_RANGES.coarse, baseHz: number = 440) {
   if (!mode) mode = "hz";
   switch (mode) {
     case "hz":
       return {
-        min: stToHz(440, range.minSt),
-        max: stToHz(440, range.maxSt),
+        min: stToHz(baseHz, range.minSt),
+        max: stToHz(baseHz, range.maxSt),
         step: 1,
         logarithmic: true,
       };
@@ -143,7 +143,12 @@ export function handlePitchKnobChange(
   
   switch (pitch.mode) {
     case "hz":
-      newSt = hzToSt(pitch.baseHz, clamp(value, PITCH_RANGES.hz.min, PITCH_RANGES.hz.max));
+      // Clamp Hz based on the current semitone range + baseHz, and also keep a global safety clamp.
+      const hzMinFromRange = stToHz(pitch.baseHz, range.minSt);
+      const hzMaxFromRange = stToHz(pitch.baseHz, range.maxSt);
+      const hzMin = Math.max(PITCH_RANGES.hz.min, Math.min(hzMinFromRange, hzMaxFromRange));
+      const hzMax = Math.min(PITCH_RANGES.hz.max, Math.max(hzMinFromRange, hzMaxFromRange));
+      newSt = hzToSt(pitch.baseHz, clamp(value, hzMin, hzMax));
       break;
     case "st":
       newSt = value;
