@@ -2037,58 +2037,52 @@ export default function Synthesizer() {
       delayWet.connect(effectsMixer);
     }
 
-    if (params.convolver.enabled && params.convolver.useCustomIR && params.convolver.irName !== "none") {
-      let irBuffer = customIRBufferRef.current;
-      if (!irBuffer || params.convolver.irName !== "current") {
-        irBuffer = await loadStoredIR(params.convolver.irName);
-      }
-      
-      if (irBuffer) {
-        const settings = convSettings || defaultConvolverSettings;
-        const processedIR = processIRBuffer(ctx, irBuffer, settings);
-        
-        const convolver = ctx.createConvolver();
-        convolver.buffer = processedIR;
-        
-        const convolverWet = ctx.createGain();
-        const convolverDry = ctx.createGain();
-        convolverWet.gain.value = params.convolver.mix / 100;
-        convolverDry.gain.value = 1 - params.convolver.mix / 100;
-        
-        let convolverInput: AudioNode = lastNode;
-        if (settings.predelay > 0) {
-          const predelayNode = ctx.createDelay(1);
-          predelayNode.delayTime.value = settings.predelay / 1000;
-          lastNode.connect(predelayNode);
-          convolverInput = predelayNode;
-        }
-        
-        const nyquist = ctx.sampleRate / 2;
-        const clampedLowCut = Math.max(20, Math.min(settings.lowCut, nyquist - 100));
-        const clampedHighCut = Math.max(clampedLowCut + 100, Math.min(settings.highCut, nyquist - 10));
-        
-        const lowCutFilter = ctx.createBiquadFilter();
-        lowCutFilter.type = "highpass";
-        lowCutFilter.frequency.value = clampedLowCut;
-        lowCutFilter.Q.value = 0.7;
-        
-        const highCutFilter = ctx.createBiquadFilter();
-        highCutFilter.type = "lowpass";
-        highCutFilter.frequency.value = clampedHighCut;
-        highCutFilter.Q.value = 0.7;
-        
-        convolverInput.connect(convolver);
-        convolver.connect(lowCutFilter);
-        lowCutFilter.connect(highCutFilter);
-        highCutFilter.connect(convolverWet);
-        lastNode.connect(convolverDry);
-        
-        const convolverMix = ctx.createGain();
-        convolverWet.connect(convolverMix);
-        convolverDry.connect(convolverMix);
-        convolverMix.connect(effectsMixer);
-      }
-    } else if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
+if (params.convolver.enabled && params.convolver.useCustomIR && params.convolver.irName !== "none") {
+  let irBuffer = customIRBufferRef.current;
+  if (!irBuffer || params.convolver.irName !== "current") {
+    irBuffer = await loadStoredIR(params.convolver.irName);
+  }
+  
+  if (irBuffer) {
+    const settings = convSettings || defaultConvolverSettings;
+    const processedIR = processIRBuffer(ctx, irBuffer, settings);
+
+    const convolver = ctx.createConvolver();
+    convolver.buffer = processedIR;
+
+    const convolverWet = ctx.createGain();
+    const wetMix = params.convolver.mix / 100;
+    convolverWet.gain.value = wetMix;
+
+    let convolverInput: AudioNode = lastNode;
+    if (settings.predelay > 0) {
+      const predelayNode = ctx.createDelay(1);
+      predelayNode.delayTime.value = settings.predelay / 1000;
+      lastNode.connect(predelayNode);
+      convolverInput = predelayNode;
+    }
+
+    const nyquist = ctx.sampleRate / 2;
+    const clampedLowCut = Math.max(20, Math.min(settings.lowCut, nyquist - 100));
+    const clampedHighCut = Math.max(clampedLowCut + 100, Math.min(settings.highCut, nyquist - 10));
+
+    const lowCutFilter = ctx.createBiquadFilter();
+    lowCutFilter.type = "highpass";
+    lowCutFilter.frequency.value = clampedLowCut;
+    lowCutFilter.Q.value = 0.7;
+
+    const highCutFilter = ctx.createBiquadFilter();
+    highCutFilter.type = "lowpass";
+    highCutFilter.frequency.value = clampedHighCut;
+    highCutFilter.Q.value = 0.7;
+
+    convolverInput.connect(convolver);
+    convolver.connect(lowCutFilter);
+    lowCutFilter.connect(highCutFilter);
+    highCutFilter.connect(convolverWet);
+    convolverWet.connect(effectsMixer);
+  }
+} else if (params.effects.reverbEnabled && params.effects.reverbMix > 0) {
       const convolver = ctx.createConvolver();
       const reverbDuration = 0.5 + (params.effects.reverbSize / 100) * 3;
       // Use enhanced impulse response with full reverb settings
