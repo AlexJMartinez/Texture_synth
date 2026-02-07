@@ -2766,37 +2766,41 @@ export default function Synthesizer() {
         // FM MODE: Bypasses main oscillator waveform, creates dedicated carrier + modulator
         // Classic 2-operator FM: modulator (AHD env) → carrier → filter/distortion → master
         oscAlreadyStarted = true;
-        
+
+        // Safety: cap deviation relative to base pitch to avoid negative/near-zero frequencies at low notes.
+        // Keep a small floor so very low notes still allow some FM.
+        const maxDevFromPitch = Math.max(30, oscPitchHz * 0.9);
+
         // Create carrier oscillator using FM's carrier waveform (not main osc waveform)
         const carrierWaveform = advFM?.carrierWaveform || "sine";
         const carrierOsc = ctx.createOscillator();
         carrierOsc.type = carrierWaveform as OscillatorType;
         carrierOsc.frequency.value = oscPitchHz;
         carrierOsc.detune.value = osc.detune;
-        
+
         // Ensure start time is never negative (phase offset could be negative)
         const oscStartTime = Math.max(0, now + phaseSeconds);
         carrierOsc.start(oscStartTime);
         carrierOsc.stop(stopAt);
-        
+
         frequencyParam = carrierOsc.frequency;
-        
+
         // FM synthesis: modulator modulates carrier frequency
         const op2Settings = advFM?.operator2;
         const algorithm = advFM?.algorithm || "series";
         const op1Active = osc.fmDepth > 0 && osc.fmWaveform !== "noise";
         const op2Active = op2Settings?.enabled && op2Settings.depth > 0;
-        
+
         const modulatorFreq = oscPitchHz * osc.fmRatio;
         const op1DetuneOffset = advFM?.operator1Detune || 0;
-        
+
         // FM depth is direct Hz value (0-1000Hz range on knob)
         // This gives usable range: 0-200Hz for subtle, 200-500Hz for moderate, 500-1000Hz for aggressive
-        const fmDepthHz = osc.fmDepth;
-        
+        const fmDepthHz = Math.min(Math.max(0, osc.fmDepth), maxDevFromPitch);
+
         // Operator 2 calculations - also use direct Hz value
         const op2Freq = op2Settings ? oscPitchHz * op2Settings.ratio : 0;
-        const op2DepthHz = op2Settings ? op2Settings.depth : 0; // Direct Hz value
+        const op2DepthHz = op2Settings ? Math.min(Math.max(0, op2Settings.depth), maxDevFromPitch) : 0; // Direct Hz value (capped)
         
         let modOsc: OscillatorNode | null = null;
         let modGain: GainNode | null = null;
@@ -2812,8 +2816,7 @@ export default function Synthesizer() {
           
           modGain = ctx.createGain();
           
-          const effectiveFmDepthHz = op1Active ? fmDepthHz : 
-            (op2Active ? modulatorFreq * 1.0 : 0);
+          const effectiveFmDepthHz = op1Active ? fmDepthHz : 0;
           
           // Key rule: Envelope the modulator (index envelope), not just the carrier
           if (osc.indexEnvEnabled && osc.indexEnvDepth > 0 && effectiveFmDepthHz > 0) {
@@ -2839,7 +2842,8 @@ export default function Synthesizer() {
             const feedbackGain = ctx.createGain();
             // Feedback adds harmonics to the modulator waveform
             // Range: 0-1 maps to 0-500Hz max deviation (subtle to moderate effect)
-            feedbackGain.gain.value = osc.fmFeedback * 500;
+            // Scale feedback deviation with pitch for more consistent behavior across notes.
+            feedbackGain.gain.value = Math.min(maxDevFromPitch, osc.fmFeedback * (oscPitchHz * 0.5 + 50));
             
             modOsc.connect(feedbackDelay);
             feedbackDelay.connect(feedbackGain);
@@ -2864,7 +2868,7 @@ export default function Synthesizer() {
             
             const op2FeedbackGain = ctx.createGain();
             // Fixed 500Hz max feedback deviation (same as Op1)
-            op2FeedbackGain.gain.value = op2Settings.feedback * 500;
+            op2FeedbackGain.gain.value = Math.min(maxDevFromPitch, op2Settings.feedback * (oscPitchHz * 0.5 + 50));
             
             op2Osc.connect(op2FeedbackDelay);
             op2FeedbackDelay.connect(op2FeedbackGain);
@@ -2889,7 +2893,10 @@ export default function Synthesizer() {
               case "feedback": {
                 op2Gain.connect(modOsc.frequency);
                 const crossFbGain = ctx.createGain();
-                crossFbGain.gain.value = fmDepthHz > 0 ? fmDepthHz : modulatorFreq;
+                crossFbGain.gain.value = Math.min(
+                maxDevFromPitch,
+                fmDepthHz > 0 ? fmDepthHz : (oscPitchHz * 0.5)
+              );
                 modOsc.connect(crossFbGain);
                 crossFbGain.connect(op2Osc.frequency);
                 modOsc.connect(modGain);
@@ -2897,22 +2904,26 @@ export default function Synthesizer() {
                 break;
               }
               case "mixed": {
-                op2Gain.connect(modOsc.frequency);
-                modOsc.connect(modGain);
-                modGain.connect(carrierOsc.frequency);
-                const directGain = ctx.createGain();
-                directGain.gain.value = op2DepthHz * 0.5;
-                op2Osc.connect(directGain);
-                directGain.connect(carrierOsc.frequency);
-                break;
-              }
+  // Series path
+  op2Gain.connect(modOsc.frequency);
+  modOsc.connect(modGain);
+  modGain.connect(carrierOsc.frequency);
+
+  // Parallel tap: Op2 also hits the carrier directly, but keep depth control consistent.
+  const op2Direct = ctx.createGain();
+  op2Direct.gain.value = 0.5; // halve direct contribution
+  op2Gain.connect(op2Direct);
+  op2Direct.connect(carrierOsc.frequency);
+
+  break;
+}
             }
           } else {
             // Op2 only, parallel mode default
             op2Gain.connect(carrierOsc.frequency);
           }
           
-          op2Osc.start(now);
+          op2Osc.start(oscStartTime);
           op2Osc.stop(stopAt);
         } else if (modOsc && modGain) {
           // Op1 only - simple 2-operator FM
@@ -2921,7 +2932,7 @@ export default function Synthesizer() {
         }
         
         if (modOsc) {
-          modOsc.start(now);
+          modOsc.start(oscStartTime);
           modOsc.stop(stopAt);
         }
         
@@ -2930,20 +2941,20 @@ export default function Synthesizer() {
       } else {
         // Standard oscillator mode (no FM, no wavetable)
         oscAlreadyStarted = true;
-        
+
         // Create single oscillator
         const oscNode = ctx.createOscillator();
         oscNode.type = osc.waveform as OscillatorType;
         oscNode.frequency.value = oscPitchHz;
         oscNode.detune.value = osc.detune;
-        
+
         frequencyParam = oscNode.frequency;
-        
+
         // Ensure start time is never negative (phase offset could be negative)
         const oscStartTime = Math.max(0, now + phaseSeconds);
         oscNode.start(oscStartTime);
         oscNode.stop(stopAt);
-        
+
         oscNode.connect(oscGain);
         sourceNode = oscNode;
       }
