@@ -2954,29 +2954,31 @@ if (params.convolver.enabled && params.convolver.useCustomIR && params.convolver
       }
 
       let finalGain = oscGain;
-      if (osc.amEnabled && osc.amDepth > 0 && osc.amWaveform !== "noise") {
-        const depth = osc.amDepth / 100;
-        
-        const amModOsc = ctx.createOscillator();
-        amModOsc.type = osc.amWaveform as OscillatorType;
-        amModOsc.frequency.value = oscPitchHz * osc.amRatio;
-        
-        const amModGain = ctx.createGain();
-        amModGain.gain.value = depth * 0.5;
-        
-        const amOutputGain = ctx.createGain();
-        amOutputGain.gain.value = 1 - depth * 0.5;
-        
-        amModOsc.connect(amModGain);
-        amModGain.connect(amOutputGain.gain);
-        
-        oscGain.disconnect();
-        oscGain.connect(amOutputGain);
-        finalGain = amOutputGain;
-        
-        amModOsc.start(now);
-        amModOsc.stop(stopAt); // Fix 3: Stop after safety fade
-      }
+if (osc.amEnabled && osc.amDepth > 0 && osc.amWaveform !== "noise") {
+  const depth = osc.amDepth / 100;
+  
+  const amModOsc = ctx.createOscillator();
+  amModOsc.type = osc.amWaveform as OscillatorType;
+  amModOsc.frequency.value = oscPitchHz * osc.amRatio;
+  
+  const amModGain = ctx.createGain();
+  amModGain.gain.value = depth * 0.5;
+  
+  const amOutputGain = ctx.createGain();
+  amOutputGain.gain.value = 1 - depth * 0.5;
+  
+  amModOsc.connect(amModGain);
+  amModGain.connect(amOutputGain.gain);
+  
+  // Removed oscGain.disconnect(); // No need to disconnect, just connect as needed
+  oscGain.connect(amOutputGain);
+  finalGain = amOutputGain;
+  
+  // Start AM modulator at phase-aligned start time
+  const amStartTime = Math.max(0, now + phaseSeconds);
+  amModOsc.start(amStartTime);
+  amModOsc.stop(stopAt); // Fix 3: Stop after safety fade
+}
 
       if (frequencyParam) {
         const pitchEnv = params.envelopes.env2;

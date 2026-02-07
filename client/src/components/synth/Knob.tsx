@@ -13,6 +13,8 @@ interface KnobProps {
   step?: number;
   label: string;
   unit?: string;
+  /** Optional formatter for the value readout (receives the raw numeric value). */
+  format?: (value: number) => string;
   onChange: (value: number) => void;
   logarithmic?: boolean;
   size?: "xs" | "sm" | "md" | "lg";
@@ -32,6 +34,7 @@ export function Knob({
   step = 1,
   label,
   unit = "",
+  format,
   onChange,
   logarithmic = false,
   size = "md",
@@ -216,9 +219,11 @@ export function Knob({
     onChange(Math.max(min, Math.min(max, snappedValue)));
   }, [value, normalizeValue, denormalizeValue, step, min, max, onChange]);
 
-  const displayValue = logarithmic ? 
-    (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0)) :
-    (Number.isInteger(step) ? Math.round(value).toString() : value.toFixed(1));
+  const baseDisplayValue = logarithmic
+    ? (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value.toFixed(0))
+    : (Number.isInteger(step) ? Math.round(value).toString() : value.toFixed(1));
+
+  const displayValue = format ? format(value) : baseDisplayValue;
 
   const accentStyles = accentColor === "accent" 
     ? "bg-accent shadow-[0_0_6px_hsl(var(--accent)/0.5)]"
@@ -305,11 +310,11 @@ export function Knob({
       <div className="h-3 flex items-center justify-center">
         {showValue ? (
           <span className="text-[10px] font-mono text-primary animate-in fade-in duration-150">
-            {displayValue}{unit}
+            {displayValue}{format ? "" : unit}
           </span>
         ) : (
           <span className="text-[10px] font-mono text-foreground/40">
-            {displayValue}{unit}
+            {displayValue}{format ? "" : unit}
           </span>
         )}
       </div>
