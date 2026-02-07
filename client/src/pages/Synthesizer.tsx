@@ -3966,34 +3966,36 @@ if (osc.amEnabled && osc.amDepth > 0 && osc.amWaveform !== "noise") {
     }
     
     // Reverb effect (algorithmic) (using post-processed signal)
-    if (effectsParams.reverbEnabled && effectsParams.reverbMix > 0) {
-      const convolver = ctx.createConvolver();
-      const reverbDuration = 0.5 + (effectsParams.reverbSize / 100) * 3;
-      const rs = reverbSettings || defaultReverbSettings;
-      const seededRandom = createSeededRandom(Date.now());
-      convolver.buffer = createImpulseResponse(
-        ctx, 
-        reverbDuration, 
-        effectsParams.reverbDecay, 
-        seededRandom,
-        rs.type,
-        rs.damping,
-        rs.diffusion,
-        rs.modulation,
-        rs.predelay,
-        rs.stereoWidth
-      );
-      
-      const reverbWet = ctx.createGain();
-      reverbWet.gain.value = effectsParams.reverbMix / 100;
-      
-      lastNode.connect(convolver);
-      convolver.connect(reverbWet);
-      reverbWet.connect(effectsMixer);
-      
-      chain.reverbConvolver = convolver;
-      chain.reverbWet = reverbWet;
-    }
+if (effectsParams.reverbEnabled && effectsParams.reverbMix > 0) {
+  const convolver = ctx.createConvolver();
+  const reverbDuration = 0.5 + (effectsParams.reverbSize / 100) * 3;
+  const rs = reverbSettings || defaultReverbSettings;
+  // Prefer explicit reverb seed; otherwise fall back to granular seed (stable during playback), then a constant.
+  const stableReverbSeed = reverbSettings?.seed ?? gs.seed ?? 1337;
+  const seededRandom = createSeededRandom(stableReverbSeed);
+  convolver.buffer = createImpulseResponse(
+    ctx, 
+    reverbDuration, 
+    effectsParams.reverbDecay, 
+    seededRandom,
+    rs.type,
+    rs.damping,
+    rs.diffusion,
+    rs.modulation,
+    rs.predelay,
+    rs.stereoWidth
+  );
+  
+  const reverbWet = ctx.createGain();
+  reverbWet.gain.value = effectsParams.reverbMix / 100;
+  
+  lastNode.connect(convolver);
+  convolver.connect(reverbWet);
+  reverbWet.connect(effectsMixer);
+  
+  chain.reverbConvolver = convolver;
+  chain.reverbWet = reverbWet;
+}
     
     // Chorus effect
     if (effectsParams.chorusEnabled && effectsParams.chorusMix > 0) {

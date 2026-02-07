@@ -13,11 +13,14 @@ export type ReverbType = "hall" | "plate" | "room";
 
 export interface ReverbSettings {
   type: ReverbType;
-  damping: number; // 0-100, how quickly high frequencies decay
-  diffusion: number; // 0-100, density of reflections
-  modulation: number; // 0-100, subtle pitch modulation for lushness
-  predelay: number; // 0-200ms, time before reverb tail starts
-  stereoWidth: number; // 0-100, stereo spread of the reverb
+  damping: number;
+  diffusion: number;
+  modulation: number;
+  predelay: number;
+  stereoWidth: number;
+
+  /** Optional deterministic seed for IR generation (stabilizes reverb character across rebuilds). */
+  seed?: number;
 }
 
 export const defaultReverbSettings: ReverbSettings = {
@@ -44,13 +47,34 @@ export const reverbTypePresets: Record<ReverbType, {
   room: { size: 35, decay: 0.6, damping: 65, diffusion: 60, modulation: 10, predelay: 10, stereoWidth: 60 },
 };
 
+
 const REVERB_SETTINGS_KEY = "synth-reverb-settings";
+
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+
+function isReverbType(v: unknown): v is ReverbType {
+  return v === "hall" || v === "plate" || v === "room";
+}
+
+function sanitizeReverbSettings(input: unknown): ReverbSettings {
+  const obj = (input && typeof input === "object") ? (input as Partial<ReverbSettings>) : {};
+  return {
+    type: isReverbType(obj.type) ? obj.type : defaultReverbSettings.type,
+    seed: obj.seed === undefined ? undefined : Number(obj.seed),
+    damping: clamp(Number(obj.damping ?? defaultReverbSettings.damping), 0, 100),
+    diffusion: clamp(Number(obj.diffusion ?? defaultReverbSettings.diffusion), 0, 100),
+    modulation: clamp(Number(obj.modulation ?? defaultReverbSettings.modulation), 0, 100),
+    predelay: clamp(Number(obj.predelay ?? defaultReverbSettings.predelay), 0, 200),
+    stereoWidth: clamp(Number(obj.stereoWidth ?? defaultReverbSettings.stereoWidth), 0, 100),
+  };
+}
 
 export function loadReverbSettings(): ReverbSettings {
   try {
     const stored = localStorage.getItem(REVERB_SETTINGS_KEY);
     if (stored) {
-      return { ...defaultReverbSettings, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored);
+      return sanitizeReverbSettings({ ...defaultReverbSettings, ...parsed });
     }
   } catch {
     // Fall through to default
@@ -60,7 +84,7 @@ export function loadReverbSettings(): ReverbSettings {
 
 export function saveReverbSettings(settings: ReverbSettings) {
   try {
-    localStorage.setItem(REVERB_SETTINGS_KEY, JSON.stringify(settings));
+    localStorage.setItem(REVERB_SETTINGS_KEY, JSON.stringify(sanitizeReverbSettings(settings)));
   } catch {
     // Ignore storage failures (quota, private mode, etc.)
   }
@@ -129,7 +153,7 @@ function EffectSection({ title, enabled, onToggle, children, testId }: EffectSec
   return (
   <div
   className={`rounded border border-border/50 transition-opacity ${
-    !enabled ? "opacity-50 bg-muted/10 pointer-events-none" : "bg-muted/30"
+    !enabled ? "opacity-50 bg-muted/10" : "bg-muted/30"
   }`}
 >
       <div className="flex items-center justify-between px-1.5 py-0.5">
@@ -148,7 +172,11 @@ function EffectSection({ title, enabled, onToggle, children, testId }: EffectSec
           data-testid={testId}
         />
       </div>
-      {isOpen && <div className="px-1.5 pb-1.5">{children}</div>}
+      {isOpen && (
+  <div className={`px-1.5 pb-1.5 ${!enabled ? "pointer-events-none" : ""}`}>
+    {children}
+  </div>
+)}
     </div>
   );
 }
@@ -170,25 +198,27 @@ export function EffectsPanel({ effects, onChange, reverbSettings, onReverbSettin
   };
 
   const handleReverbTypeChange = (type: ReverbType) => {
-    if (onReverbSettingsChange) {
-      const preset = reverbTypePresets[type];
-      // Update both the reverb settings and the main reverb parameters
-      onReverbSettingsChange({
-        type,
-        damping: preset.damping,
-        diffusion: preset.diffusion,
-        modulation: preset.modulation,
-        predelay: preset.predelay,
-        stereoWidth: preset.stereoWidth,
-      });
-      // Also update size and decay in the main effects
-      onChange({
-        ...effects,
-        reverbSize: preset.size,
-        reverbDecay: preset.decay,
-      });
-    }
-  };
+  const preset = reverbTypePresets[type];
+
+  // Always update size and decay in the main effects
+  onChange({
+    ...effects,
+    reverbSize: preset.size,
+    reverbDecay: preset.decay,
+  });
+
+  // Update advanced reverb settings if the consumer provided a handler
+  if (onReverbSettingsChange) {
+    onReverbSettingsChange({
+      type,
+      damping: preset.damping,
+      diffusion: preset.diffusion,
+      modulation: preset.modulation,
+      predelay: preset.predelay,
+      stereoWidth: preset.stereoWidth,
+    });
+  }
+};
 
   const handleRandomize = () => {
     onChange({ ...effects, ...randomizeEffects() });
