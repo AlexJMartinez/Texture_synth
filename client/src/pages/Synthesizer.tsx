@@ -2823,7 +2823,7 @@ export default function Synthesizer() {
             const baseDepth = Math.max(EPS, effectiveFmDepthHz);
             const peakMultiplier = 1 + (osc.indexEnvDepth / 20);
             const peakDepth = baseDepth * peakMultiplier;
-            triggerAHD(modGain.gain, now, {
+            triggerAHD(modGain.gain, oscStartTime, {
               attack: 0.0005,
               hold: 0,
               decay: osc.indexEnvDecay / 1000
@@ -2904,19 +2904,19 @@ export default function Synthesizer() {
                 break;
               }
               case "mixed": {
-  // Series path
-  op2Gain.connect(modOsc.frequency);
-  modOsc.connect(modGain);
-  modGain.connect(carrierOsc.frequency);
+              // Series path
+              op2Gain.connect(modOsc.frequency);
+              modOsc.connect(modGain);
+              modGain.connect(carrierOsc.frequency);
 
-  // Parallel tap: Op2 also hits the carrier directly, but keep depth control consistent.
-  const op2Direct = ctx.createGain();
-  op2Direct.gain.value = 0.5; // halve direct contribution
-  op2Gain.connect(op2Direct);
-  op2Direct.connect(carrierOsc.frequency);
+              // Parallel tap: Op2 also hits the carrier directly, but keep depth control consistent.
+              const op2Direct = ctx.createGain();
+              op2Direct.gain.value = 0.5; // halve direct contribution
+              op2Gain.connect(op2Direct);
+              op2Direct.connect(carrierOsc.frequency);
 
-  break;
-}
+              break;
+          }
             }
           } else {
             // Op2 only, parallel mode default
